@@ -1,7 +1,7 @@
 'use strict';
 const C=require('../lib/data-import-contract');
-async function seedSupplierInvoices(f,{suffix='',snapshotAt='2026-09-13T09:00:00.000Z',detailsOverride=null}={}){
- const heads=[
+async function seedSupplierInvoices(f,{suffix='',snapshotAt='2026-09-13T09:00:00.000Z',detailsOverride=null,headsOverride=null}={}){
+ const heads=headsOverride||[
   {ID:1,Rechnungsnr:'RE-001',Suchname:'Demo',BFirma:'Demo Optik GmbH',Anlegedatum:'2026-09-10T00:00:00.000',Buchdatum:'2026-09-08T00:00:00.000'},
   {ID:2,Rechnungsnr:'RE-001',Suchname:'Zwei',BFirma:'Zweiter Lieferant',Anlegedatum:'2026-09-11T00:00:00.000',Buchdatum:null},
   {ID:3,Rechnungsnr:'RE-003',Suchname:'Demo',BFirma:'Demo Optik GmbH',Anlegedatum:'2025-12-15T00:00:00.000',Buchdatum:'2025-12-14T00:00:00.000'},

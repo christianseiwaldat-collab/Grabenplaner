@@ -93,32 +93,40 @@ function compactSixSchedule() {
   return schedule;
 }
 
+function compactTeamSchedule({ timeFontSize = "14.5", mixedEntries = false } = {}) {
+  const schedule = compactSixSchedule();
+  schedule.employees.push({ ...schedule.employees[2], personnel_number: "907", nickname: "Mika", full_name: "Mika Beispiel" });
+  schedule.shifts.push(...schedule.shifts.filter(shift => shift.employee_number === "903")
+    .map(shift => ({ ...shift, id: shift.id + 1000, employee_number: "907" })));
+  schedule.weekOptions.push({ ...schedule.weekOptions[0], id: "meeting-7", employee_number: "907" });
+  schedule.settings.pdf_schedule_matrix_time_font_size = timeFontSize;
+  if (mixedEntries) {
+    schedule.shifts.find(shift => shift.employee_number === "901" && shift.shift_date === "2026-09-16").end_time = "16:30";
+    schedule.shifts.find(shift => shift.employee_number === "906" && shift.shift_date === "2026-09-16").start_time = "11:30";
+    schedule.weekOptions.push(
+      { id: "partial-za", employee_number: "901", option_type: "time_off", date_from: "2026-09-16", date_to: "2026-09-16", all_day: 0, start_time: "16:30", end_time: "18:00", note: "ZA" },
+      { id: "external", employee_number: "906", option_type: "external_appointment", date_from: "2026-09-16", date_to: "2026-09-16", all_day: 0, start_time: "10:00", end_time: "11:30", note: "Fototermin Musterfiliale" },
+    );
+  }
+  return schedule;
+}
+
 async function main() {
   const root = path.resolve(__dirname, "..");
   const output = path.resolve(root, process.argv[2] || "output/pdf/Wochenmatrix-Muster.pdf");
   if (!output.startsWith(root + path.sep) || !/\.pdf$/iu.test(output)) throw new Error("Preview output must be a PDF inside this repository.");
-  const scratch = path.join(root, "tmp", "pdfs");
-  fs.mkdirSync(scratch, { recursive: true });
-  const fixture = fs.mkdtempSync(path.join(scratch, "schedule-preview-"));
-  Object.assign(process.env, { DB_PATH: path.join(fixture, "fixture.db"), BACKUP_DIR: path.join(fixture, "backups"),
-    GRABENPLANER_DATA_DIR: path.join(fixture, "data"), GRABENPLANER_HOST: "127.0.0.1",
-    GRABENPLANER_SEED_DEMO: "0", GRABENPLANER_TEST_AMU_SCANNER: "clean", NODE_ENV: "test", TZ: "Europe/Vienna" });
-  const subject = require("../server");
-  try {
-    fs.mkdirSync(path.dirname(output), { recursive: true });
-    const stream = fs.createWriteStream(output);
-    const completion = finished(stream);
-    await subject.drawSchedulePdfForTests(process.argv.includes("--compact-six") ? compactSixSchedule() : syntheticSchedule({ sevenDays: process.argv.includes("--seven-days"),
+  const { drawMatrix } = require("./schedule-pdf-render-fixture");
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  const stream = fs.createWriteStream(output);
+  const completion = finished(stream);
+  drawMatrix(process.argv.includes("--compact-seven") ? compactTeamSchedule({ mixedEntries: true })
+    : process.argv.includes("--compact-six") ? compactSixSchedule() : syntheticSchedule({ sevenDays: process.argv.includes("--seven-days"),
       longNotes: process.argv.includes("--long-notes"), manyEmployees: process.argv.includes("--many-employees"),
       showDutyLabels: process.argv.includes("--duty-labels") }),
-    stream, new Date("2026-09-06T14:00:00Z"), "matrix");
-    await completion;
-    process.stdout.write(`${JSON.stringify({ output, bytes: fs.statSync(output).size })}\n`);
-  } finally {
-    await subject.closePersistenceForTests();
-    subject.releaseInstanceLockForTests();
-  }
+    stream, new Date("2026-09-06T14:00:00Z"));
+  await completion;
+  process.stdout.write(`${JSON.stringify({ output, bytes: fs.statSync(output).size })}\n`);
 }
 
-module.exports = { syntheticSchedule, compactSixSchedule };
+module.exports = { syntheticSchedule, compactSixSchedule, compactTeamSchedule };
 if (require.main === module) main().catch(error => { process.stderr.write(`${error.stack}\n`); process.exitCode = 1; });

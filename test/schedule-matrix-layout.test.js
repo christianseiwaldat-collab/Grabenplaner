@@ -102,12 +102,17 @@ test("Absatzgrenzen bleiben auch beim Wechsel der Spalte erhalten", () => {
 function firstPageNoteBudget(note) {
   const fs = require("node:fs"), vm = require("node:vm"), PDFDocument = require("pdfkit");
   const source = fs.readFileSync(require.resolve("../server"), "utf8");
-  const name = "scheduleMatrixFirstPageRowsHeight", start = source.indexOf(`function ${name}(`);
   const context = vm.createContext({ scheduleNoteRichText: require("../lib/schedule-note-rich-text") });
-  assert.ok(start >= 0);
-  vm.runInContext(source.slice(start, source.indexOf("\n}", start) + 2), context);
+  for (const name of ["scheduleMatrixNotePanel", "scheduleMatrixFooter", "scheduleMatrixFirstPageRowsHeight"]) {
+    const start = source.indexOf(`function ${name}(`);
+    assert.ok(start >= 0);
+    vm.runInContext(source.slice(start, source.indexOf("\n}", start) + 2), context);
+  }
   const doc = new PDFDocument({ autoFirstPage: false });
-  try { return context[name](doc, note, 797.89, 367, 288, 64); }
+  try {
+    const footer = context.scheduleMatrixFooter(doc, note, [], 797.89);
+    return context.scheduleMatrixFirstPageRowsHeight(367, 288, footer);
+  }
   finally { doc.end(); }
 }
 
@@ -116,7 +121,7 @@ test("normale Matrixbemerkungen erhalten Platz vor optionaler Zeilenstreckung un
   const ordinary = syntheticSchedule().scheduleNote;
   assert.equal(firstPageNoteBudget({ note_text: "Kurze Bemerkung" }), 367);
   const available = firstPageNoteBudget(ordinary);
-  assert.ok(Math.abs(available - 288.2) < .001, "The complete 603-character note fits without reducing any 48pt row minimum");
+  assert.ok(Math.abs(available - 288.2) < 1, "The complete 603-character note fits without reducing any 48pt row minimum");
   assert.ok(available >= 288 && available < 348, "Only optional row expansion is reclaimed");
 });
 

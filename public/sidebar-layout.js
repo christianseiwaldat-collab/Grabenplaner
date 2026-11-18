@@ -11,7 +11,7 @@
   const GROUP_KEYS = ["filialManagement", "planning", "vacations", "personnelAdministration", "salesAdministration", "logistics", "privacyOrganization", "technicalSecurity"];
 
   function navigationPath(view) {
-    if (["filialAdministration", "personnel", "planning", "vacations", "loans", "branchOrders"].includes(view)) {
+    if (["filialAdministration", "branchWebgl", "personnel", "planning", "vacations", "loans", "branchOrders"].includes(view)) {
       return ["filialManagement", ...(["planning", "vacations"].includes(view) ? [view] : [])];
     }
     if (["personnelAdministration", "requests", "timeTracking"].includes(view)) return ["personnelAdministration"];

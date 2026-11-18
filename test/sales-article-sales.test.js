@@ -17,7 +17,7 @@ const raw = (name,fields) => ({...Object.fromEntries(H.tableFor('cash',name).col
 function data() {
   const flags = CASH_SOURCE_POLICIES[0].policy.statusRules[3].flags,result = {Umsatz_KASSE:[],Umsatz_Kasse_Details:[]};
   for (const [index,[article,price,branch,date]] of [['00042','120','018','2010-02-03'],['00042','60','018','2010-01-02'],['42','24','018','2010-01-01'],['00042','240','019','2010-02-04']].entries()) {
-    const head = raw('Umsatz_KASSE',{Bonnr:String(index+1),Filialid:branch,Kassenid:'01',Bondatum:date+'T00:00:00.000',VerkäuferID:'08',KUND_NR:'00031',RechnungsBetrag:price});
+    const head = raw('Umsatz_KASSE',{Bonnr:String(index+1),Filialid:branch,Kassenid:'01',Bondatum:date+'T00:00:00.000',Bonzeit:'1899-12-30T16:40:27.000',VerkäuferID:'08',KUND_NR:'00031',RechnungsBetrag:price});
     result.Umsatz_KASSE.push(head);result.Umsatz_Kasse_Details.push(raw('Umsatz_Kasse_Details',{...flags,
       Bonnr:head.Bonnr,Filialid:branch,Kassenid:'01',Bondatum:head.Bondatum,RepID:'00000000-0000-0000-0000-'+String(index+1).padStart(12,'0'),
       EAN:article,VKMenge:'1',VK_Preis:price,Sollpreis:'180',MWST:'20',RohertragDM:'20',KalkRohertrag:'9999',Verkäuferid:'07',Artikelbezeichnung:'Historical camera',KameraNr:'SN-'+index}));
@@ -65,6 +65,7 @@ test('Historical prices use checked source units and confirmed margin; list assu
 test('Exact indexed article query preserves zeros, historical values, scopes and receipt IDs with globally sorted pagination',async t=>{
   const f=await fixture(t),page=await f.search({limit:1});assert.equal(page.total,2);assert.equal(page.rows[0].date,'2010-02-03');assert.ok(page.next);assert.ok(page.resultSet);
   assert.equal(page.rows[0].articleNumber,'00042');assert.equal(page.rows[0].actualGross,'120.00');assert.equal(page.rows[0].actualMargin,'20.00');assert.equal(page.rows[0].actualMarginPercent,'20.00');assert.equal(page.rows[0].listGross,null);
+  assert.equal(page.rows[0].time,'16:40:27.000');assert.equal(page.rows[0].dateTime,'2010-02-03T16:40:27.000');assert.equal(page.rows[0].timeSource,'Umsatz_KASSE.Bonzeit');
   const second=await f.search({limit:1,cursor:page.next});assert.equal(second.rows[0].actualGross,'60.00');assert.equal(second.next,null);
   const sorted=await f.search({limit:1,resultSet:page.resultSet,sort:'actualGross',direction:'asc'});assert.equal(sorted.rows[0].actualGross,'60.00');
   assert.equal((await f.search({articleNumber:'42'})).total,1);assert.equal((await f.search({dateFrom:'2010-02-01',dateTo:'2010-02-28'})).total,1);

@@ -1,5 +1,6 @@
 (function(host,factory){'use strict';const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(host)host.GrabenplanerTradeResults=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
+ const SourceTime=typeof module==='object'&&module.exports?require('./source-date-time'):globalThis.GrabenplanerSourceDateTime;
  const titles={suggestions:'Handlungsvorschläge',stocktakes:'Inventuren & Differenzen',movements:'Warenbewegungen',purchasing:'Einkauf / Lieferstände',transfers:'Filialversorgung','stock-summary':'Filialbestand & Warenwert',inventory:'Bestand / Langsamdreher',repairs:'Reparaturen','customer-history':'Kundenhistorie','device-history':'Gerätehistorie'};
  const collator=new Intl.Collator('de-AT',{numeric:true,sensitivity:'base'});
  const numberFormatter=new Intl.NumberFormat('de-AT',{maximumFractionDigits:4});
@@ -10,7 +11,7 @@
  function columns(kind,projection={},result={}){
   const c=column;
   if(kind==='article-history')return [c('articleNumber','Artikelnummer'),c('label','Bezeichnung'),c('group','Sortiment'),c('status','Status','text',r=>({current:'Artikelstamm',archived:'Archiviert',ambiguous:'Zuordnung prüfen',missing:'Keine Referenz'})[r.status]||r.status),c('sourceLabel','Herkunft','text',r=>(r.candidates||[]).map(v=>v.source).join(' · '))];
-  if(kind==='supplier-invoices')return [c('created','Anlegedatum','date'),c('booked','Buchdatum','date'),c('number','Rechnungsnummer'),c('supplier','Lieferant'),c('quantity','Menge','decimal'),...(projection.costs?[c('priceMin','EK netto von','money'),c('priceMax','EK netto bis','money')]:[])];
+  if(kind==='supplier-invoices')return [c('created','Anlegedatum','date',r=>r.timestamps?.created?.dateTime||r.created),c('booked','Buchdatum','date',r=>r.timestamps?.booked?.dateTime||r.booked),c('number','Rechnungsnummer'),c('supplier','Lieferant'),c('quantity','Menge','decimal'),...(projection.costs?[c('priceMin','EK netto von','money'),c('priceMax','EK netto bis','money')]:[])];
   if(kind==='suggestions')return [c('action','Prüfhinweis'),c('article','Artikel','text',r=>r.articleNumber+' · '+r.label),c('sourceLocation','Filiale'),c('stock','Quellbestand','decimal'),c('soldNet','Nettoabsatz','decimal'),c('coverageDays','Reichweite (Tage)','decimal'),c('donorLabel','Mögliche Gegenfilialen'),c('reason','Begründung')];
   if(kind==='stocktakes')return result.stocktake?[c('articleNumber','Artikelnr.'),c('label','Artikel','text',r=>r.label+(r.articleReference?.status==='archived'?' (Archiviert)':'')),c('oldQuantity','Vorher','decimal'),c('newQuantity','Gezählt','decimal'),c('difference','Quelldifferenz','decimal'),c('calculated','Rechnerisch','decimal'),c('stateLabel','Einordnung')]:[c('date','Inventurdatum','date'),c('number','Inventur'),c('sourceLocation','Filiale'),c('positions','Positionen','number'),c('positive','Mehrbestand','number'),c('negative','Minderbestand','number'),c('unchanged','Unverändert','number'),c('incomplete','Mengen fehlen','number'),c('quality','Datenprüfung')];
   if(kind==='movements')return [c('date','Datum','date'),c('typeLabel','Bewegungsart'),c('article','Artikel','text',r=>r.articleNumber+' · '+r.label+(r.articleReference?.status==='archived'?' (Archiviert)':'')),c('quantity','Menge','decimal'),c('from','Herkunft','text',r=>r.kind==='unclear'?'Ungeklärt':r.from),c('to','Ziel','text',r=>r.kind==='unclear'?'Ungeklärt':r.to),c('supplier','Lieferant'),c('documentRefs','Belegverweise'),c('issueLabel','Prüfhinweise')];
@@ -23,7 +24,7 @@
  function format(value,type){
   if(value==null||value==='')return '–';
   if(type==='decimal')return String(value).replace('.',',');
-  if(type==='date')return String(value).slice(0,10).split('-').reverse().join('.');
+  if(type==='date')return SourceTime.sourceLabel(String(value));
   if(type==='number'||type==='money')return (type==='money'?moneyFormatter:numberFormatter).format(Number(value));
   return String(value);
  }

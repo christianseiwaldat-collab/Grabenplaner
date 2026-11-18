@@ -10,6 +10,7 @@ test("fixture ownership preserves only explicitly reviewed infrastructure relati
   assert.equal(isTechnicalRelation("sales", "gp", "import_delete_performance_history"), true);
   assert.equal(isTechnicalRelation("sales", "gp", "import_history_attestations_migration_history"), true);
   assert.equal(isTechnicalRelation("sales", "gp", "import_history_publication_performance_history"), true);
+  assert.equal(isTechnicalRelation("sales", "gp", "import_history_reference_proof_migration_history"), true);
   assert.equal(isTechnicalRelation("sales", "integration", "import_history_snapshot_attestations"), false);
   assert.equal(isTechnicalRelation("sales", "gp", "unknown_migration_history"), false);
   assert.equal(isTechnicalRelation("core", "gp", "import_delete_performance_history"), false);

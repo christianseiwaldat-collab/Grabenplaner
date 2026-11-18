@@ -1,6 +1,16 @@
 # Versionsstatus
 
-## v0.92.103 Beta · Quellstand
+## v0.92.104 Beta · Quellstand
+
+Die Filiale Grabenweg lässt sich mit Filialplan, Ich-Perspektive und zwei Canon PRO-2000 in WebGL erkunden.
+
+Die Wochenmatrix rückt die Teamsitzung bei Platzmangel neben die Bemerkungen, damit sechs oder sieben Mitarbeiter auf eine Seite passen können.
+
+Kassenbelege und Verkaufsansichten übernehmen vorhandene Quell-Uhrzeiten. Der Beleg zeigt geprüfte Steuerbeträge, Kameranummer, Journal-Zusatztext und Verkäufer je Position unter den bestehenden Zugriffsrechten.
+
+Der Trade-Import fängt vorübergehende Fehler bei der Statusabfrage ab. Die Freigabe historischer Bestände verwendet den geprüften Fremdschlüssel für die Referenzprüfung.
+
+Enthält den bisherigen Quellstand v0.92.103 Beta:
 
 Updates können GP Core und eigene Inhalte mit einem kleineren Sicherungspunkt prüfen. Die vollständige Sales-Sicherung und nächtliche Recovery Assurance bleiben unabhängig davon erhalten.
 

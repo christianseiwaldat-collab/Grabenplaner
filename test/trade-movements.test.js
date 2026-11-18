@@ -13,9 +13,12 @@ test('signed source quantities, flags and precision retain their actual meaning'
  assert.deepEqual(M.sortRows([{quantity:'-0.01'},{quantity:'-2'}],M.columns('movements'),'quantity').map(r=>r.quantity),['-2','-0.01']);
 });
 test('WEUM journal keeps dates, source keys, directions, negative quantities and reference evidence distinct',async t=>{
- const f=await seed(t,[movement(1,{Bestellnr:1,Lieferscheinnr:'LS-7',Rechnungsnr:'RE-3',NNPreis:'321.99'}),movement(2,{We:false,Umlagerung:true,FilialID:'19',Filialid2:'18',KorbId:1,Menge:'-2'}),movement(3,{WEDatum:null}),movement(4,{EAN:'42',We:true,Umlagerung:true})]);
+ const f=await seed(t,[movement(1,{Bestellnr:1,Lieferscheinnr:'LS-7',Rechnungsnr:'RE-3',NNPreis:'321.99',WEDatum:'2026-09-10T16:40:27.000'}),movement(2,{We:false,Umlagerung:true,FilialID:'19',Filialid2:'18',KorbId:1,Menge:'-2'}),movement(3,{WEDatum:null}),movement(4,{EAN:'42',We:true,Umlagerung:true})]);
  const result=await f.run('movements'),row=id=>result.rows.find(r=>r.movementNumber===String(id));assert.equal(result.rows.length,4);assert.equal(result.scanned,4);
  assert.equal(row(1).references.order.status,'matched');assert.match(row(1).references.order.label,/Position nicht abgeglichen/);assert.equal(row(1).references.delivery,'LS-7');
+ assert.equal(row(1).time,'16:40:27.000');assert.equal(row(1).dateTime,'2026-09-10T16:40:27.000');
+ assert.match(M.format(row(1).date,'date'),/16:40:27/);assert.equal(row(2).time,null);assert.equal(row(2).timeStatus,'date_only');
+ assert.match(UI.detail(row(1),require('../public/trade-article-history')),/16:40:27/);
  assert.equal(row(2).from,'Filiale 19');assert.equal(row(2).to,'Filiale 18');assert.equal(row(2).references.basket.status,'matched');assert.equal(row(2).quantity,'-2');assert.equal(row(2).physicalReceiptConfirmed,false);
  assert.equal(row(3).date,null);assert.ok(row(3).secondaryDate);assert.equal(row(4).articleReference.status,'missing');assert.equal(row(4).kind,'unclear');
  assert.doesNotMatch(JSON.stringify(result),/NNPreis|321\.99|Rechnungspreis/);

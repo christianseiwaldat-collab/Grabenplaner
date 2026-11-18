@@ -6,9 +6,10 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function receiptSearchModule() {
   'use strict';
   const Lines = typeof module === 'object' && module.exports ? require('./receipt-line-format') : globalThis.GrabenplanerReceiptLineFormat;
+  const SourceTime = typeof module === 'object' && module.exports ? require('./source-date-time') : globalThis.GrabenplanerSourceDateTime;
   const ArticleHistory = typeof module === 'object' && module.exports ? require('./trade-article-history') : globalThis.GrabenplanerArticleHistory;
   const TableLayout = typeof module === 'object' && module.exports ? require('./table-layout') : globalThis.GrabenplanerTableLayout;
-  const columnDefaults = {date:120, receipt:135, invoice:165, location:150, personnel:140, register:90, description:330, positions:100,
+  const columnDefaults = {date:220,time:120,receipt:135, invoice:165, location:150, personnel:140, register:90, description:330, positions:100,
     gross:170, state:140, account:120, inflow:130, outflow:130, customerNumber:150, customerAccount:180, customerSourceAccount:180,
     customerName:200, customerAddress:290, customerPhone:170, customerEmail:240};
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -26,7 +27,8 @@
     });
   }
   function cell(row, key) {
-    if (key === 'date') return date(row.date);
+    if (key === 'date') return SourceTime.rowLabel(row);
+    if (key === 'time') return SourceTime.timeLabel(row.time);
     if (['gross', 'inflow', 'outflow'].includes(key)) return number(value(row, key));
     return value(row, key) ?? '–';
   }
@@ -41,7 +43,7 @@
   }
   function renderDetail(row) {
     return `<p class="receipt-info-note"><strong>Beleginformation – keine Rechnung</strong><br>Informationsauszug aus dem importierten Kassenstand. Kein Ersatz für den Originalbeleg.</p>
-      <dl class="receipt-meta"><dt>Beleg / Tag</dt><dd>${escape(row.receipt)} · ${escape(date(row.date))}</dd><dt>Filiale / Kasse</dt><dd>${escape(row.location)} · ${escape(row.register || '–')}</dd>
+      <dl class="receipt-meta"><dt>Beleg / Zeitpunkt</dt><dd>${escape(row.receipt)} · ${escape(SourceTime.rowLabel(row))}</dd><dt>Filiale / Kasse</dt><dd>${escape(row.location)} · ${escape(row.register || '–')}</dd>
       ${Object.hasOwn(row, 'personnel') ? `<dt>Personalnummer (Beleg)</dt><dd><strong>${escape(row.personnel || 'Zuordnung offen')}</strong></dd>` : ''}
       ${Object.hasOwn(row, 'customerNumber') ? `<dt>Kunden-Kontonummer</dt><dd>${escape(row.customerAccount || 'Kein Kundenkonto am Beleg')}</dd>
       ${row.customerNumber ? `<dt>Kundennummer</dt><dd>${escape(row.customerNumber)}</dd>` : ''}${row.customerName ? `<dt>Kunde</dt><dd>${escape(row.customerName)}</dd>` : ''}
@@ -51,8 +53,9 @@
       ${row.invoice ? `<dt>Rechnungsreferenz</dt><dd>${escape(row.invoice)}</dd>` : ''}<dt>Datenstand</dt><dd>${escape(row.provenance.sourceLabel)}</dd><dt>Importiert</dt><dd>${escape(date(row.provenance.importedAt?.slice(0, 10)))}</dd></dl>
       ${row.kind === 'receipts' ? `<p>${row.positions} vollständige Belegpositionen · ${escape(row.state)}</p><div class="receipt-table-scroll receipt-lines" role="region" tabindex="0" aria-label="Belegpositionen"><table><thead><tr><th scope="col">Menge</th><th scope="col">Artikelnr.</th><th scope="col">Bezeichnung</th><th scope="col" class="receipt-number">Einzelpreis</th><th scope="col" class="receipt-number">Gesamtpreis</th></tr></thead>
       ${Lines.groups(row).map(group => `<tbody>${group.personnel !== null ? `<tr class="receipt-personnel-group"><th colspan="5" scope="rowgroup"><strong>Personalnr.: ${escape(group.personnel || 'nicht zugeordnet')}</strong></th></tr>` : ''}
-      ${group.lines.map(l => `<tr><td class="receipt-number">${escape(number(l.quantity))}</td><td>${escape(l.article)}</td><td>${escape(l.displayDescription || l.description)}${ArticleHistory.referenceMarkup(l.articleDisplay,l.description)}${Lines.note(l.status) ? `<small class="receipt-line-note">${escape(Lines.note(l.status))}</small>` : ''}</td><td class="receipt-number">${escape(Lines.money(l.sourcePrice))}</td><td class="receipt-number">${escape(Lines.money(Lines.total(l.sourcePrice, l.quantity)))}</td></tr>`).join('')}</tbody>`).join('')}</table></div><p class="settings-note">Gesamtpreis = Menge × Einzelpreis, je Position auf Cent gerundet. Gutscheinausgaben, Zahlungsmittel und UID-Zwischenbuchungen sind kein Warenumsatz.</p><p><strong>${row.gross == null ? 'Quellbetrag des Belegkopfs' : 'Geprüfter Warenumsatz'}: ${escape(Lines.money(row.gross ?? row.sourceAmount))} ${escape(row.currency || '')}</strong></p>${row.gross == null ? '<p class="settings-note">Belegabgleich offen. Die angezeigten Positionsbeträge sind noch keine freigegebene Umsatzsumme.</p>' : ''}`
-        : `<p>${escape(row.description)} · Konto ${escape(row.account)}</p><p>Einzahlung ${escape(number(row.inflow))} · Auszahlung ${escape(number(row.outflow))}</p><p>Separate Kassenbuchung; kein zusätzlicher Verkauf.</p>`}`;
+      ${group.lines.map(l => `<tr><td class="receipt-number">${escape(number(l.quantity))}</td><td>${escape(l.article)}</td><td>${escape(l.displayDescription || l.description)}${l.deviceNumber?`<small>Erfasste Gerätenummer: ${escape(l.deviceNumber)}</small>`:''}${Lines.taxText(l)?`<small>${escape(Lines.taxText(l))}</small>`:''}${ArticleHistory.referenceMarkup(l.articleDisplay,l.description)}${Lines.note(l.status) ? `<small class="receipt-line-note">${escape(Lines.note(l.status))}</small>` : ''}</td><td class="receipt-number">${escape(Lines.money(l.sourcePrice))}</td><td class="receipt-number">${escape(Lines.money(Lines.total(l.sourcePrice, l.quantity)))}</td></tr>`).join('')}</tbody>`).join('')}</table></div><p class="settings-note">Gesamtpreis = Menge × Einzelpreis, je Position auf Cent gerundet. Gutscheinausgaben, Zahlungsmittel und UID-Zwischenbuchungen sind kein Warenumsatz.</p><p><strong>${row.gross == null ? 'Geprüfter Warenumsatz nicht freigegeben' : 'Geprüfter Warenumsatz: '+escape(Lines.money(row.gross))+' '+escape(row.currency || '')}</strong></p>
+      ${row.net!=null?`<p>Netto: ${escape(Lines.money(row.net))} · Steuer: ${escape(Lines.money(row.tax))} ${escape(row.currency||'')}</p>`:''}<p>Originaler Quellbetrag des Belegkopfs: ${escape(Lines.money(row.sourceAmount))} ${escape(row.currency||'')}</p>${Lines.reconciliationText(row)?`<p>${escape(Lines.reconciliationText(row))}</p>`:''}${row.gross == null ? '<p class="settings-note">Belegabgleich offen. Die angezeigten Positionsbeträge sind noch keine freigegebene Umsatzsumme.</p>' : ''}`
+        : `<p>${escape(row.description)} · Konto ${escape(row.account)}</p>${row.descriptionSupplement?`<p>Zusätzlicher Journaltext: ${escape(row.descriptionSupplement)}</p>`:''}<p>Einzahlung ${escape(number(row.inflow))} · Auszahlung ${escape(number(row.outflow))}</p><p>Separate Kassenbuchung; kein zusätzlicher Verkauf.</p>`}`;
   }
   function mount(root, { api, rawApi, accessKey = () => '', canUse = () => true, active, windowPreferences, scale, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar } = {}) {
     let detailRequest = null;
@@ -130,6 +133,7 @@
       }
       el('seller-fields').hidden = finance || !context.projection.sellers;
       el('customer-fields').hidden = finance || !context.projection.customerPurchases;
+      if(el('device-fields'))el('device-fields').hidden=finance;
       if (finance) el('seller').value = '';
       if (finance) el('customer').value = '';
       el('scope-note').textContent = finance ? 'Kassenbuchungen sind keine zusätzlichen Verkäufe.' : 'Personalnummer bezeichnet den Belegverkäufer. Positionsverkäufer stehen in der Beleginfo.';
@@ -140,7 +144,7 @@
         const reusable = resort ? resultSet : null, previousSelection = resort ? new Set(selected) : new Set();
         clear(); resultSet = reusable; selected = previousSelection;
         query = { sourceId: el('source').value, kind: el('kind').value, dateFrom: from, dateTo: to, locationId: el('location').value,
-          query: el('query').value, receipt: el('receipt').value, seller: el('kind').value === 'receipts' && context.projection.sellers ? el('seller').value : '', sellerRole: el('seller-role').value,
+          query: el('query').value, receipt: el('receipt').value,deviceNumber:el('kind').value==='receipts'?el('device')?.value||'':'',seller: el('kind').value === 'receipts' && context.projection.sellers ? el('seller').value : '', sellerRole: el('seller-role').value,
           customer: el('kind').value === 'receipts' && context.projection.customerPurchases ? el('customer').value : '', sort: sort.key, direction: sort.direction === 1 ? 'asc' : 'desc', limit: 50 };
       } else cancel();
       const ticket = generation, target = items.length + 50;
@@ -194,6 +198,7 @@
           columns = context.preferences.columns.filter(k => allColumns.includes(k)); if (!columns.length) columns = ['date', 'receipt'];
           root.innerHTML = `<section class="receipt-search-card" aria-label="Belege finden"><header><span class="eyebrow">Belegsuche</span><h2>Belege finden</h2></header><form data-r="form" class="receipt-filters"><label class="receipt-query">Suchbegriff<input data-r="query" type="search" maxlength="160" placeholder="z. B. Sony A7* 24-105mm" aria-describedby="receiptSearchHelp"></label>
             <label>Beleg-/Rechnungsnummer<input data-r="receipt" type="search" maxlength="80" placeholder="Nummer oder Teil mit *"></label>
+            <label data-r="device-fields">Gerätenummer<input data-r="device" type="search" maxlength="80" placeholder="Erfasste Gerätenummer oder Teil mit *" autocomplete="off"></label>
             <label data-r="customer-fields" class="receipt-query">Kunde<input data-r="customer" type="search" maxlength="160" placeholder="Kundennummer, Name, Adresse, Telefon oder E-Mail" autocomplete="off"></label>
             <label>Datenart<select data-r="kind">${option('receipts', 'Belege')}${context.projection.finance ? option('daily', 'Tagesberichte · Buchungen') + option('journal', 'Kassenjournal · Buchungen') : ''}</select></label>
             <label>Zeitraum<button type="button" data-r="range" class="date-range-trigger" aria-haspopup="dialog">${date(from)} – ${date(to)}</button></label>

@@ -2,25 +2,16 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
 const { Writable } = require("node:stream");
 const { finished } = require("node:stream/promises");
-const { syntheticSchedule, compactSixSchedule } = require("../test-support/render-schedule-matrix-preview");
-
-const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "gp-matrix-render-"));
-Object.assign(process.env, { DB_PATH: path.join(fixtureRoot, "fixture.db"),
-  BACKUP_DIR: path.join(fixtureRoot, "backups"), GRABENPLANER_DATA_DIR: path.join(fixtureRoot, "data"),
-  GRABENPLANER_HOST: "127.0.0.1", GRABENPLANER_SEED_DEMO: "0", GRABENPLANER_TEST_AMU_SCANNER: "clean",
-  NODE_ENV: "test", TZ: "Europe/Vienna" });
-const subject = require("../server");
+const { syntheticSchedule, compactSixSchedule, compactTeamSchedule } = require("../test-support/render-schedule-matrix-preview");
+const { drawMatrix } = require("../test-support/schedule-pdf-render-fixture");
 
 async function render(schedule) {
   const chunks = [];
   const output = new Writable({ write(chunk, _encoding, callback) { chunks.push(chunk); callback(); } });
   const completion = finished(output);
-  await subject.drawSchedulePdfForTests(schedule, output, new Date("2026-09-06T14:00:00Z"), "matrix");
+  drawMatrix(schedule, output, new Date("2026-09-06T14:00:00Z"));
   await completion;
   const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const loading = getDocument({ data: Uint8Array.from(Buffer.concat(chunks)), disableWorker: true,
@@ -44,13 +35,6 @@ async function render(schedule) {
     return pages;
   } finally { await loading.destroy(); }
 }
-
-test.after(async () => {
-  await subject.closePersistenceForTests();
-  subject.releaseInstanceLockForTests();
-  assert.ok(fixtureRoot.startsWith(path.join(os.tmpdir(), "gp-matrix-render-")));
-  fs.rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
-});
 
 test("echte Wochenmatrix enthält sechs Personen, Dienstbuttons und normale Bemerkungen auf einer Seite", async () => {
   const schedule = syntheticSchedule();
@@ -114,6 +98,83 @@ test("sechs Personen mit großen Uhrzeiten und Teamsitzung passen ohne verkleine
   for(const employee of schedule.employees)assert.ok(pages[0].text.includes(employee.nickname));
   assert.ok(pages[0].text.includes('18:00-18:30'));assert.ok(pages[0].text.includes('Samstag: Übergabe'));
   assert.ok(pages[0].items.filter(item=>item.str==='09:00-18:00').every(item=>item.height>=11),'Time typography remains legible rather than scaling down the entire PDF');
+});
+
+test("sieben Personen mit 18pt-Zeiteinstellung und Teamsitzung passen auf eine lesbare A4-Seite", async () => {
+  for (const note of ["", "Samstag: Übergabe der offenen Reservierungen."]) {
+    const schedule = compactTeamSchedule({ timeFontSize: "18" });
+    schedule.scheduleNote.note_text = note;
+    const pages = await render(schedule);
+    assert.equal(pages.length, 1);
+    for (const employee of schedule.employees) assert.ok(pages[0].text.includes(employee.nickname));
+    assert.equal(pages[0].items.filter(item => item.str === "09:00-18:00").length, 42);
+    assert.equal(pages[0].items.filter(item => item.str === "TS · 18:00-18:30").length, 7);
+    assert.ok(pages[0].items.filter(item => item.str === "09:00-18:00").every(item => item.height >= 11));
+    if (note) assert.ok(pages[0].text.includes(note));
+    assert.equal(Math.round(pages[0].width), 842); assert.equal(Math.round(pages[0].height), 595);
+  }
+});
+
+test("sieben Personen einschließlich Teamsitzung, Teil-ZA und Außentermin bleiben vollständig auf einer Seite", async () => {
+  const schedule = compactTeamSchedule({ mixedEntries: true });
+  const pages = await render(schedule);
+  assert.equal(pages.length, 1);
+  const page = pages[0], text = page.text.replace(/\s+/g, " ");
+  for (const employee of schedule.employees) assert.ok(text.includes(employee.nickname));
+  for (const value of ["09:00-16:30", "16:30-18:00", "10:00-11:30", "11:30-18:00", "Außer-Haus-Termin", "Fototermin", "Musterfiliale", "Teamsitzung (TS)", "Samstag: Übergabe"])
+    assert.ok(text.includes(value), value);
+  assert.equal(page.items.filter(item => item.str === "TS · 18:00-18:30").length, 7);
+  assert.ok(page.items.some(item => item.str === "ZA"));
+  const heading = page.items.find(item => item.str === "Bemerkungen");
+  const note = page.items.find(item => item.str.startsWith("Samstag: Übergabe"));
+  assert.ok(heading.transform[5] > note.transform[5]);
+  assert.ok(note.transform[5] > 39, "The complete note remains above the footer");
+  assert.ok(Math.abs(note.height - 10) < .01, "Note text keeps its configured size");
+});
+
+test("bei sechs und sieben Personen wechselt die Teamsitzung nur bei Platzbedarf ins rechte Feld", async () => {
+  for (const count of [6, 7]) {
+    const regular = compactTeamSchedule();
+    regular.employees = regular.employees.slice(0, count);
+    const standardPages = await render(regular);
+    assert.equal(standardPages.length, 1, `${count}: standard layout fits`);
+    const standard = standardPages[0].items;
+    const banner = standard.find(item => item.str.startsWith("Teamsitzung (TS) · 16.09."));
+    const standardRemarks = standard.find(item => item.str === "Bemerkungen");
+    assert.ok(banner && banner.transform[4] < 50 && banner.transform[5] > standardRemarks.transform[5]);
+
+    const tight = compactTeamSchedule({ timeFontSize: "18", mixedEntries: count === 6 });
+    tight.employees = tight.employees.slice(0, count);
+    Object.assign(tight.shifts.find(shift => shift.employee_number === "903" && shift.shift_date === "2026-09-16"),
+      { duty_code: "department", department_id: 1, department_name: "Hardware" });
+    const pages = await render(tight);
+    assert.equal(pages.length, 1, `${count}: side field saves a page`);
+    const [page] = pages, items = page.items;
+    for (const employee of tight.employees) assert.ok(page.text.includes(employee.nickname));
+    const notesHeading = items.find(item => item.str === "Bemerkungen");
+    const meetingHeading = items.find(item => item.str === "Teamsitzung (TS)");
+    assert.ok(meetingHeading && meetingHeading.transform[4] > page.width * .55);
+    assert.ok(Math.abs(notesHeading.transform[5] - meetingHeading.transform[5]) < .01);
+    const summary = items.find(item => item.str.includes("16.09.") && item.str.includes("18:00-18:30"));
+    assert.ok(summary && summary.transform[4] > meetingHeading.transform[4]);
+    assert.ok(summary.transform[5] < meetingHeading.transform[5]);
+    const hw = items.find(item => item.str === "HW");
+    const participation = items.find(item => item.str === "TS · 18:00-18:30" && Math.abs(item.transform[4] - hw.transform[4]) < 5
+      && item.transform[5] < hw.transform[5] && hw.transform[5] - item.transform[5] < 30);
+    assert.ok(participation);
+    assert.ok(hw.transform[5] - participation.transform[5] >= 13.4, "HW badge and TS text retain visible separation");
+  }
+});
+
+test("lange Teamsitzungsnotizen fließen vollständig auf eigene Fortsetzungsseiten", async () => {
+  const schedule = compactTeamSchedule();
+  const notes = Array.from({ length: 30 }, (_, index) => `TOP${index + 1}: Vollständiger Tagesordnungspunkt mit Zusatzinformation.`);
+  for (const option of schedule.weekOptions) option.note = notes.join(" ");
+  const pages = await render(schedule), text = pages.map(page => page.text).join(" ").replace(/\s+/g, " ");
+  assert.ok(pages.length > 1);
+  assert.ok(text.includes("Teamsitzungen · Fortsetzung"));
+  for (let index = 1; index <= 30; index++) assert.equal(text.split(`TOP${index}:`).length - 1, 1, `TOP ${index} remains complete and appears once`);
+  assert.ok(pages[0].items.some(item => item.str === "Bemerkungen"));
 });
 
 test("Dienstbezeichnungen sind standardmäßig verborgen und lassen sich rechts neben dem Button einblenden", async () => {

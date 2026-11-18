@@ -11,9 +11,12 @@ test('Native publication optimization migrates and rolls back atomically without
   const run=await f.ingest('ARTIKEL_FILIALEN',[{EAN:'102004',FilialID:18,FBestand:3}]);
   const proofs=async()=>(await pg.client.query('SELECT * FROM integration.import_history_snapshot_attestations ORDER BY run_id')).rows;
   const expectedProofs=await proofs(),expected=await fingerprint();
+  const references=require('../lib/persistence/postgresql/sales/import-history-publication-reference-proof');
+  const previous=(await pg.client.query('SELECT target_sha256 FROM gp.import_history_publication_performance_history')).rows[0].target_sha256;
   for(const fault of [false,true]){
    await pg.client.query('BEGIN');
    try{
+    await references.rollbackWithinTransaction(pg.client,previous);
     assert.equal((await m.rollbackWithinTransaction(pg.client,base)).applied,true);
     assert.equal(await fingerprint(),base);assert.deepEqual(await proofs(),expectedProofs);
     await pg.client.query('SELECT gp.certify_history_snapshot($1)',[run.id]);
@@ -22,7 +25,7 @@ test('Native publication optimization migrates and rolls back atomically without
      await assert.rejects(m.migrateWithinTransaction({query:(sql,...args)=>sql.startsWith('CREATE INDEX import_history_member_coverage')?Promise.reject(injected):pg.client.query(sql,...args)},base),e=>e===injected);
     }else{
      assert.equal((await m.migrateWithinTransaction(pg.client,base)).applied,true);
-     assert.equal(await fingerprint(),expected);assert.deepEqual(await proofs(),expectedProofs);
+     assert.equal(await fingerprint(),previous);assert.deepEqual(await proofs(),expectedProofs);
      assert.equal((await m.migrateWithinTransaction(pg.client,base)).applied,false);
      await pg.client.query('SELECT gp.certify_history_snapshot($1)',[run.id]);
      await pg.client.query("UPDATE gp.import_history_publication_performance_history SET plan_sha256=repeat('0',64)");
@@ -34,6 +37,7 @@ test('Native publication optimization migrates and rolls back atomically without
   }
   await pg.client.query('BEGIN');
   try{
+   await references.rollbackWithinTransaction(pg.client,previous);
    await pg.client.query('DROP INDEX integration.import_history_member_coverage');
    await assert.rejects(m.migrateWithinTransaction(pg.client,base),/schema drift/);
    await assert.rejects(m.rollbackWithinTransaction(pg.client,base),/schema drift/);

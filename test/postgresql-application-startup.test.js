@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-function applicationFixture(t, open) {
+function applicationFixture(t, open, configuration={}) {
   const boundary = require('../lib/persistence/postgresql/boundary/application');
   const authorization = require('../lib/persistence/postgresql/core/application');
   const operations = require('../lib/persistence/postgresql/application-operations/access');
@@ -22,9 +22,21 @@ function applicationFixture(t, open) {
   const application = require(modulePath).openDeferredPostgresqlApplication({
     coreUrl: 'synthetic-core', salesUrl: 'synthetic-sales',
     readers: { coreUrl: 'synthetic-reader' }, authorize: () => true,
+    ...configuration,
   });
   return { application, closed, reads };
 }
+
+for(const [productActivation,rehearsal,expected] of [[true,false,true],[false,true,false],[true,true,false],[false,false,false]])
+test(`parallel import capacity requires actual production activation: active=${productActivation}, rehearsal=${rehearsal}`,async t=>{
+  let requested;
+  const f=applicationFixture(t,async options=>{
+    requested=options.productiveConcurrency;
+    return {provider:{},close:async()=>{}};
+  },{productActivation,rehearsal});
+  await f.application.ready;assert.equal(requested,expected);
+  await f.application.provider.close();
+});
 
 test('PostgreSQL connection deadlines begin after synchronous application bootstrap', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });

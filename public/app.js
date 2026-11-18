@@ -2072,6 +2072,20 @@ function canAccessTeamManagement() {
     .some(permission => permissions.includes(permission));
 }
 
+function canOpenBranchWebgl() {
+  return canAccessTeamManagement() && activeLocations().some(location => /grabenweg/i.test(location.name || ""));
+}
+
+let branchWebglWorkspace = null;
+function activateBranchWebgl() {
+  if (state.currentView !== "branchWebgl" || !canOpenBranchWebgl()) {
+    branchWebglWorkspace?.suspend();
+    return;
+  }
+  branchWebglWorkspace ||= window.GrabenplanerBranchWebgl.mount(document.getElementById("branchWebglWorkspace"));
+  branchWebglWorkspace.activate();
+}
+
 function hasGovernancePermission(permission) {
   return !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes(permission) === true;
@@ -3049,6 +3063,8 @@ function applyRoleVisibility() {
   elements.addRetentionHoldButton?.classList.toggle("hidden", !retentionManageAccess);
   elements.retentionPreviewCard?.classList.toggle("hidden", !retentionManageAccess);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
+  document.querySelectorAll('[data-view="branchWebgl"]').forEach((button) => button.classList.toggle("hidden", !canOpenBranchWebgl()));
+  if (state.currentView === "branchWebgl" && !canOpenBranchWebgl()) setView("startDashboard");
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
   elements.addVacationButton?.classList.toggle("hidden", !approvedAbsenceWriteAccess);
   elements.vacationApprovedEntryHint?.classList.toggle("hidden", !isLocationPlannerSession());
@@ -5459,6 +5475,7 @@ function renderContextNavigation() {
   elements.filialManagementNav?.classList.toggle("contains-active", filialViewActive);
   applyNavigationGroupState("filialManagement", true);
   setNavigationCurrent(elements.filialDashboardNavButton, state.currentView === "filialAdministration");
+  setNavigationCurrent(document.getElementById("branchWebglNavButton"), state.currentView === "branchWebgl");
   setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
   setNavigationCurrent(elements.loanManagementNavButton, state.currentView === "loans");
   setNavigationCurrent(elements.branchOrdersManagementNavButton, state.currentView === "branchOrders");
@@ -23067,6 +23084,7 @@ function normalizePersonnelDashboardLayout(value) {
 function filialDashboardCatalog() {
   const features = state.portalStatus?.installationFeatures || {};
   return [
+    { id: "webgl", symbol: "⬡", eyebrow: "Räumliche Planung", label: "WebGL · Grabenweg", description: "Die Grundlage für Grundriss, Raumhöhe und Geschäftsausstattung öffnen.", view: "branchWebgl", available: canOpenBranchWebgl() },
     { id: "team", symbol: "◎", eyebrow: "Organisation", label: "Teams & Standorte", description: "Team, Farben, Spitznamen und operative Filialdaten verwalten.", view: "personnel", available: canAccessTeamManagement() },
     { id: "loans", symbol: "▣", eyebrow: "Leihe", label: "Leihverwaltung", description: "Leihvorgänge und Rücknahmen im freigegebenen Bereich bearbeiten.", view: "loans", available: canReadLoanManagement() },
     { id: "branchOrders", symbol: "▤", eyebrow: "Beschaffung", label: "Filialbestellungen", description: "Bestellgruppen, Ziele und Nachweise im erlaubten Bereich verwalten.", view: "branchOrders", available: canManageBranchOrders() },
@@ -26541,6 +26559,7 @@ async function saveUserRights(event) {
 const UI_APPEARANCE_VIEWS = Object.freeze([
   "startDashboard",
   "filialAdministration",
+  "branchWebgl",
   "planning",
   "requests",
   "timeTracking",
@@ -26678,6 +26697,7 @@ function pageViewElement(view) {
   return ({
     startDashboard: elements.startDashboardView,
     filialAdministration: elements.filialAdministrationView,
+    branchWebgl: document.getElementById("branchWebglView"),
     planning: elements.planningView,
     requests: elements.requestsView,
     timeTracking: elements.timeTrackingView,
@@ -38810,6 +38830,7 @@ function setView(view) {
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
     || (view === "personnel" && !canAccessTeamManagement())
+    || (view === "branchWebgl" && !canOpenBranchWebgl())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
     || (view === "tradeInsights" && !canAccessTradeInsights())
@@ -38874,6 +38895,8 @@ function setView(view) {
   renderContextNavigation();
   elements.startDashboardView?.classList.toggle("active", view === "startDashboard");
   elements.filialAdministrationView?.classList.toggle("active", view === "filialAdministration");
+  document.getElementById("branchWebglView")?.classList.toggle("active", view === "branchWebgl");
+  activateBranchWebgl();
   elements.planningView.classList.toggle("active", view === "planning");
   elements.requestsView.classList.toggle("active", view === "requests");
   elements.timeTrackingView?.classList.toggle("active", view === "timeTracking");
@@ -38957,7 +38980,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (fromHistory) closeMobileNavigation({ restoreFocus: false });
     return;
   }
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "technicalSecurity", "articleCatalog", "articleReport", "salesBwl", "gpDefinitions", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "branchWebgl", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "technicalSecurity", "articleCatalog", "articleReport", "salesBwl", "gpDefinitions", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }

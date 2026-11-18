@@ -5,15 +5,16 @@
  const moneyFormatter=new Intl.NumberFormat('de-AT',{style:'currency',currency:'EUR',maximumFractionDigits:2});
  const number=v=>v==null?'–':numberFormatter.format(Number(v));
  const money=v=>v==null?'–':moneyFormatter.format(Number(v));
- const date=v=>v?String(v).slice(0,10).split('-').reverse().join('.'):'–';
+ const SourceTime=typeof module==='object'&&module.exports?require('./source-date-time'):globalThis.GrabenplanerSourceDateTime;
+ const date=v=>SourceTime.sourceLabel(v);
  const columns=[['created','Anlegedatum'],['booked','Buchdatum'],['number','Rechnungsnummer'],['supplier','Lieferant'],['quantity','Menge'],['priceMin','EK netto']];
  const collator=new Intl.Collator('de-AT',{numeric:true,sensitivity:'base'});
  function sorted(rows,key='booked',direction='desc'){
-  return [...rows].sort((a,b)=>{const x=a[key],y=b[key];if(x==null||y==null)return x==null?(y==null?0:1):-1;
+  return [...rows].sort((a,b)=>{const x=a.timestamps?.[key]?.dateTime||a[key],y=b.timestamps?.[key]?.dateTime||b[key];if(x==null||y==null)return x==null?(y==null?0:1):-1;
    const c=['quantity','priceMin','price','netNet'].includes(key)?Number(x)-Number(y):collator.compare(String(x),String(y));return (direction==='asc'?c:-c)||collator.compare(a.id,b.id);});
  }
  const price=row=>row.priceMin==null?'–':row.priceMin===row.priceMax?money(row.priceMin):money(row.priceMin)+' – '+money(row.priceMax);
- function copyText(article,row){return 'Artikel: '+article.number+' · '+article.label+'\nLieferant: '+row.supplier+' ('+row.supplierCode+')\nRechnungsnummer: '+row.number+'\nAnlegedatum: '+date(row.created)+'\nBuchdatum: '+date(row.booked)+'\nMenge: '+number(row.quantity);}
+ function copyText(article,row){return 'Artikel: '+article.number+' · '+article.label+'\nLieferant: '+row.supplier+' ('+row.supplierCode+')\nRechnungsnummer: '+row.number+'\nAnlegedatum: '+date(row.timestamps?.created?.dateTime||row.created)+'\nBuchdatum: '+date(row.timestamps?.booked?.dateTime||row.booked)+'\nMenge: '+number(row.quantity);}
  function mount(root,{api,tableLayout=null,onExport=null,today=()=>new Date().toISOString().slice(0,10)}={}){
   root.classList.add('supplier-invoices');
   root.innerHTML=`<header><h2>Lieferantenrechnungen</h2><p>Rechnungsnummern für Reparatur, Austausch oder Gutschrift finden – einschließlich der Belege aus dem Zentrallager.</p></header>
@@ -34,9 +35,9 @@
   function render(){
    const a=data?.article;q('selection').hidden=!a;if(!a)return;
    q('article').innerHTML='<div><strong class="si-number">'+escape(a.number)+'</strong><h3>'+escape(a.label)+'</h3>'+(!a.current?'<small>Historischer Artikel · kein aktueller Artikelstamm</small>':'')+'</div><div class="si-prices"><span>VK brutto<strong>'+money(a.saleGross)+'</strong></span>'+(data.costs?'<span>Durchschnitts-EK netto<strong>'+money(a.averageNet)+'</strong></span>':'')+'</div>';
-   q('summary').textContent=number(data.rows.length)+' Rechnungen · Importstand '+date(data.sourceDate)+(filters.elements.dateFrom.value?' · Zeitraum nach '+(filters.elements.dateField.value==='booked'?'Buchdatum':'Anlegedatum'):' · Gesamter Zeitraum');
+   q('summary').textContent=number(data.rows.length)+' Rechnungen · Importstand '+SourceTime.instantLabel(data.sourceDate)+(filters.elements.dateFrom.value?' · Zeitraum nach '+(filters.elements.dateField.value==='booked'?'Buchdatum':'Anlegedatum'):' · Gesamter Zeitraum');
    const cols=columns.filter(([k])=>k!=='priceMin'||data.costs);
-   q('results').innerHTML=data.rows.length?'<table><thead><tr>'+cols.map(([k,label])=>'<th aria-sort="'+(key===k?(direction==='asc'?'ascending':'descending'):'none')+'"><button type="button" data-si-sort="'+k+'">'+label+' '+(key===k?(direction==='asc'?'↑':'↓'):'↕')+'</button></th>').join('')+'<th>Aktionen</th></tr></thead><tbody>'+sorted(data.rows,key,direction).map(r=>'<tr>'+cols.map(([k])=>'<td>'+(['created','booked'].includes(k)?date(r[k]):k==='priceMin'?price(r)+(r.priceMissing?'<small>Preis teilweise nicht hinterlegt</small>':''):k==='quantity'?number(r.quantity)+(r.negative?'<small>Enthält negative Mengen</small>':''):k==='number'?'<strong>'+escape(r.number)+'</strong>':escape(r[k]))+'</td>').join('')+'<td class="si-actions"><button type="button" data-si-copy="'+escape(r.id)+'">Kopieren</button><button type="button" data-si-detail="'+escape(r.id)+'">Positionen ('+r.positions.length+')</button></td></tr>').join('')+'</tbody></table>':'<p>Keine Rechnungen für diesen Artikel im gewählten Zeitraum.</p>';
+   q('results').innerHTML=data.rows.length?'<table><thead><tr>'+cols.map(([k,label])=>'<th aria-sort="'+(key===k?(direction==='asc'?'ascending':'descending'):'none')+'"><button type="button" data-si-sort="'+k+'">'+label+' '+(key===k?(direction==='asc'?'↑':'↓'):'↕')+'</button></th>').join('')+'<th>Aktionen</th></tr></thead><tbody>'+sorted(data.rows,key,direction).map(r=>'<tr>'+cols.map(([k])=>'<td>'+(['created','booked'].includes(k)?date(r.timestamps?.[k]?.dateTime||r[k]):k==='priceMin'?price(r)+(r.priceMissing?'<small>Preis teilweise nicht hinterlegt</small>':''):k==='quantity'?number(r.quantity)+(r.negative?'<small>Enthält negative Mengen</small>':''):k==='number'?'<strong>'+escape(r.number)+'</strong>':escape(r[k]))+'</td>').join('')+'<td class="si-actions"><button type="button" data-si-copy="'+escape(r.id)+'">Kopieren</button><button type="button" data-si-detail="'+escape(r.id)+'">Positionen ('+r.positions.length+')</button></td></tr>').join('')+'</tbody></table>':'<p>Keine Rechnungen für diesen Artikel im gewählten Zeitraum.</p>';
    tableLayout?.attach(q('results'),'supplier-invoices');
   }
   async function load(number){

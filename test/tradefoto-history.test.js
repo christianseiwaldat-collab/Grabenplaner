@@ -554,6 +554,7 @@ test('Productive Block 1: an explicitly verified placeholder head never erases s
 });
 test('Block 4: default sales gate stays closed, including heads without details', () => {
   const result = reconcile(head(), [], { policy: null }); assert.equal(result.canAggregate, false); assert.equal(result.totals, null);
+  assert.equal(result.time,'10:15:30.000');assert.equal(result.dateTime,DAY.slice(0,10)+'T10:15:30.000');
   assert.ok(result.issues.includes('SALES_SEMANTICS_UNCONFIRMED')); assert.ok(result.issues.includes('RECEIPT_WITHOUT_LINES'));
   assert.throws(() => reconcile(head(), [line()], { policy: { ...policy() } }), code('IMPORT_SALES_POLICY_UNTRUSTED'));
   assert.throws(() => reconcile(head(), [line()], { sourceInstance: 'different' }), code('IMPORT_SALES_POLICY_SCOPE'));

@@ -159,7 +159,8 @@ test("Wochenmatrix verdrahtet Punktgrößen, Hervorhebung, Kopftext und bereichs
   assert.match(server, /if \(showEmployeePosition\) \{[\s\S]*employee\.position_name/);
   assert.match(server, /contrastOnWhite\(candidate\) < 4\.5/);
   assert.match(server, /livePersonnelLearningRoleAdministrationActor\([\s\S]*assertSessionContextScope\(liveSession, context\)/);
-  assert.match(server, /return `Teamsitzung \(TS\) · \$\{date\} · \$\{time\}/);
+  // Meeting field placement, complete text and duty/TS spacing are verified
+  // against the generated PDF in schedule-matrix-render.test.js.
   assert.doesNotMatch(server, /label:\s*"Mitarbeitendenfarbe"/);
 });
 

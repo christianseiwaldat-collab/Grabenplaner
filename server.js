@@ -35111,6 +35111,7 @@ function rightsDashboardCoverage(permission, user, scope) {
 const UI_PREFERENCE_VIEWS = Object.freeze([
   "startDashboard",
   "filialAdministration",
+  "branchWebgl",
   "planning",
   "requests",
   "timeTracking",
@@ -65147,6 +65148,20 @@ function scheduleMatrixCellData(schedule, employee, date, hiddenOptions = new Se
   const timedDuties = entries.filter((entry) => entry.type === "shift"
     || (entry.type === "event" && entry.option.option_type === "branch"
       && !optionIsAllDay(entry.option) && isTime(entry.option.start_time) && isTime(entry.option.end_time)));
+  // Reclaim padding on dense pages without hiding timed options or their
+  // reasons. A meeting still remains on each participating employee's row.
+  if (schedule.matrixCompactRows && entries.some(entry => entry.type === "shift")) {
+    for (const entry of entries) {
+      if (entry.type !== "event" || optionIsAllDay(entry.option)
+        || !isTime(entry.option.start_time) || !isTime(entry.option.end_time)
+        || entry.option.option_type === "branch") continue;
+      entry.compactDuty = true;
+      entry.compactOption = true;
+      entry.compactDetailTexts = entry.detailLines.filter(text => text !== scheduleMatrixOptionTimeText(entry.option)
+        && text !== scheduleMatrixOptionCode(entry.option.option_type));
+      for (const duty of timedDuties) duty.compactDuty = true;
+    }
+  }
   if (timedDuties.length > 1) {
     for (const entry of timedDuties) entry.compactDuty = true;
   }
@@ -65184,7 +65199,7 @@ function scheduleMatrixMeetingText(meeting) {
   const time = optionIsAllDay(meeting)
     ? "ganztägig"
     : `${meeting.start_time || ""}-${meeting.end_time || ""}`;
-  return `Teamsitzung (TS) · ${date} · ${time}${meeting.note ? ` · ${meeting.note}` : ""}`;
+  return `${date} · ${time}${meeting.note ? ` · ${meeting.note}` : ""}`;
 }
 
 function scheduleMatrixFittedFontSize(doc, text, font, preferredSize, width, minimumSize = 5.2) {
@@ -65203,9 +65218,10 @@ function scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize) {
 }
 
 function scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize) {
+  if (entry.compactOption) return 15 + entry.compactDetailLines.length * 9.5;
   if (entry.compactDuty) return 15 + (entry.type === "event" ? 10 : 0);
   if (entry.type === "shift") {
-    return timeFontSize + detailFontSize + 6;
+    return timeFontSize + detailFontSize + 10;
   }
   if (entry.type === "event") {
     const estimatedLines = entry.detailLines.reduce(
@@ -65308,64 +65324,75 @@ function scheduleMatrixSpanLayout(doc, spans, dayWidth, detailFontSize, settings
 
 function scheduleMatrixContentRowHeight(schedule, employee, dayCount, timeFontSize, detailFontSize, doc, dayWidth) {
   if (!employee) return 35;
+  const cellPadding = schedule.matrixCompactRows ? 6 : 8;
   const spans = scheduleMatrixEmployeeSpans(schedule, employee, dayCount);
   const hiddenOptions = new Set(spans.flatMap((span) => span.options));
   const spanLayout = scheduleMatrixSpanLayout(doc, spans, dayWidth, detailFontSize, schedule.settings);
   const cells = Array.from({ length: dayCount }, (_item, dayIndex) => (
     scheduleMatrixCellData(schedule, employee, addDays(schedule.weekStart, dayIndex), hiddenOptions)
   ));
+  for (const cell of cells) scheduleMatrixPrepareCompactOptions(doc, cell, dayWidth - 14);
   const fullHeightSpan = spans.length === 1
     && cells.slice(spans[0].startDay, spans[0].endDay + 1)
       .every((cell) => cell.lines.every((line) => line.type === "empty"));
   const spanHeight = fullHeightSpan ? 0 : spanLayout.totalHeight;
-  let required = fullHeightSpan ? spanLayout.items[0].height + 8 : 0;
+  let required = fullHeightSpan ? spanLayout.items[0].height + cellPadding : 0;
   for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
     if (fullHeightSpan && dayIndex >= spans[0].startDay && dayIndex <= spans[0].endDay) continue;
     const cell = cells[dayIndex];
     const contentHeight = cell.lines
       .slice(0, 4)
       .reduce((sum, entry) => sum + scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize), 0);
-    required = Math.max(required, spanHeight + contentHeight + 8);
+    required = Math.max(required, spanHeight + contentHeight + cellPadding);
   }
   return Math.ceil(required);
 }
 
-function scheduleMatrixNoteLayout(doc, note, width, mainHeight = 68) {
-  const padding = 8;
-  const rich = scheduleNoteRichText.layout(doc, typeof note === "string" ? { note_text: note } : note || {}, width - padding * 2);
-  const pages = scheduleNoteRichText.paginate(rich.lines, Math.max(0, mainHeight - 11 - padding * 2), 458);
-  return { columns: 1, gap: 0, padding, columnWidth: rich.width,
-    mainColumns: [pages[0]], continuationPages: pages.slice(1).map(lines => [lines]) };
+function scheduleMatrixNotePanel(doc, note, width, { title = "Bemerkungen", padding = 8, minimumHeight = 32 } = {}) {
+  const headingHeight = title ? 11 : 0;
+  const overhead = headingHeight + padding * 2;
+  const { lines } = scheduleNoteRichText.layout(doc, note || {}, width - padding * 2);
+  // Round up so a line measured to fit cannot spill over by a rounding error.
+  const height = Math.max(minimumHeight, Math.ceil(overhead + lines.reduce((sum, line) => sum + line.height, 0)));
+  return { title, width, headingHeight, padding, overhead, lines, height, reservedHeight: Math.min(64, height) };
 }
 
-function drawScheduleMatrixNoteColumns(doc, columns, x, y, layout) {
-  scheduleNoteRichText.draw(doc, columns.flat(), x + layout.padding, y + layout.padding);
+function scheduleMatrixNotePages(panel, mainHeight) {
+  const [first, ...continuation] = scheduleNoteRichText.paginate(panel.lines, Math.max(0, mainHeight - panel.overhead), 458);
+  return { first, continuation };
 }
 
-function drawScheduleMatrixNotesBox(doc, noteText, columns, x, y, width, height, layout, hint = "") {
-  doc.fillColor("#253943").font("Helvetica-Bold").fontSize(7.4).text("Bemerkungen", x, y, { width });
-  const boxY = y + 11;
-  doc.roundedRect(x, boxY, width, height - 11, 4).fillAndStroke("#f7f9f8", "#c8d1cd");
-  const hasLines = noteText && columns.some((column) => column.length);
-  if (hasLines) {
-    drawScheduleMatrixNoteColumns(doc, columns, x, boxY, layout);
+function drawScheduleMatrixNotesBox(doc, panel, lines, x, y, height, hint = "", style = {}) {
+  const { title, width, headingHeight, padding } = panel;
+  if (title) {
+    doc.fillColor("#253943").font("Helvetica-Bold").fontSize(7.4).text(title, x, y, { width });
+  }
+  const boxY = y + headingHeight;
+  doc.roundedRect(x, boxY, width, height - headingHeight, 4).fillAndStroke(style.fill || "#f7f9f8", style.stroke || "#c8d1cd");
+  if (lines.length) {
+    scheduleNoteRichText.draw(doc, lines, x + padding, boxY + padding);
   }
   if (hint) {
-    doc.fillColor("#7c888d").font("Helvetica").fontSize(5.9).text(hint, hasLines ? x + 120 : x + 9, hasLines ? y + 1 : boxY + 9,
-      { width: hasLines ? width - 120 : width - 18, align: hasLines ? "right" : "left" });
+    const besideTitle = title && lines.length;
+    const hintX = besideTitle ? x + 120 : x + padding;
+    const hintY = besideTitle ? y + 1 : boxY + padding;
+    doc.fillColor("#7c888d").font("Helvetica").fontSize(5.9).text(hint, hintX, hintY,
+      { width: x + width - padding - hintX, align: besideTitle ? "right" : "left" });
   }
 }
 
 function drawScheduleMatrixCompactDuty(doc, line, x, y, width, employeeColor, settings) {
   const away = line.type === "event";
   const option = line.option;
-  const code = String(away ? option.pdf_duty_code || "A" : line.duty?.code || "AG");
+  const code = String(line.compactOption ? scheduleMatrixOptionCode(option.option_type)
+    : away ? option.pdf_duty_code || "A" : line.duty?.code || "AG");
   const timeText = away ? `${option.start_time}-${option.end_time}` : line.timeText;
   const badgeWidth = 18;
   const badgeHeight = 10;
   const badgeX = x;
   const timeX = x + badgeWidth + 5;
-  const color = scheduleDutyColor(code, settings.schedule_duty_colors);
+  const color = line.compactOption ? scheduleMatrixOptionStyle(option.option_type).stroke
+    : scheduleDutyColor(code, settings.schedule_duty_colors);
   const timeFont = settingEnabled(settings, "pdf_schedule_matrix_time_font_bold") ? "Helvetica-Bold" : "Helvetica";
   const timeColor = settingEnabled(settings, "pdf_schedule_matrix_time_employee_color")
     ? scheduleMatrixEmployeeTextColor(employeeColor) : "#172433";
@@ -65376,12 +65403,26 @@ function drawScheduleMatrixCompactDuty(doc, line, x, y, width, employeeColor, se
   doc.fillColor(scheduleDutyTextColor(color)).font("Helvetica-Bold").fontSize(6.5)
     .text(code, badgeX, y + (badgeHeight - 6.5 * 0.718) / 2,
       { width: badgeWidth, align: "center", lineBreak: false });
-  if (away) {
+  if (line.compactOption) {
+    line.compactDetailLines.forEach((text, index) => {
+      doc.fillColor("#40535d").font("Helvetica-Bold").fontSize(6.8)
+        .text(text, timeX, y + 12 + index * 9.5, { width: width - badgeWidth - 5, lineBreak: false });
+    });
+  } else if (away) {
     const destination = `A · ${option.pdf_destination_location_label || option.pdf_destination_label || "Andere Filiale"}`;
     const detailWidth = width - badgeWidth - 5;
     const size = scheduleMatrixFittedFontSize(doc, destination, "Helvetica-Bold", 6.8, detailWidth, 5.2);
     doc.fillColor("#40535d").font("Helvetica-Bold").fontSize(size)
       .text(destination, timeX, y + 12, { width: detailWidth, lineBreak: false, ellipsis: true });
+  }
+}
+
+function scheduleMatrixPrepareCompactOptions(doc, cell, width) {
+  doc.font("Helvetica-Bold").fontSize(6.8);
+  for (const line of cell.lines) {
+    if (!line.compactOption) continue;
+    line.compactDetailLines = line.compactDetailTexts.flatMap(text =>
+      wrapScheduleMatrixNote(text, value => doc.widthOfString(value), width - 23));
   }
 }
 
@@ -65513,13 +65554,33 @@ function scheduleMatrixPageRowHeights(employees, availableHeight, minimumHeightF
   return heights;
 }
 
-function scheduleMatrixFirstPageRowsHeight(doc, note, width, availableHeight, minimumHeight, noteAreaHeight) {
-  const rich = scheduleNoteRichText.layout(doc, note || {}, width - 16);
-  const noteHeight = 11 + 16 + rich.lines.reduce((sum, line) => sum + line.height, 0);
-  // The first page's notes take precedence over optional row stretching.
-  // Preserve every row's content minimum and the note's actual point sizes;
-  // text exceeding that physical space still uses the continuation pages.
-  return Math.max(minimumHeight, availableHeight - Math.max(0, noteHeight - noteAreaHeight));
+function scheduleMatrixFirstPageRowsHeight(availableHeight, minimumHeight, footer) {
+  // Let remarks and meetings use the space otherwise spent stretching rows.
+  return Math.max(minimumHeight, availableHeight - (footer.height - footer.reservedHeight));
+}
+
+function scheduleMatrixFooter(doc, note, meetings, tableWidth, sideBySide = false) {
+  const gap = sideBySide ? 12 : meetings.length ? 7 : 0;
+  const noteWidth = sideBySide ? Math.round(tableWidth * 0.6) : tableWidth;
+  const remarks = scheduleMatrixNotePanel(doc, note, noteWidth);
+  if (!meetings.length) {
+    return { remarks, meeting: null, sideBySide, gap, height: remarks.height, reservedHeight: remarks.reservedHeight };
+  }
+
+  const title = meetings.length === 1 ? "Teamsitzung (TS)" : "Teamsitzungen (TS)";
+  const meetingText = meetings.map(scheduleMatrixMeetingText).join("\n");
+  const meeting = scheduleMatrixNotePanel(doc, {
+    note_text: sideBySide ? meetingText : `${title} · ${meetingText}`,
+    font_size: sideBySide ? "8" : "7.2",
+    bold: true,
+  }, sideBySide ? tableWidth - noteWidth - gap : tableWidth,
+  sideBySide ? { title } : { title: "", padding: 7, minimumHeight: 26 });
+  return {
+    remarks, meeting, sideBySide, gap,
+    height: sideBySide ? Math.max(remarks.height, meeting.height) : meeting.height + gap + remarks.height,
+    reservedHeight: sideBySide ? Math.max(remarks.reservedHeight, meeting.reservedHeight)
+      : meeting.reservedHeight + gap + remarks.reservedHeight,
+  };
 }
 
 function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
@@ -65544,7 +65605,6 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const dayCount = settingEnabled(schedule.settings, "show_sunday") || sundayHasContent ? 7 : 6;
   const weekdayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const meetings = collapsedScheduleWeekOptions(schedule.weekOptions).filter(isTeamWideMeetingOption);
-  const scheduleNoteText = String(schedule.scheduleNote?.note_text || "").trim();
   const timeFontSize = Number(normalizeScheduleMatrixFontSize(
     schedule.settings.pdf_schedule_matrix_time_font_size,
     SCHEDULE_MATRIX_TIME_FONT_SIZES,
@@ -65560,48 +65620,72 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const showEmployeePosition = settingEnabled(schedule.settings, "pdf_schedule_matrix_show_position");
   const matrixHeaderText = normalizeScheduleMatrixHeaderText(schedule.settings.pdf_schedule_matrix_header_text);
   const tableTop = 58;
-  const noteAreaHeight = 64;
-  const postTableHeight = 25 + noteAreaHeight + (meetings.length ? 33 : 0);
-  const tableBottom = 556 - postTableHeight;
+  const tableWidth = pageWidth - left - right;
   const hasDayStatus = Array.from({ length: dayCount }, (_, index) => schedulePdfDayStatus(schedule, addDays(schedule.weekStart, index), publicHolidayName)).some(Boolean);
   const headerHeight = hasDayStatus ? 65 : 42;
   const employees = schedule.employees.length ? schedule.employees : [null];
-  const tableWidth = pageWidth - left - right;
   const employeeColumnWidth = 148;
   const dayWidth = (tableWidth - employeeColumnWidth) / dayCount;
+  const dataTop = tableTop + headerHeight;
+  const spaceBelowHeader = 556 - dataTop - 25; // gaps and legend
   const baseRowHeight = scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize);
-  const minimumHeightFor = (employee) => Math.max(
-    baseRowHeight,
-    scheduleMatrixContentRowHeight(
-      schedule,
-      employee,
-      dayCount,
-      timeFontSize,
-      detailFontSize,
-      doc,
-      dayWidth,
-    ),
-  );
-  const availableRowsHeight = tableBottom - tableTop - headerHeight;
+  const measureRows = (compact) => {
+    const input = compact ? { ...schedule, matrixCompactRows: true } : schedule;
+    const baseHeight = compact ? Math.min(baseRowHeight, 40) : baseRowHeight;
+    return new Map(employees.map(employee => [employee, Math.max(baseHeight,
+      scheduleMatrixContentRowHeight(input, employee, dayCount, timeFontSize, detailFontSize, doc, dayWidth))]));
+  };
+  const sumRows = heights => [...heights.values()].reduce((sum, height) => sum + height, 0);
+  let footer = scheduleMatrixFooter(doc, schedule.scheduleNote, meetings, tableWidth);
+  let rowHeightsByEmployee = measureRows(false);
+  let requiredRowsHeight = sumRows(rowHeightsByEmployee);
+  if (meetings.length && employees.length >= 6 && employees.length <= 7
+      && requiredRowsHeight + footer.height > spaceBelowHeader) {
+    const sideFooter = scheduleMatrixFooter(doc, schedule.scheduleNote, meetings, tableWidth, true);
+    if (requiredRowsHeight + sideFooter.height <= spaceBelowHeader) {
+      footer = sideFooter;
+    } else {
+      const compactRows = measureRows(true);
+      const compactHeight = sumRows(compactRows);
+      // With long notes, the side panel may still save an employee page.
+      const savesEmployeePage = compactHeight + footer.reservedHeight > spaceBelowHeader
+        && compactHeight + sideFooter.reservedHeight <= spaceBelowHeader;
+      if (compactHeight + sideFooter.height <= spaceBelowHeader || savesEmployeePage) {
+        footer = sideFooter;
+        schedule = { ...schedule, matrixCompactRows: true };
+        rowHeightsByEmployee = compactRows;
+        requiredRowsHeight = compactHeight;
+      }
+    }
+  }
+  const availableRowsHeight = spaceBelowHeader - footer.reservedHeight;
+  if (requiredRowsHeight > availableRowsHeight && !schedule.matrixCompactRows) {
+    rowHeightsByEmployee = measureRows(true);
+    schedule = { ...schedule, matrixCompactRows: true };
+  }
+  const minimumHeightFor = employee => rowHeightsByEmployee.get(employee);
   const pageRows = scheduleMatrixPageRows(employees, availableRowsHeight, minimumHeightFor);
   const firstPageRows = pageRows[0];
-  const firstPageAvailableHeight = scheduleMatrixFirstPageRowsHeight(doc, schedule.scheduleNote, tableWidth,
-    availableRowsHeight, firstPageRows.reduce((sum, employee) => sum + minimumHeightFor(employee), 0), noteAreaHeight);
+  const firstPageAvailableHeight = scheduleMatrixFirstPageRowsHeight(availableRowsHeight,
+    firstPageRows.reduce((sum, employee) => sum + minimumHeightFor(employee), 0), footer);
   const firstPageRowHeights = scheduleMatrixPageRowHeights(firstPageRows, firstPageAvailableHeight, minimumHeightFor);
-  const firstDataBottom = tableTop + headerHeight
-    + firstPageRowHeights.reduce((sum, height) => sum + height, 0);
-  const firstNoteY = firstDataBottom + 7 + (meetings.length ? 33 : 0) + 18;
-  const mainNoteHeight = Math.max(noteAreaHeight, 556 - firstNoteY);
-  const noteLayout = scheduleMatrixNoteLayout(doc, schedule.scheduleNote, tableWidth, mainNoteHeight);
+  const footerSpace = Math.max(footer.reservedHeight, spaceBelowHeader - firstPageRowHeights.reduce((sum, height) => sum + height, 0));
+  const stackedMeeting = footer.meeting && !footer.sideBySide;
+  const bannerHeight = stackedMeeting ? Math.min(footer.meeting.height, footerSpace - footer.remarks.reservedHeight - footer.gap) : 0;
+  const mainNoteHeight = footer.sideBySide ? Math.min(footer.height, footerSpace)
+    : Math.min(footer.remarks.height, footerSpace - (stackedMeeting ? bannerHeight + footer.gap : 0));
+  const notePages = scheduleMatrixNotePages(footer.remarks, mainNoteHeight);
+  const meetingPages = footer.meeting ? scheduleMatrixNotePages(footer.meeting, footer.sideBySide ? mainNoteHeight : bannerHeight) : null;
+  const meetingStyle = footer.sideBySide ? { fill: "#f4f0f8", stroke: "#c7b7d4" } : { fill: "#eadff5", stroke: "#68448f" };
+  const meetingContinuationHint = "Fortsetzung auf den folgenden Teamsitzungsseiten.";
 
   pageRows.forEach((employeesOnPage, pageIndex) => {
     doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
-    const pageEmployeeCount = employeesOnPage.filter(Boolean).length;
-    const rowHeights = pageIndex === 0 ? firstPageRowHeights
+    const firstPage = pageIndex === 0;
+    const rowHeights = firstPage ? firstPageRowHeights
       : scheduleMatrixPageRowHeights(employeesOnPage, availableRowsHeight, minimumHeightFor);
     const rowOffsets = [0];
     rowHeights.forEach((height) => rowOffsets.push(rowOffsets.at(-1) + height));
-    const dataTop = tableTop + headerHeight;
     const dataBottom = dataTop + rowOffsets.at(-1);
 
     doc.fillColor("#142033").font("Helvetica-Bold").fontSize(15).text(
@@ -65717,6 +65801,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
         const date = addDays(schedule.weekStart, dayIndex);
         return { date, cell: scheduleMatrixCellData(schedule, employee, date, hiddenOptions) };
       });
+      for (const { cell } of cells) scheduleMatrixPrepareCompactOptions(doc, cell, dayWidth - 14);
       const fullHeightSpan = spans.length === 1
         && cells.slice(spans[0].startDay, spans[0].endDay + 1)
           .every(({ cell }) => cell.lines.every((line) => line.type === "empty"));
@@ -65743,7 +65828,8 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       cells.forEach(({ cell }, dayIndex) => {
         if (fullHeightSpan && dayIndex >= spans[0].startDay && dayIndex <= spans[0].endDay) return;
         const x = left + employeeColumnWidth + dayIndex * dayWidth;
-        const availableCellHeight = rowHeight - spanAreaHeight - 8;
+        const cellPadding = schedule.matrixCompactRows ? 6 : 8;
+        const availableCellHeight = rowHeight - spanAreaHeight - cellPadding;
         const visibleLines = [];
         let contentHeight = 0;
         for (const line of cell.lines.slice(0, 4)) {
@@ -65752,7 +65838,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
           visibleLines.push(line);
           contentHeight += entryHeight;
         }
-        let lineY = y + spanAreaHeight + Math.max(4, (rowHeight - spanAreaHeight - contentHeight) / 2);
+        let lineY = y + spanAreaHeight + Math.max(cellPadding / 2, (rowHeight - spanAreaHeight - contentHeight) / 2);
         for (const line of visibleLines) {
           if (line.compactDuty) {
             drawScheduleMatrixCompactDuty(doc, line, x + 7, lineY, dayWidth - 14, employeeColor, schedule.settings);
@@ -65773,7 +65859,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
               { width: dayWidth - 14, height: timeFontSize + 2, align: "left", ellipsis: true, lineBreak: false },
             );
             lineY += timeFontSize + 2;
-            lineY += drawScheduleMatrixDutyLine(doc, line, x + 7, lineY, dayWidth - 14, employeeColor, detailFontSize) + 1;
+            lineY += drawScheduleMatrixDutyLine(doc, line, x + 7, lineY, dayWidth - 14, employeeColor, detailFontSize) + 5;
           } else if (line.type === "event") {
             const eventHeight = scheduleMatrixEntryHeight(line, timeFontSize, detailFontSize);
             drawScheduleMatrixEventBlock(doc, line.option, x + 3, lineY, dayWidth - 6, eventHeight, detailFontSize, schedule.settings);
@@ -65825,15 +65911,17 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
     }
 
     let postTableY = dataBottom + 7;
-    if (meetings.length) {
-      doc.roundedRect(left, postTableY, tableWidth, 26, 5).fillAndStroke("#eadff5", "#68448f");
-      doc.fillColor("#332044").font("Helvetica-Bold").fontSize(7.2).text(
-        meetings.map(scheduleMatrixMeetingText).join("   |   "),
-        left + 9,
-        postTableY + 8,
-        { width: tableWidth - 18, height: 11, align: "left", ellipsis: true, lineBreak: false },
-      );
-      postTableY += 33;
+    if (stackedMeeting) {
+      const height = firstPage ? bannerHeight : 26;
+      const lines = firstPage ? meetingPages.first : [];
+      drawScheduleMatrixNotesBox(doc, footer.meeting, lines, left, postTableY, height,
+        firstPage ? (lines.length ? "" : meetingContinuationHint) : "Teamsitzungen auf der ersten Matrixseite.",
+        meetingStyle);
+      if (firstPage && lines.length && meetingPages.continuation.length) {
+        doc.fillColor("#68448f").font("Helvetica").fontSize(5.9).text(meetingContinuationHint, left, postTableY + height,
+          { width: tableWidth, align: "right" });
+      }
+      postTableY += height + footer.gap;
     }
 
     const legendY = postTableY;
@@ -65859,20 +65947,24 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
     }
     postTableY += 18;
 
-    const pageNoteHeight = Math.max(noteAreaHeight, 556 - postTableY);
+    const pageNoteHeight = firstPage ? mainNoteHeight : 32;
     drawScheduleMatrixNotesBox(
       doc,
-      pageIndex === 0 ? scheduleNoteText : "",
-      pageIndex === 0 ? noteLayout.mainColumns : Array.from({ length: noteLayout.columns }, () => []),
+      footer.remarks,
+      firstPage ? notePages.first : [],
       left,
       postTableY,
-      tableWidth,
       pageNoteHeight,
-      noteLayout,
-      pageIndex === 0
-        ? (noteLayout.continuationPages.length ? "Fortsetzung auf den folgenden Bemerkungsseiten." : "")
+      firstPage
+        ? (notePages.continuation.length ? "Fortsetzung auf den folgenden Bemerkungsseiten." : "")
         : "Wochenbemerkung auf der ersten Matrixseite; Feld für Ergänzungen.",
     );
+    if (footer.sideBySide) {
+      drawScheduleMatrixNotesBox(doc, footer.meeting, firstPage ? meetingPages.first : [],
+        left + footer.remarks.width + footer.gap, postTableY, pageNoteHeight,
+        firstPage ? (meetingPages.continuation.length ? meetingContinuationHint : "") : "Teamsitzungen auf der ersten Matrixseite.",
+        meetingStyle);
+    }
 
     doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
       `Dienstplan erstellt mit: ${APP_NAME} ${APP_VERSION_LABEL}`,
@@ -65887,10 +65979,12 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
     );
   });
 
-  noteLayout.continuationPages.forEach((columns, index) => {
+  const continuationBlocks = [{ title: "Bemerkungen", pages: notePages, panel: footer.remarks }];
+  if (meetingPages) continuationBlocks.push({ title: "Teamsitzungen", pages: meetingPages, panel: footer.meeting });
+  for (const block of continuationBlocks) block.pages.continuation.forEach((lines, index) => {
     doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
     doc.fillColor("#142033").font("Helvetica-Bold").fontSize(15).text(
-      `Bemerkungen · Fortsetzung ${index + 1}/${noteLayout.continuationPages.length}`,
+      `${block.title} · Fortsetzung ${index + 1}/${block.pages.continuation.length}`,
       left,
       18,
       { width: tableWidth - 230 },
@@ -65901,7 +65995,8 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       40,
       { width: tableWidth - 230 },
     );
-    drawScheduleMatrixNotesBox(doc, scheduleNoteText, columns, left, 58, tableWidth, 498, noteLayout);
+    drawScheduleMatrixNotesBox(doc, { ...block.panel, title: block.title, headingHeight: 11, width: tableWidth },
+      lines, left, 58, 498);
     doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
       `Dienstplan erstellt mit: ${APP_NAME} ${APP_VERSION_LABEL}`,
       left,

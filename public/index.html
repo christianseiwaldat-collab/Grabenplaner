@@ -34,6 +34,7 @@
     <link rel="stylesheet" href="/sales-price-label-search-window.css" />
     <link rel="stylesheet" href="/sales-article-price-labels.css" />
     <link rel="stylesheet" href="/receipt-search.css" />
+    <link rel="stylesheet" href="/branch-webgl.css" />
     <link rel="stylesheet" href="/trade-insights.css" />
     <link rel="stylesheet" href="/trade-movements.css" />
     <link rel="stylesheet" href="/trade-stocktakes.css" />
@@ -86,7 +87,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" data-gp-print-fallback type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.103 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.104 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -154,6 +155,9 @@
             <div class="nav-module-children hidden" id="filialManagementNavChildren">
               <button class="nav-item nav-module-route" data-view="personnel" id="filialTeamsNavButton">
                 <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="branchWebgl" id="branchWebglNavButton" type="button">
+                <span class="nav-symbol" aria-hidden="true">⬡</span><span>WebGL</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="loans" id="loanManagementNavButton">
                 <span class="nav-symbol">▣</span><span>Leih&shy;verwaltung</span><strong class="nav-count hidden" id="loanManagementNavCount">0</strong>
@@ -389,6 +393,62 @@
                 </section>
               </div>
             </article>
+          </div>
+        </section>
+        <section id="branchWebglView" class="view" aria-labelledby="branchWebglTitle">
+          <header class="topbar">
+            <div><span class="eyebrow">Filialverwaltung / WebGL</span><h1 id="branchWebglTitle">Grabenweg in 3D</h1><p class="subtitle">Filiale 18 · eine erste begehbare Annäherung an Grabenweg 2, Innsbruck.</p></div>
+          </header>
+          <div id="branchWebglWorkspace">
+            <div class="branch-webgl-layout">
+              <section class="branch-webgl-scene" aria-labelledby="branchWebglSceneTitle">
+                <header class="branch-webgl-toolbar">
+                  <div><h2 id="branchWebglSceneTitle">Grabenweg · Filiale 18</h2><p>Lageplan, Fotowelt und begehbare Ich-Perspektive</p></div>
+                  <div class="branch-webgl-controls" role="group" aria-label="3D-Ansicht steuern">
+                    <button type="button" data-webgl-action="reset" title="3D-Ansicht zurücksetzen">Übersicht</button>
+                    <button type="button" data-webgl-action="top">Draufsicht</button>
+                    <button type="button" data-webgl-action="building">Gesamtgebäude</button>
+                    <button type="button" data-webgl-action="map" aria-pressed="false">Lageplan</button>
+                    <button type="button" data-webgl-action="fotowelt">Fotowelt</button>
+                    <button type="button" data-webgl-action="walk" aria-pressed="false">Begehen</button>
+                    <button type="button" data-webgl-action="outside">10 m vor Eingang</button>
+                    <button type="button" data-webgl-action="street">Blick vom Grabenweg</button>
+                    <button type="button" data-webgl-action="fullscreen">Vollbild</button>
+                    <button type="button" data-webgl-action="in" aria-label="Vergrößern">+</button>
+                    <button type="button" data-webgl-action="out" aria-label="Verkleinern">−</button>
+                  </div>
+                </header>
+                <div class="branch-webgl-stage">
+                  <canvas class="branch-webgl-canvas" tabindex="0" aria-label="Begehbares 3D-Modell der Filiale Grabenweg. In der Übersicht ziehen und zoomen. In der Ich-Perspektive WASD zum Gehen und Maus zum Umsehen." aria-describedby="branchWebglStatus"></canvas>
+                  <div class="branch-webgl-map" data-webgl-map hidden></div>
+                  <div class="branch-webgl-stage-note"><strong>Erste räumliche Annäherung</strong>Kontur aus deiner Markierung<br>Maßstab, Höhe und Möbelpositionen vorläufig<br>Gelb: korrigierte Filialgrenze zu ORION</div>
+                  <span class="branch-webgl-crosshair" data-webgl-crosshair role="img" aria-label="Zielpunkt" hidden></span>
+                  <div class="branch-webgl-walk-controls" data-webgl-walk-controls role="group" aria-label="Begehung ohne Maussteuerung" hidden>
+                    <button type="button" data-webgl-action="turn-left" aria-label="Nach links umsehen">↶</button>
+                    <button type="button" data-webgl-action="forward" aria-label="Vorwärts gehen">↑</button>
+                    <button type="button" data-webgl-action="turn-right" aria-label="Nach rechts umsehen">↷</button>
+                    <button type="button" data-webgl-action="left" aria-label="Seitwärts nach links gehen">←</button>
+                    <button type="button" data-webgl-action="back" aria-label="Rückwärts gehen">↓</button>
+                    <button type="button" data-webgl-action="right" aria-label="Seitwärts nach rechts gehen">→</button>
+                    <button type="button" data-webgl-action="spawn">Zum Eingang</button>
+                  </div>
+                  <div class="branch-webgl-fallback" data-webgl-fallback hidden><strong>Die 3D-Ansicht ist derzeit nicht verfügbar.</strong><br>Bitte WebGL im Browser prüfen. Die Angaben zum geplanten Modell stehen rechts.</div>
+                </div>
+                <p class="branch-webgl-status" id="branchWebglStatus" data-webgl-status role="status">Die 3D-Ansicht wird beim Öffnen vorbereitet.</p>
+              </section>
+              <aside class="branch-webgl-brief" aria-labelledby="branchWebglBriefTitle">
+                <span class="branch-webgl-badge">FIL18 · PROPORTIONSMODELL</span>
+                <h2 id="branchWebglBriefTitle">Ein erster Rundgang</h2>
+                <p>Nach deiner korrigierten Filialgrenze, der breiteren Schiebetür und deinen Street-View-Bildern. Die genaue Innenaufteilung und Abmessungen sind noch unbestätigt.</p>
+                <ol class="branch-webgl-checklist">
+                  <li><div><strong>Filiale &amp; ORION</strong><p>Unser Geschäft endet an der gelben Markierung. Nach dem Mauerstück beginnt das Glasschaufenster von ORION. Die Schiebetür ist breiter angelegt.</p><small>Proportionen nach deiner Skizze · noch nicht vermessen</small></div></li>
+                  <li><div><strong>Lageplan &amp; Nachbarn</strong><p>Grabenweg, Greif Center, Hervis, Onkel Hasan, JYSK und ORION zur Orientierung.</p><small>Straßen und Gebäude aus OpenStreetMap</small></div></li>
+                  <li><div><strong>Fotowelt &amp; FineArt</strong><p>Zwei Canon imagePROGRAF PRO-2000 mit Papierauffangkorb und Standfuß. Fotowelt ersetzt die frühere Sony-Center-Beschriftung.</p><small>Gerätemaße nach Canon · Aufstellung vorläufig</small></div></li>
+                </ol>
+                <p><a href="https://lamprechter.com/Service/UEber-uns-Karriere/Unsere-Standorte-Teams/Filiale-Grabenweg/" target="_blank" rel="noopener noreferrer">Verwendete Filialfotos ansehen ↗</a></p>
+              </aside>
+            </div>
+            <p class="branch-webgl-help">Begehen: WASD oder Bildschirmtasten · Mausblick per Klick in die Ansicht · Esc gibt die Maus frei · Umschalt zum schnelleren Gehen. Übersicht: Ziehen zum Drehen, Mausrad zum Zoomen. Lageplan: Ziehen zum Verschieben, Mausrad oder +/− zum Zoomen. Für eine maßstäbliche Innenplanung fehlen noch bestätigte Maße und der aktuelle Innenplan.</p>
           </div>
         </section>
         <section id="filialAdministrationView" class="view" aria-labelledby="filialAdministrationTitle">
@@ -3234,7 +3294,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.103 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.104 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -4657,6 +4717,13 @@
     <script src="/api-errors.js"></script>
     <script src="/vendor/quill/quill.js"></script>
     <script src="/date-range-calendar.js"></script>
+    <script src="/source-date-time.js"></script>
+    <script src="/branch-webgl-materials.js"></script>
+    <script src="/branch-webgl-plotter.js"></script>
+    <script src="/branch-webgl-scene.js"></script>
+    <script src="/branch-webgl-map-data.js"></script>
+    <script src="/branch-webgl-map.js"></script>
+    <script src="/branch-webgl.js"></script>
     <script src="/trade-article-history.js"></script>
     <script src="/trade-supplier-invoices.js"></script>
     <script src="/gp-data-quality.js"></script>

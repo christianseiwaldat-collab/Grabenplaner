@@ -1,10 +1,11 @@
 (function(host,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(host)host.SalesArticleTools=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
+ const SourceTime=typeof module==='object'&&module.exports?require('./source-date-time'):globalThis.GrabenplanerSourceDateTime;
  const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const movementColumns={date:'Datum',articleNumber:'Artikelnummer',quantity:'Anzahl',label:'Artikelbezeichnung',from:'Von Filiale',to:'Zu Filiale',typeLabel:'Bewegungsart',documentRefs:'Belegverweise',supplier:'Lieferant',issueLabel:'Prüfhinweis'};
  const noteColumns={date:'Datum',text:'Notiz',person:'Person',origin:'Herkunft'};
  const sectionLabels={master:'Stammdaten',prices:'Preise',notes:'Notizen',identifiers:'Kennungen & Verlauf',movements:'Umlagerungen',sales:'Verkäufe'};
- const formatDate=value=>value?new Intl.DateTimeFormat('de-AT').format(new Date(String(value).slice(0,10)+'T12:00:00Z')):'–';
+ const formatDate=value=>typeof value==='string'&&value.endsWith('Z')?SourceTime.instantLabel(value):SourceTime.sourceLabel(value);
  const numeric=new Set(['quantity','listSourcePrice','listGross','listMargin','listMarginPercent','actualGross','actualMargin','actualMarginPercent']);
  const historyFilterKeys=kind=>kind==='sales'?['dateFrom','dateTo','locationId','personnel']:['dateFrom','dateTo','fromLocationId','toLocationId'];
  function historyDefaults(kind,today){
@@ -14,7 +15,7 @@
   else {const month=end.getUTCMonth();start.setUTCFullYear(start.getUTCFullYear()-1);if(start.getUTCMonth()!==month)start.setUTCDate(0);}
   return {dateFrom:start.toISOString().slice(0,10),dateTo:today};
  }
- function display(key,value){if(value===null||value===undefined||value==='')return '–';if(key==='date')return formatDate(value);if(key==='status')return {sale:'Verkauf',return:'Rücknahme',review:'Prüfen'}[value]||String(value);if(numeric.has(key)&&/^-?\d+(\.\d+)?$/.test(String(value))){let raw=String(value),negative=raw.startsWith('-'),[whole,fraction='']=raw.replace(/^-/,'').split('.');if(key!=='quantity'){let cents=BigInt(whole)*100n+BigInt((fraction+'00').slice(0,2));if((fraction[2]||'0')>='5')cents++;whole=String(cents/100n);fraction=String(cents%100n).padStart(2,'0');if(cents===0n)negative=false;}return(negative?'-':'')+whole.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+(fraction?','+fraction:'')+(key.endsWith('Percent')?' %':key==='quantity'?'':' €');}return String(value);}
+ function display(key,value){if(key==='time')return SourceTime.timeLabel(value);if(value===null||value===undefined||value==='')return '–';if(key==='date')return formatDate(value);if(key==='status')return {sale:'Verkauf',return:'Rücknahme',review:'Prüfen'}[value]||String(value);if(numeric.has(key)&&/^-?\d+(\.\d+)?$/.test(String(value))){let raw=String(value),negative=raw.startsWith('-'),[whole,fraction='']=raw.replace(/^-/,'').split('.');if(key!=='quantity'){let cents=BigInt(whole)*100n+BigInt((fraction+'00').slice(0,2));if((fraction[2]||'0')>='5')cents++;whole=String(cents/100n);fraction=String(cents%100n).padStart(2,'0');if(cents===0n)negative=false;}return(negative?'-':'')+whole.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+(fraction?','+fraction:'')+(key.endsWith('Percent')?' %':key==='quantity'?'':' €');}return String(value);}
  function mount(root,{api,rawApi,article,write=false,accessKey=()=>'',onCustomer=()=>{},windowPreferences,scale,active=()=>true,trigger}){
   const owner=accessKey();let disposed=false,context=null,contextLoading=null,localNotes=null,mutation=null,notesBusy=false;
   const authorized=()=>!disposed&&root.isConnected&&accessKey()===owner;
@@ -42,7 +43,7 @@
   function table(container,key,rows,columns,{sort='date',direction='desc',sortAction}={}){
    tables?.clear(container);const keys=Object.keys(columns);
    container.innerHTML='<div class="sales-article-detail-table-wrap"><table class="sales-article-history-table"><thead><tr>'+keys.map(k=>'<th scope="col" aria-sort="'+(sort===k?(direction==='asc'?'ascending':'descending'):'none')+'"><button type="button" data-sort="'+escape(k)+'">'+escape(columns[k])+' <span aria-hidden="true">'+(sort===k?(direction==='asc'?'↑':'↓'):'↕')+'</span></button></th>').join('')+(key==='article-sales'?'<th scope="col">Beleg</th>':'')+'</tr></thead><tbody>'+rows.map((row,i)=>'<tr>'+keys.map(k=>{
-    let value=display(k,k==='locationId'?(row.sourceLocationId??row.locationId):row[k]);
+    let value=k==='date'&&key==='article-sales'?SourceTime.rowLabel(row):display(k,k==='locationId'?(row.sourceLocationId??row.locationId):row[k]);
     if(k==='personnel')value='<span title="'+escape(row.personnelSurname||'Nachname nicht hinterlegt')+'">'+escape(value)+'</span>';
     else if(k==='customerNumber'&&row.customerId)value='<button type="button" class="text-button" data-customer="'+i+'">'+escape(value)+'</button>';
     else value=escape(value);

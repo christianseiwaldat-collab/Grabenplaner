@@ -55,6 +55,18 @@ test('Article sheet options require at least one unique known section and a bool
     { orientation: null }, { orientation: 'vertical' }, { orientation: true }]) assert.throws(() => normalizeArticleSheetOptions(input), { code: 'ARTICLE_SHEET_OPTIONS' });
 });
 
+test('article sale and movement PDFs retain source booking times in portrait and landscape',async()=>{
+ const input=model();input.sales.rows=input.sales.rows.slice(0,1);input.movements.rows=input.movements.rows.slice(0,1);
+ Object.assign(input.sales.rows[0],{time:'16:40:27.000',dateTime:'2026-09-20T16:40:27.000',timeStatus:'source'});
+ input.movements.rows[0].date='2026-09-21T09:12:03.000';
+ for(const orientation of ['portrait','landscape']){
+  const pdf=await createSalesArticleSheetPdf(input,{sections:['movements','sales'],orientation});
+  const result=await pages(pdf),text=result.map(p=>p.text).join(' ').replace(/\s/g,'');
+  assert.match(text,/16:40:27/);assert.match(text,/09:12:03/);assert.doesNotMatch(text,/1899/);
+  if(process.env.GP_RECEIPT_PREVIEW_DIR)require('node:fs').writeFileSync(require('node:path').join(process.env.GP_RECEIPT_PREVIEW_DIR,'article-times-'+orientation+'.pdf'),pdf);
+ }
+});
+
 test('Article sheet uses true A4 portrait/landscape bounds and custom title metadata while retaining every selected section and article identity', async () => {
   const input = model(); input.imageBuffer = await sharp({ create: { width: 500, height: 340, channels: 3, background: '#276b58' } }).webp().toBuffer();
   const title = 'BEISPIEL - Kameraübersicht für die Filiale';

@@ -26,6 +26,30 @@ function rows({ count = 1, price = '12', seller = '07', location = '018', unknow
     RepID: '00000000-0000-0000-0000-' + String(i + 1).padStart(12, '0'), EAN: '00042', VKMenge: '1', VK_Preis: price,
     MWST: '20', Verkäuferid: seller, Artikelbezeichnung: description, ...flags, ...(unknown ? { Beratung: true } : {}) })) };
 }
+
+test('receipt timestamps, device lookup and checked tax survive publication, warm summary cache and restricted sellers',async t=>{
+  const f=await fixture(t),data=rows({price:'120'});
+  data.Umsatz_KASSE[0].Bonzeit='1899-12-30T16:40:27.000';
+  data.Umsatz_Kasse_Details[0].KameraNr='DEVICE-000042';
+  const id=await f.build(data);await f.activate(f.request(id));
+  const runtime=f.history(),find=extra=>runtime.run(f.get,w=>w.receipts.search(f.query(extra)));
+  const cold=await find({deviceNumber:'DEVICE-000042'}),warm=await find({query:'DEVICE-000042'});
+  assert.equal(cold.items.length,1);assert.equal(warm.items.length,1);
+  for(const page of [cold,warm]) {
+    assert.equal(page.items[0].time,'16:40:27.000');assert.equal(page.items[0].dateTime,'2010-01-02T16:40:27.000');
+    assert.equal(page.items[0].net,'100.00');assert.equal(page.items[0].tax,'20.00');
+    assert.equal(page.items[0].reconciliation.difference,'0.00');
+  }
+  assert.equal((await find({deviceNumber:'OTHER'})).items.length,0);
+  const document=async()=>runtime.run(f.get,w=>w.receipts.documents({ids:[cold.items[0].id]}));
+  const full=(await document()).items[0];
+  assert.equal(full.lines[0].deviceNumber,'DEVICE-000042');assert.equal(full.lines[0].vatRate,'20');
+  assert.equal(full.lines[0].net,'100.00');assert.equal(full.lines[0].tax,'20.00');
+  assert.equal(full.personnel,'person-b');assert.equal(full.lines[0].personnel,'person-a');
+  f.session.permissions=f.session.permissions.filter(p=>p!=='sales:history:sellers:read');
+  const restricted=(await document()).items[0];assert.ok(!Object.hasOwn(restricted,'personnel'));assert.ok(!Object.hasOwn(restricted.lines[0],'personnel'));
+  assert.equal(restricted.time,'16:40:27.000');
+});
 // Exercise the PostgreSQL repository branch through a real transactional
 // synthetic database. The adapter delegates each batch to equivalent scalar
 // statements; native PostgreSQL SQL is checked separately.
@@ -1272,21 +1296,29 @@ test('tampered customer filter key cannot turn a different authenticated cash cu
 test('daily reports and cash journal use the compact source and remain separate from revenue totals', async t => {
   const f = await fixture(t), data = rows();
   data.KassenJournal = [raw('KassenJournal', { Vorgang: '7', Filiale: '018', Datum: '2010-01-02T00:00:00.000' })];
-  data.KassenJournal_Details = [raw('KassenJournal_Details', { Vorgang: '7', Filiale: '018', Datum: '2010-01-02T00:00:00.000', Beleg: '003', Bezeichnung: 'Synthetic journal', Einzahlung: '5', Auszahlung: '3' })];
+  data.KassenJournal_Details = [raw('KassenJournal_Details', { Vorgang: '7', Filiale: '018', Datum: '2010-01-02T00:00:00.000', Beleg: '003', Bezeichnung: 'Synthetic journal', Beschreibung: 'Zusatztext Wechselgeld', Einzahlung: '5', Auszahlung: '3' })];
   data.Tagesbericht = [raw('Tagesbericht', { ZBon: '001', KoBeschreibung: 'Synthetic daily', Bondatum: '2010-01-02T00:00:00.000', Filialid: '018', Einnahmen: '12', Ausgaben: '0' })];
   const id = await f.build(data); await f.activate(f.request(id)); f.session.permissions.push('sales:history:finance:read');
   for (const [kind, description] of [['daily', 'Synthetic daily'], ['journal', 'Synthetic journal']]) {
     const result = await f.history().run(f.get, w => w.search(f.query({ kind, snapshot: C.fingerprint(data) })));
     assert.equal(result.items.length, 1); assert.equal(result.items[0].description, description);
+    assert.equal(result.items[0].time, null); assert.equal(result.items[0].timeStatus, 'date_only');
+    if (kind === 'journal') assert.equal(result.items[0].descriptionSupplement, 'Zusatztext Wechselgeld');
     assert.equal(result.totals, null); assert.ok(result.coverage.issues.includes('SEPARATE_CASH_DATA_NOT_SALES'));
     const documents = await f.history().run(f.get, async w => {
       const search = await w.receipts.search({ sourceId: 'compact-cash', kind, dateFrom: '2010-01-01', dateTo: '2010-12-31', query: 'Synthe*' });
       assert.equal(search.items.length, 1); assert.equal(search.items[0].description, description); assert.equal(search.items[0].gross, null);
+      assert.equal(search.items[0].time, null); assert.equal(search.items[0].dateTime, null);
+      if (kind === 'journal') {
+        assert.equal(search.items[0].descriptionSupplement, 'Zusatztext Wechselgeld');
+        assert.equal((await w.receipts.search({ sourceId: 'compact-cash', kind, dateFrom: '2010-01-01', dateTo: '2010-12-31', query: 'Wechselgeld' })).items.length, 1);
+      }
       assert.equal(search.items[0].personnel, undefined);
       return w.receipts.documents({ ids: [search.items[0].id] });
     });
     assert.equal(documents.items[0].inflow, kind === 'daily' ? '12.000000000000' : '5');
     assert.equal(documents.items[0].outflow, kind === 'daily' ? '0.000000000000' : '3');
+    if (kind === 'journal') assert.equal(documents.items[0].descriptionSupplement, 'Zusatztext Wechselgeld');
     f.session.permissions = f.session.permissions.filter(p => p !== 'sales:history:finance:read');
     await assert.rejects(f.history().run(f.get, w => w.receipts.documents({ ids: [documents.items[0].id] })), e => e.code.startsWith('IMPORT_'));
     f.session.permissions.push('sales:history:finance:read');

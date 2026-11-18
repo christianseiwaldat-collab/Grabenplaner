@@ -36,5 +36,13 @@
     voucher_issue: 'Gutscheinausgabe · kein Warenumsatz',
     uid_clearing: 'UID-Zwischenbuchung · kein Warenumsatz',
     excluded: 'Ausgeschlossen', review: 'Prüfung offen' }[status] || '');
-  return Object.freeze({ total, money, groups, note });
+  function taxText(line){return line.net==null||line.tax==null?'':[
+    line.vatRate==null?'':`USt ${line.vatRate} %`,`Netto ${money(line.net)}`,`Steuer ${money(line.tax)}`].filter(Boolean).join(' · ');}
+  function reconciliationText(row){
+    const value=row.reconciliation;if(!value)return '';
+    const basis={gross:'Bruttobetrag',net:'Nettobetrag'}[value.headerBasis]||'ungeklärte Betragsbasis';
+    if(value.headerStatus==='unavailable_zero_placeholder')return 'Quellbetrag 0,00 ist ein bestätigter Platzhalter; kein Nachweis einer kostenlosen Abgabe oder Zahlung.';
+    return `Belegabgleich auf ${basis}${value.difference==null?' · Differenz nicht ermittelt':' · Differenz '+money(value.difference)}${row.gross==null?' · Prüfung offen':''}`;
+  }
+  return Object.freeze({ total, money, groups, note,taxText,reconciliationText });
 }));

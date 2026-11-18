@@ -185,7 +185,11 @@
     const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;pendingAction=null;uploadPolicySave=null;if(issueView?.loading)issueView=null;};
     async function request(url,options={}) {return api(url,{...options,signal:controller?.signal});}
     const post=(url,data={})=>request(url,{method:'POST',body:JSON.stringify(data)});
-    const message=text=>{if(el('message'))el('message').textContent=text;};
+    // A successful status read must not clear unrelated upload or action feedback.
+    const refreshErrors=new WeakSet();
+    let refreshMessage=false;
+    const message=(text,fromRefresh=false)=>{refreshMessage=fromRefresh;if(el('message'))el('message').textContent=text;};
+    const showError=error=>message(errorMessage(error),refreshErrors.has(error));
     const uploadPolicy=()=>context?.uploadPolicy||{minutes:30,minMinutes:1,maxMinutes:120};
     const updateUploadTimeout=()=>{const field=el('upload-timeout');if(field)field.disabled=working||!!uploadPolicySave||!context?.projection?.prepare;};
     async function saveUploadPolicy() {
@@ -241,26 +245,41 @@
     }
     async function refresh(next=false) {
       const ticket=generation;
-      if(next&&cursor)sourcePage=cursor;
-      const [result,overview]=await Promise.all([post('/api/data-import/sources/search',sourcePage),context.sourceCatalog?request('/api/data-import/overview'):Promise.resolve(null)]);
-      if(disposed||ticket!==generation)return;
-      cursor=result.next;el('next').hidden=!cursor;
-      el('sources').innerHTML=renderSources(result.items,selected?.id);
-      const overviewElement=el('overview');
-      if(overviewElement) {
-        const opened=Array.from(overviewElement.querySelectorAll('details')).map(d=>d.open);
-        const focused=globalThis.document?.activeElement,attribute=overviewElement.contains(focused)&&['data-i-upload','data-i-source'].find(a=>focused.hasAttribute(a)),value=attribute&&focused.getAttribute(attribute);
-        overviewElement.innerHTML=renderOverview(overview?.items||result.items,selected?.id,context,overview?.complete!==false);
-        Array.from(overviewElement.querySelectorAll('details')).forEach((d,i)=>{d.open=!!opened[i];});
-        if(attribute)Array.from(overviewElement.querySelectorAll('button')).find(b=>!b.disabled&&b.getAttribute(attribute)===value)?.focus({preventScroll:true});
-      }
-      if(selected) {const selectedId=selected.id;const latest=await request(`/api/data-import/sources/${selectedId}`);if(disposed||ticket!==generation||selected?.id!==selectedId)return;selected=latest;renderSelected();await loadIssues(issueView?.sourceId===selected.id?issueView.runId:null);if(disposed||ticket!==generation)return;}
+      let poll=false;
       clearTimeout(timer);
-      if(!working && visible() && !globalThis.document?.hidden && (selected?.active||result.items.some(s=>s.active)||overview?.items?.some(s=>s.active))) timer=setTimeout(refreshQuietly,2500);
+      try {
+        if(next&&cursor)sourcePage=cursor;
+        const [result,overview]=await Promise.all([post('/api/data-import/sources/search',sourcePage),context.sourceCatalog?request('/api/data-import/overview'):Promise.resolve(null)]);
+        if(disposed||ticket!==generation)return;
+        cursor=result.next;el('next').hidden=!cursor;
+        el('sources').innerHTML=renderSources(result.items,selected?.id);
+        const overviewElement=el('overview');
+        if(overviewElement) {
+          const opened=Array.from(overviewElement.querySelectorAll('details')).map(d=>d.open);
+          const focused=globalThis.document?.activeElement,attribute=overviewElement.contains(focused)&&['data-i-upload','data-i-source'].find(a=>focused.hasAttribute(a)),value=attribute&&focused.getAttribute(attribute);
+          overviewElement.innerHTML=renderOverview(overview?.items||result.items,selected?.id,context,overview?.complete!==false);
+          Array.from(overviewElement.querySelectorAll('details')).forEach((d,i)=>{d.open=!!opened[i];});
+          if(attribute)Array.from(overviewElement.querySelectorAll('button')).find(b=>!b.disabled&&b.getAttribute(attribute)===value)?.focus({preventScroll:true});
+        }
+        if(selected) {const selectedId=selected.id;const latest=await request(`/api/data-import/sources/${selectedId}`);if(disposed||ticket!==generation||selected?.id!==selectedId)return;selected=latest;renderSelected();await loadIssues(issueView?.sourceId===selected.id?issueView.runId:null);if(disposed||ticket!==generation)return;}
+        if(refreshMessage)message('');
+        poll=selected?.active||result.items.some(s=>s.active)||overview?.items?.some(s=>s.active);
+      }catch(error){
+        const status=Number(error?.status)||0;
+        poll=error?.name!=='AbortError'&&error?.code!=='PORTAL_SESSION_CHANGED'&&(!status||status>=500||status===408||status===429);
+        if(error&&typeof error==='object')refreshErrors.add(error);
+        throw error;
+      }finally{
+        if(!disposed&&ticket===generation){
+          clearTimeout(timer);
+          if(poll&&!working&&visible()&&!globalThis.document?.hidden&&context?.available)timer=setTimeout(refreshQuietly,2500);
+        }
+      }
     }
-    async function refreshQuietly() {
+    async function refreshQuietly(next=false) {
       const ticket=generation;
-      try{await refresh();}catch(error){if(!disposed&&ticket===generation&&error?.name!=='AbortError')message(errorMessage(error));}
+      try{await refresh(next);return !disposed&&ticket===generation;}
+      catch(error){if(!disposed&&ticket===generation&&error?.name!=='AbortError')showError(error);return false;}
     }
     async function load() {
       if(disposed||!visible())return;cancel();const ticket=generation;controller=new AbortController();body.textContent='Importanbindung wird geprüft …';
@@ -277,7 +296,7 @@
           <details class="data-import-history"><summary>Importverlauf und frühere Dateistände</summary><div data-i="sources"></div><button type="button" data-i="next" hidden>Ältere Importe</button></details>
           <p data-i="message" role="status" aria-live="polite"></p><button type="button" data-i="stop" data-i-stop hidden>Anhalten</button><section data-i="detail"></section><section data-i="publication"></section><section data-i="log"></section>`;
         if(el('upload-timeout'))el('upload-timeout').value=String(uploadPolicy().minutes);
-        if(context.available)await refresh();
+        if(context.available)await refreshQuietly();
       }catch(error){if(!disposed&&ticket===generation)body.textContent=error.message||'Importanbindung nicht verfügbar.';}
     }
     async function runAction(action) {
@@ -291,7 +310,7 @@
           const result=await post(`/api/data-import/sources/${selected.id}/approve-counts`,{expectedRevision:selected.revision});
           if(disposed||ticket!==generation)return;selected=result;
           message('Zählerfreigabe protokolliert. Die Datenübernahme kann jetzt separat gestartet werden.');
-        }catch(error){if(!disposed&&ticket===generation)message(errorMessage(error));}
+        }catch(error){if(!disposed&&ticket===generation)showError(error);}
         finally{if(!disposed&&ticket===generation){working=false;pendingAction=null;renderSelected();}}
         return;
       }
@@ -320,7 +339,7 @@
         message(sourceStateLabel(selected));
       }catch(error){
         if(disposed||ticket!==generation)return;
-        if(archiveErrorMessages[error?.code]){message(errorMessage(error));return;}
+        if(archiveErrorMessages[error?.code]){showError(error);return;}
         if(cash){
           unconfirmedCashSource=selected.id;
           message('Die Übernahme wurde nicht bestätigt. Der gespeicherte Kassenstand wird jetzt geprüft …');
@@ -332,7 +351,7 @@
             if(selected.cashPublication?.active)unconfirmedCashSource=null;
             message(selected.cashPublication?.active?'Kassenstand übernommen. Der gespeicherte Status wurde erneut bestätigt.':'Die Rückmeldung zur Übernahme wurde unterbrochen. Der neue Kassenstand ist bisher nicht als übernommen bestätigt. Eine bereits gesendete Übernahme kann noch am Server laufen. Bitte „Status aktualisieren“, bevor Sie die Übernahme erneut versuchen.');
           }catch(statusError){if(!disposed&&ticket===generation)message('Die Rückmeldung zur Übernahme und die Statusabfrage wurden unterbrochen. Das Ergebnis ist noch unklar. Bitte „Status aktualisieren“, sobald die Verbindung wieder besteht.');}
-        }else message(errorMessage(error));
+        }else showError(error);
       }
       finally{if(!disposed&&ticket===generation){working=false;pendingAction=null;el('stop')?.setAttribute('hidden','');renderSelected();}}
     }
@@ -389,15 +408,15 @@
         if(target.dataset.iAction)return await runAction(target.dataset.iAction);
         if(target.dataset.iIssues){await loadIssues(target.dataset.iIssues,0,true);await refresh();return;}
         if(target.hasAttribute('data-i-issues-next')&&issueView?.result?.next){await loadIssues(issueView.runId,issueView.result.next.after,true);await refresh();return;}
-        if(target.hasAttribute('data-i-check-status')){await refresh();if(disposed||ticket!==generation)return;message(selected.id===unconfirmedCashSource&&!selected.cashPublication?.active?'Status aktualisiert: Der neue Kassenstand ist noch nicht als übernommen bestätigt.':`Status aktualisiert: ${sourceStateLabel(selected)}.`);return;}
-        if(target.hasAttribute('data-i-refresh')){clearTimeout(timer);sourcePage={};return await refresh();}
-        if(target===el('next'))return await refresh(true);
+        if(target.hasAttribute('data-i-check-status')){if(!await refreshQuietly()||disposed||ticket!==generation)return;message(selected.id===unconfirmedCashSource&&!selected.cashPublication?.active?'Status aktualisiert: Der neue Kassenstand ist noch nicht als übernommen bestätigt.':`Status aktualisiert: ${sourceStateLabel(selected)}.`);return;}
+        if(target.hasAttribute('data-i-refresh')){sourcePage={};return await refreshQuietly();}
+        if(target===el('next'))return await refreshQuietly(true);
         if(target.dataset.iSource){publicationView?.destroy();publicationView=null;const result=await request(`/api/data-import/sources/${target.dataset.iSource}`);if(disposed||ticket!==generation)return;selected=result;logState=null;el('log').replaceChildren();renderSelected();await refresh();return;}
         if(target.dataset.iLog)return await log('events',target.dataset.iLog);
         if(target.dataset.iRows)return await log('rows',target.dataset.iRows);
         if(target.dataset.iUndoPreview)return await log('undo-preview',target.dataset.iUndoPreview);
         if(target.hasAttribute('data-i-log-next')&&logState)return await log(logState.action,logState.runId,true);
-      }catch(error){if(!disposed&&ticket===generation)message(errorMessage(error));}
+      }catch(error){if(!disposed&&ticket===generation)showError(error);}
     }
     async function submit(event) {
       if(event.target!==el('form'))return;event.preventDefault();if(working)return;
@@ -416,7 +435,7 @@
         if(disposed||ticket!==generation)return;el('file').value='';el('file-name').textContent='';el('upload').hidden=true;
         const source=await request(`/api/data-import/sources/${result.id}`);if(disposed||ticket!==generation)return;selected=source;sourcePage={};working=false;
         message(context.backgroundEnabled?'Datei sicher angenommen. Der Server liest und prüft sie automatisch; Sie können den GP jetzt schließen.':'Datei angenommen. Der Fortschritt wird laufend aktualisiert.');await refresh();
-      }catch(error){if(!disposed&&ticket===generation)message(error.status===408&&uploadStarted&&!uploadAccepted?'Die Dateiübertragung wurde wegen Zeitüberschreitung beendet (HTTP 408). Die Dateiauswahl bleibt erhalten. Bitte das Upload-Zeitlimit erhöhen und erneut hochladen.':error.message);}
+      }catch(error){if(!disposed&&ticket===generation){if(refreshErrors.has(error))showError(error);else message(error.status===408&&uploadStarted&&!uploadAccepted?'Die Dateiübertragung wurde wegen Zeitüberschreitung beendet (HTTP 408). Die Dateiauswahl bleibt erhalten. Bitte das Upload-Zeitlimit erhöhen und erneut hochladen.':error.message);}}
       finally{password='';if(!disposed&&ticket===generation){working=false;updateUploadTimeout();}}
     }
     let wasVisible=false;

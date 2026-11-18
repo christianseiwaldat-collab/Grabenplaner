@@ -15,6 +15,7 @@
   const money = value => value === null || value === undefined || value === "" ? "Nicht hinterlegt"
     : Number.isFinite(Number(value)) ? new Intl.NumberFormat("de-AT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value)) : "–";
   const date = value => /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? value.slice(8) + "." + value.slice(5, 7) + "." + value.slice(0, 4) : "–";
+  const SourceTime=typeof module==='object'&&module.exports?require('./source-date-time'):globalThis.GrabenplanerSourceDateTime;
   const count = (value, singular, plural) => `${value} ${Number(value) === 1 ? singular : plural}`;
 
   const articleNumber = value => /^\d{1,6}$/.test(String(value)) ? String(value).padStart(6, '0') : String(value || '');
@@ -53,7 +54,7 @@
   }
   function receiptRows(items) {
     return items.map(row => `<article class="branch-search-result"><div><strong>Beleg ${esc(row.receipt || "ohne Nummer")}</strong>
-      <p>${esc(date(row.date))} · ${esc(row.location)}${row.register ? " · Kasse " + esc(row.register) : ""}</p>
+      <p>${esc(SourceTime.rowLabel(row))} · ${esc(row.location)}${row.register ? " · Kasse " + esc(row.register) : ""}</p>
       <p>${esc(receiptCustomer(row))}${row.personnel ? ' · Belegverkäufer ' + esc(row.personnel) : ''}</p>
       <p>${esc(row.description || "Keine Bezeichnung")} · ${esc(count(row.positions, "Position", "Positionen"))}</p>
       ${row.invoice ? `<p>Rechnungsreferenz: ${esc(row.invoice)}</p>` : ""}</div>
@@ -65,13 +66,16 @@
   }
   function receiptDetail(item, lines) {
     if (!item) return "<p>Der Beleg ist nicht mehr verfügbar.</p>";
-    return `<p>${esc(date(item.date))} · ${esc(item.location)} · ${esc(count(item.positions, "Position", "Positionen"))}</p>
+    return `<p>${esc(SourceTime.rowLabel(item))} · ${esc(item.location)} · ${esc(count(item.positions, "Position", "Positionen"))}</p>
       <p>${esc(receiptCustomer(item))}${item.personnel ? ' · Belegverkäufer ' + esc(item.personnel) : ''}</p>
       ${[item.customerAddress, item.customerPhone, item.customerEmail].filter(Boolean).map(value => '<p>' + esc(value) + '</p>').join('')}
       ${item.invoice ? `<p>Rechnungsreferenz: ${esc(item.invoice)}</p>` : ""}
       <div class="branch-receipt-lines">${item.lines.map(row => `<article><div><strong>${esc(row.description)}</strong>
         <small>Artikelnr. ${esc(row.article || "–")}${lines?.note(row.status) ? " · " + esc(lines.note(row.status)) : ""}</small></div>
-        <p>${esc(row.quantity)} × ${esc(money(row.sourcePrice))} = <b>${esc(lines?.money(lines.total(row.sourcePrice, row.quantity)) || "–")}</b></p></article>`).join("")}</div>`;
+        ${row.deviceNumber?`<p>Erfasste Gerätenummer: ${esc(row.deviceNumber)}</p>`:''}${Object.hasOwn(item,'personnel')?`<p>Positionsverkäufer: ${esc(row.personnel||'nicht zugeordnet')}</p>`:''}
+        <p>${esc(row.quantity)} × ${esc(money(row.sourcePrice))} = <b>${esc(lines?.money(lines.total(row.sourcePrice, row.quantity)) || "–")}</b></p>${lines?.taxText?.(row)?`<p>${esc(lines.taxText(row))}</p>`:''}</article>`).join("")}</div>
+        ${item.gross!=null?`<p>Geprüfter Warenumsatz: ${esc(money(item.gross))} ${esc(item.currency||'')} · Netto ${esc(money(item.net))} · Steuer ${esc(money(item.tax))}</p>`:'<p>Warenumsatz nicht freigegeben · Belegabgleich offen</p>'}
+        <p>Originaler Quellbetrag des Belegkopfs: ${esc(money(item.sourceAmount))} ${esc(item.currency||'')}</p>${lines?.reconciliationText?.(item)?`<p>${esc(lines.reconciliationText(item))}</p>`:''}`;
   }
 
   function mount(root, { kind, api, rawApi, getUser, lineFormat, active = () => true, windowPreferences, scale,
@@ -109,6 +113,7 @@
           <input type="search" data-b="query" maxlength="160" autocomplete="off" placeholder="${kind === "articles" ? "z. B. Kamera oder 000042" : "z. B. Objektiv"}"></label>${kind==='articles'?'<button type="button" class="text-button branch-scan-button" data-b="scan" aria-label="EAN oder QR-Code mit Kamera scannen"><span aria-hidden="true">📷</span><span>Scannen</span></button>':''}</div>
         ${kind === "articles" ? '<label><span>Status</span><select data-b="status"><option value="active">Aktiv</option><option value="all">Alle</option><option value="inactive">Archiviert</option></select></label>'
           : `<label class="branch-search-receipt"><span>Belegnummer / Rechnungsreferenz</span><input type="search" data-b="receipt" maxlength="80" autocomplete="off"></label>
+            <label><span>Gerätenummer</span><input type="search" data-b="device" maxlength="80" autocomplete="off" placeholder="Erfasste Gerätenummer oder Teil mit *"></label>
             <label><span>Von</span><input type="date" data-b="from" required min="1900-01-01"></label><label><span>Bis</span><input type="date" data-b="to" required min="1900-01-01"></label>
             <label class="branch-search-wide branch-search-customer"><span>Kunde</span><input type="search" data-b="customer" maxlength="160" autocomplete="off" placeholder="z. B. Müller 6020"><small>Name, Straße, PLZ, Ort, Nummer, Telefon oder E-Mail.</small></label>
             <label class="branch-search-sellers"><span>Belegverkäufer · Personalnummern</span><input type="text" data-b="sellers" maxlength="440" autocomplete="off" placeholder="z. B. 12, 34, 56"><small>Mehrere Nummern durch Beistriche trennen.</small></label>
@@ -223,7 +228,7 @@
           let cursor = page || "", processed = 0, items = [];
           if (!selectedLocations.size) throw new Error('Bitte mindestens eine Filiale auswählen.');
           try { Filters.sellers(el('sellers').value); } catch { throw new Error('Bitte bis zu 20 vollständige Personalnummern durch Beistriche getrennt eingeben.'); }
-          const query = { query: el("query").value, receipt: el("receipt").value, dateFrom: el("from").value, dateTo: el("to").value,
+          const query = { query: el("query").value, receipt: el("receipt").value,deviceNumber:el('device')?.value||'',dateFrom: el("from").value, dateTo: el("to").value,
             customer: el('customer').value, sellers: el('sellers').value, locations: [...selectedLocations].sort() };
           do {
             const result = await api("/api/portal/v1/branch-receipts/search", { method: "POST", body: JSON.stringify({ ...query, cursor }) });
