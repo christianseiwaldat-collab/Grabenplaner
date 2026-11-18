@@ -113668,12 +113668,12 @@
         },
         {
           "path": "test/emma-absence-requests-postgresql.test.js",
-          "sha256": "20db7c364f4b07cb7167923423f4d8d9d1e0903313466c97187efd65a8c273fe",
+          "sha256": "0142c594ac2445891ecdca658b51ca25612ad0489868d1df99c8575b97c82fe7",
           "sha256Variants": [
-            "20db7c364f4b07cb7167923423f4d8d9d1e0903313466c97187efd65a8c273fe",
-            "35c60e0ba80322fb9da429b4d4e22e39ac4052993c27195cc463e18910b13cc8"
+            "0142c594ac2445891ecdca658b51ca25612ad0489868d1df99c8575b97c82fe7",
+            "cf2ba7dd05e11300896d616d1a928f5c5168260dd8a46ed472baa1d18b7bfb77"
           ],
-          "reason": "Exact source boundary reviewed for this finding. Strictly formatted/escaped values and the named existing regression boundary are retained."
+          "reason": "Native PostgreSQL CI 44392874758 passed all application shards. The fixture now enables the matrix design for its own branch through the real scoped PDF-settings API with an explicit manager permission and CSRF. The tested pending-absence authorization, cross-branch limits, persistence and PDF text assertions remain effective; application code and all finding spans are unchanged."
         }
       ]
     },
