@@ -34,14 +34,14 @@ if (process.env.GP_PG_API_FIXTURE_BRIDGE !== "1") {
       .run(crypto.randomUUID(), number, crypto.createHash("sha256").update(token).digest("hex"));
     return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
   }
-  async function api(route, { actor = "Emma", body, csrf = true, binary = false } = {}) {
+  async function api(route, { actor = "Emma", body, method = body === undefined ? "GET" : "POST", csrf = true, binary = false } = {}) {
     const auth = sessions.get(actor), headers = { Accept: binary ? "application/pdf" : "application/json" };
     if (auth) headers.Cookie = auth.cookie;
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";
       if (csrf && auth) headers["X-CSRF-Token"] = auth.csrf;
     }
-    const response = await fetch(base + route, { method: body === undefined ? "GET" : "POST", headers,
+    const response = await fetch(base + route, { method, headers,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     const data = binary && response.ok ? Buffer.from(await response.arrayBuffer()) : await response.json();
     return { status: response.status, data, headers: response.headers };
@@ -89,11 +89,16 @@ if (process.env.GP_PG_API_FIXTURE_BRIDGE !== "1") {
       db.prepare("INSERT INTO portal_access_scopes(employee_number,location_id,assigned_by) VALUES(?,?,'synthetic-fixture')").run(number, LOCATION);
     db.prepare(`INSERT INTO shifts(employee_number,location_id,shift_date,start_time,end_time)
       VALUES(?,?,'2031-04-08','09:00','18:00')`).run(ZA, LOCATION);
-    db.prepare("INSERT INTO settings(key,value) VALUES('pdf_schedule_design_ids',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
-      .run(JSON.stringify(["timeline", "matrix"]));
+    db.prepare("INSERT INTO portal_permission_grants(employee_number,permission,granted_by) VALUES(?,'schedule:pdf:settings:write','synthetic-fixture')")
+      .run(MANAGER);
     server = app.listen(0, "127.0.0.1");
     await new Promise((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
     base = `http://127.0.0.1:${server.address().port}`;
+    const pdfSettings = await api("/api/portal/v1/schedule-pdf-settings", {
+      actor: MANAGER, method: "PUT", body: { locationId: LOCATION, schedulePdfDesignIds: ["timeline", "matrix"] },
+    });
+    assert.equal(pdfSettings.status, 200, JSON.stringify(pdfSettings.data));
+    assert.deepEqual(pdfSettings.data.settings.pdf_schedule_design_ids, ["timeline", "matrix"]);
   });
 
   test.after(async () => {
@@ -157,7 +162,7 @@ if (process.env.GP_PG_API_FIXTURE_BRIDGE !== "1") {
     assert.equal(after.data.optionCreditTotals[PERSON], before.data.optionCreditTotals[PERSON]);
     assert.equal(after.data.totals[PERSON], before.data.totals[PERSON]);
     const pdf = await api(`/api/schedule.pdf?week=2031-04-07&location=${LOCATION}&design=matrix`, { binary: true });
-    assert.equal(pdf.status, 200); assert.match(pdf.headers.get("content-type"), /application\/pdf/);
+    assert.equal(pdf.status, 200, JSON.stringify(pdf.data)); assert.match(pdf.headers.get("content-type"), /application\/pdf/);
     const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const loading = getDocument({ data: Uint8Array.from(pdf.data), disableWorker: true, isEvalSupported: false, useSystemFonts: true });
     const document = await loading.promise;

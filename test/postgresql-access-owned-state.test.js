@@ -47,6 +47,7 @@ CREATE TABLE own_unknown_notes(id TEXT PRIMARY KEY,note TEXT);
 function client(database) {
   const cursors = new Map();
   const result = { database, cursors, writes: 0, connectionParameters: { host: '/tmp/gp-pg-recovery-ownedfixture', port: 55484 }, async query(sql, args = []) {
+    if (sql === 'SET LOCAL cursor_tuple_fraction=1') return { rows: [] };
     if (sql.startsWith('DECLARE ')) {
       const match = /^DECLARE "(gp_owned_export_[a-f0-9]{16})" NO SCROLL CURSOR FOR (SELECT .*)$/.exec(sql);
       assert.ok(match); assert.equal(match[2].includes('LIMIT'), false);
