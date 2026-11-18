@@ -351,6 +351,18 @@ test('fresh-generation mode still rejects missing retained foreign-key anchors b
   await assert.rejects(fs.access(path.join(f.directory, P.FILE)), { code: 'ENOENT' });
 });
 
+test('indexed history closure checks the complete composite key of retained segments', async t => {
+  const f = await fixture(t, { bulk: 1, authenticated: true });
+  const retained = uuid(1000);
+  insert(f.salesDb, 'import_history_holds', { record_id: retained, consumer_id: 'own-revision-link' });
+  f.salesDb.exec('PRAGMA foreign_keys=OFF');
+  insert(f.salesDb, 'import_history_segments', {
+    record_id: retained, revision: 900000, data_class: 'sales', payload: 'missing revision fixture',
+  });
+  await assert.rejects(P.exportOwnedState({ ...f, basis: P.FRESH_BASIS }), { code: 'PG_DEPLOY_OWNED_FK_CLOSURE' });
+  await assert.rejects(fs.access(path.join(f.directory, P.FILE)), { code: 'ENOENT' });
+});
+
 async function onlyCompletedRuns(t,{strictRunKeys=true}={}) {
  const f=await fixture(t,{bulk:1,authenticated:true,strictRunKeys});
  f.salesDb.exec('DELETE FROM data_import_change_payload_refs; DELETE FROM data_import_row_payload_refs; DELETE FROM data_import_changes; DELETE FROM data_import_rows; DELETE FROM data_import_run_state_counts; DELETE FROM data_import_events;');

@@ -51,6 +51,8 @@ Verwendung: sudo ./backup-grabenplaner.sh [Optionen]
                        (geerbte FD9-Wartungssperre und ausdruecklich --keep 1000).
   --deploy-owned       Interner Deploy-Punkt: Core und eigene Sales-Inhalte;
                        verlangt geerbte Wartungssperre und gepruefte Quellen.
+  --standalone-core    Core und eigene GP-Inhalte mit eigenem Wartungsbudget;
+                       verlangt eine geerbte Wartungssperre und gestoppten GP.
 EOF
 }
 
@@ -69,6 +71,7 @@ preserve_existing_backups=0
 defer_archive=0
 finish_deferred=0
 deploy_owned=0
+standalone_core=0
 
 while (($#)); do
   case "$1" in
@@ -87,6 +90,7 @@ while (($#)); do
     --defer-archive) defer_archive=1; shift ;;
     --finish-deferred) finish_deferred=1; shift ;;
     --deploy-owned) deploy_owned=1; shift ;;
+    --standalone-core) standalone_core=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -105,6 +109,8 @@ unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS LD_PREL
   || gp_die 'Dieser GP-Stand sichert ausschliesslich PostgreSQL-Paare. Altsicherungen nur mit der Offline-Wiederherstellungskapsel pruefen.'
 (( defer_archive == 0 )) \
   || gp_die 'SQLite-Archivoptionen sind in diesem Serverstand nicht mehr verfuegbar.'
+(( deploy_owned + standalone_core <= 1 )) \
+  || gp_die 'Es darf nur ein Core-Sicherungsauftrag ausgewaehlt werden.'
 # shellcheck source=server-tools/linux/lib/postgresql-maintenance.sh
 source "$SCRIPT_DIR/lib/postgresql-maintenance.sh"
 gp_postgresql_backup

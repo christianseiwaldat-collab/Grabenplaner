@@ -14,10 +14,11 @@ gp_postgresql_backup() {
       || gp_die 'Der erhaltende Sicherungsauftrag benoetigt die geerbte Wartungssperre und ausdruecklich --keep 1000.'
     backup_action=backup-preserve
   fi
-  if (( ${deploy_owned:-0} == 1 )); then
+  if (( ${deploy_owned:-0} == 1 || ${standalone_core:-0} == 1 )); then
     (( lock_already_held == 1 && preserve_existing_backups == 0 && finish_deferred == 0 && defer_archive == 0 )) \
       || gp_die 'Der kleinere Deploy-Punkt verlangt die geerbte Wartungssperre ohne Archiv- oder Rotationsauftrag.'
     backup_action=backup-deploy-owned
+    if (( ${standalone_core:-0} == 1 )); then backup_action=backup-standalone-core; fi
   fi
   anchor="$data_dir/data/postgresql-pair.json"
   [[ -z "$database_arg" || "$database_arg" == "$anchor" ]] || gp_die 'Die PostgreSQL-Sicherung akzeptiert nur den konfigurierten Paarbezug.'

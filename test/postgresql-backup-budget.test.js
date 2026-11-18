@@ -32,6 +32,20 @@ test('both snapshots retain bounded idle budgets across the full serial pair whi
  for(const c of f.clients){assert.ok(c.queries.some(s=>s.includes("idle_in_transaction_session_timeout='1500000ms'")));assert.ok(c.queries.some(s=>s.includes("lock_timeout='5s'")));assert.ok(c.queries.includes('COMMIT'));}
  assert.ok(f.clients[1].queries.includes("SET LOCAL statement_timeout='60000ms'"));
 });
+test('only standalone Core has a separate bounded operation and snapshot lifetime',async t=>{
+ let now=0;const budget=B.createBackupBudget({now:()=>now,standaloneCore:true});
+ const f=fixture(t,budget);
+ f.options.readCheckpoint=async()=>{now=23*60000;return {synthetic:true};};
+ assert.ok(fs.existsSync((await createPairedSnapshot(f.options)).commitMarker));
+ for(const c of f.clients)assert.ok(c.queries.some(s=>s.includes("idle_in_transaction_session_timeout='2100000ms'")));
+ assert.equal(budget.remaining(),9*60000);
+ now=32*60000;
+ const cancellation=Object.assign(new Error('deadline'),{code:'57014'});
+ now--;
+ const bounded=B.boundedSnapshotClient({async query(sql){if(sql==='SELECT fixture'){now++;throw cancellation;}}},budget);
+ await assert.rejects(bounded.query('SELECT fixture'),{code:'PG_BACKUP_OPERATION_TIMEOUT'});
+ await assert.rejects(require('../lib/persistence/postgresql/operations/runtime').createBackup({}, {standaloneCore:true}),/PG_BACKUP_STANDALONE_CORE_SCOPE/);
+});
 test('an expired full-pair deadline rolls both owned snapshots back without a complete marker',async t=>{
  let now=0;const b=B.createBackupBudget({now:()=>now,milliseconds:1000}),f=fixture(t,b);
  const dump=f.options.runDump;f.options.runDump=async x=>{await dump(x);if(x.domain==='sales')now=1001;};
