@@ -164,12 +164,12 @@
     },
     {
       "scanner": "secrets",
-      "fingerprint": "82ca2c415a3777be082d99c1b3429ed1b3dcb21adc5da3126a94e9735ff8dce7",
-      "sourceSha256": "02e9571c37979d3a51439be045cffc9d1590a396029d702bb68fd32e7303a586",
+      "fingerprint": "18332ac23b966bd5703c72a610d042cba5cafe42699687087bf18151aa6c5e98",
+      "sourceSha256": "700e9e363f871e6c786d1098a1b5572c5f20de765c02764b5d4b3a42ff0c5cb2",
       "owner": "Codex PR106 source review",
-      "reason": "current checkout:test/sales-article-sales.test.js:92. The matched legacy-102607 value is an asserted synthetic article identity in an isolated sales-catalog fixture. It is compared with sourceArticleKey, never used for authentication or network authorization. Exact fixture and surrounding import assertions inspected.",
-      "reviewedOn": "2026-11-04",
-      "expiresOn": "2026-11-18",
+      "reason": "current checkout:test/sales-article-sales.test.js:93. The matched legacy-102607 value is an asserted synthetic article identity in an isolated sales-catalog fixture. It is compared with sourceArticleKey, never used for authentication or network authorization. Exact fixture and surrounding import assertions inspected.",
+      "reviewedOn": "2026-11-18",
+      "expiresOn": "2026-11-25",
       "priority": "P2"
     },
     {

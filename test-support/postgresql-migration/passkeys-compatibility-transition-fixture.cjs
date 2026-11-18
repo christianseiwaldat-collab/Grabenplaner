@@ -10,7 +10,7 @@ const REPO = path.resolve(__dirname, "../.."), BIN = "/usr/lib/postgresql/18/bin
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 const INSPECTOR_SHA = "f89627774a3580fea93a22a30910d3034296251da30c1b92728029aee5054064";
 const DEPENDENCIES_SHA = "2afd6587681740d340039db0e128dadf52b2886d9359b6585980a7d7d7e9a70b";
-const FROZEN_DEPENDENCIES_SHA = "e2b0fce6206c9fad6b58aa7a6482d2ee82e3cc7c2ac7d5b101432a3a5e7087b0";
+const FROZEN_DEPENDENCIES_SHA = "8842becfe3f5306aa5629948b7ff0a180a9908ce034f3c96bc76ab93bb6e8d52";
 
 function originalInspector(document = require("./f0d-core-inspector.json"),
   frozen = require("./f0d-core-inspector-frozen-dependencies.json")) {
@@ -29,7 +29,7 @@ function originalInspector(document = require("./f0d-core-inspector.json"),
   if (hash(JSON.stringify(frozen)) !== FROZEN_DEPENDENCIES_SHA
     || frozen.format !== "gp-f0d-core-inspector-frozen-dependencies-v1"
     || frozen.sourceCommit !== document.sourceCommit || frozen.sharedDependenciesSha256 !== DEPENDENCIES_SHA
-    || !Array.isArray(frozen.files) || frozen.files.length !== 9
+    || !Array.isArray(frozen.files) || frozen.files.length !== 10
     || !Array.isArray(frozen.readOnlyData) || frozen.readOnlyData.length !== 1) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
   const retained = new Map(), originals = new Map();
   for (const item of frozen.files) {
