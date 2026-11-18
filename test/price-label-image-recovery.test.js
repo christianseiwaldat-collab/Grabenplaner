@@ -167,7 +167,7 @@ function backupRuntime(f) {
   if (name === 'pg_restore' && args.database === 'sales') f.rows = [], events.push('live-rows-changed');
  };
  const sandbox = { require: name => name === 'pg' ? { Pool } : name === './paired-checkpoint' ? { captureCheckpoint: async () => ({ synthetic: true }) } : actualRequire(name),
-  module, exports: module.exports, performance, syntheticNativeTool: nativeTool };
+  module, exports: module.exports, performance, process, syntheticNativeTool: nativeTool };
  vm.runInNewContext(fs.readFileSync(sourceFile, 'utf8') + '\ninspectPair=async()=>({core:{},sales:{}});nativeTool=syntheticNativeTool;', sandbox, { filename: sourceFile });
  const backupDirectory = path.join(f.directory, 'pairs'), workDirectory = path.join(f.directory, 'work');
  fs.mkdirSync(backupDirectory, { mode: 0o700 }); fs.mkdirSync(workDirectory, { mode: 0o700 });

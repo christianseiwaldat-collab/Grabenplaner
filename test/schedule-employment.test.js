@@ -253,7 +253,7 @@ test('actual schedule read model excludes pre-entry work, credits and actual-day
       listXoffiSnapshots: async () => [{ employeeNumber: '434', importId: 1, snapshot: { balanceDate: '2026-10-12', closingBalance: 88 } }],
     },
     saturdayCreditService: { cutover: async () => null },
-    absenceManagementRepository: { pendingTimeOffForRange: async () => [] },
+    absenceManagementRepository: { pendingTimeOffForRange: async () => [], pendingVacationForRange: async () => [] },
     sicknessCreditsForEmployeesInRange: async () => [{ employee_number: '434', date: '2026-10-12', minutes: 30 }, { employee_number: '434', date: '2026-10-15', minutes: 30 }],
     shiftMetrics: async (shift, settings, options) => { assert.equal(options?.planning, true); return { counted_minutes: 60, raw_minutes: 60, break_minutes: 0, bonus_minutes: 0 }; },
     optionMinutesPerDay: () => 0, optionIsAllDay: () => true, isTeamWideMeetingOption: () => false,

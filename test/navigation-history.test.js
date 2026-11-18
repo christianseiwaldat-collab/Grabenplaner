@@ -148,7 +148,7 @@ function administration() {
     canReadSecurityAuditsWorkspace: () => true,
     canReadDataSubjectRequests: () => true,
     loadDataSubjectRequests: async () => { calls.push('loadDataRequests'); },
-    showToast: () => {},
+    showToast: () => {}, activateBranchWebgl: () => {},
     loadSystemCenter: () => calls.push('loadSystemCenter'),
   };
   for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canAccessTeamManagement', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canUseSalesPriceLabels', 'canAccessCrm', 'canAccessTradeInsights', 'canReadTradeMovements', 'canReadLoanManagement', 'canManageBranchOrders', 'canAccessPrivacyOrganization']) ctx[name] = () => true;

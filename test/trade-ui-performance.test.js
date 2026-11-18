@@ -11,6 +11,7 @@ test('Repeated result formatting reuses locale formatters without changing displ
   let constructions = 0;
   const context = {
     module: { exports: {} },
+    require: name => { assert.equal(name, './source-date-time'); return require('../public/source-date-time'); },
     Intl: {
       Collator: Intl.Collator,
       NumberFormat: function (...args) { constructions++; return new Intl.NumberFormat(...args); },
@@ -27,7 +28,8 @@ test('Repeated result formatting reuses locale formatters without changing displ
   assert.equal(constructions, initial);
   for (const value of [null, undefined, '']) assert.equal(format(value, 'number'), '–');
   assert.equal(format('9007199254740993.1234', 'decimal'), '9007199254740993,1234');
-  assert.equal(format('2026-09-28T12:00:00Z', 'date'), '28.09.2026');
+  assert.equal(format('2026-09-28T12:00:00Z', 'date'), '28.09.2026 · 12:00:00 Uhr');
+  assert.equal(format('2026-09-28', 'date'), '28.09.2026');
 });
 
 test('Related article links preserve the first occurrence and stop after twelve distinct articles', () => {

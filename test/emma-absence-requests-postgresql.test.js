@@ -22,7 +22,7 @@ if (process.env.GP_PG_API_FIXTURE_BRIDGE !== "1") {
     GRABENPLANER_TEST_TODAY: "2031-04-01", NODE_ENV: "test", TZ: "Europe/Vienna",
   });
   const subject = require("../server"), { app, db } = subject;
-  const LOCATION = "emma-native", PERSON = "emma-self", ZA = "emma-za", OTHER = "emma-other", MANAGER = "emma-review";
+  const LOCATION = "91", PERSON = "emma-self", ZA = "emma-za", OTHER = "emma-other", MANAGER = "emma-review";
   const PREFIX = "/api/portal/v1/emma/absence-requests";
   const sessions = new Map();
   let server, base;
@@ -74,9 +74,9 @@ if (process.env.GP_PG_API_FIXTURE_BRIDGE !== "1") {
     prepareLocationFixture(db, "INSERT INTO locations(id,name,min_staff,day_settings_json,active) VALUES(?,?,99,?,1)")
       .run(LOCATION, "Synthetic Emma branch", days);
     prepareLocationFixture(db, "INSERT INTO locations(id,name,min_staff,day_settings_json,active) VALUES(?,?,0,?,1)")
-      .run("emma-away", "Synthetic outside branch", days);
+      .run("92", "Synthetic outside branch", days);
     for (const [number, role, location] of [["Emma", "employee", LOCATION], [PERSON, "employee", LOCATION],
-      [ZA, "employee", LOCATION], [OTHER, "employee", "emma-away"], [MANAGER, "manager", LOCATION]]) {
+      [ZA, "employee", LOCATION], [OTHER, "employee", "92"], [MANAGER, "manager", LOCATION]]) {
       db.prepare(`INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active)
         VALUES(?,?,?,'#287a67',38.5,?,1)`).run(number, `Synthetic ${number}`, number, location);
       db.prepare(`INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at)

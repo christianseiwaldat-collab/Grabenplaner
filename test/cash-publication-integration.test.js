@@ -298,6 +298,7 @@ test('batched publication preserves the scalar plan and rolls back every binding
 
 test('historical immutable SQLite background worker preserves separate-file PDF totals for old data', async t => {
   const fs = require('node:fs'), path = require('node:path');
+  fs.mkdirSync(path.resolve(__dirname, '../tmp'), { recursive: true, mode: 0o700 });
   const root = fs.realpathSync(path.resolve(__dirname, '../tmp')), dir = fs.mkdtempSync(path.join(root, 'report-worker-'));
   const databasePath = path.join(dir, 'source.db'), f = await fixture(t, { databasePath, count: 205 });
   await f.activate();
@@ -1104,6 +1105,7 @@ test('only a personally authorized importer can activate and only the current ac
 test('published cash survives a real database copy, a fresh vault and full re-verification without changing its selection', async t => {
   const fs = require('node:fs'), path = require('node:path');
   const f = await fixture(t); const active = await f.activate();
+  fs.mkdirSync(path.resolve(__dirname, '../tmp'), { recursive: true, mode: 0o700 });
   const root = fs.realpathSync(path.resolve(__dirname, '../tmp')), directory = fs.mkdtempSync(path.join(root, 'cash-publication-restore-'));
   const file = path.join(directory, 'restored.db'); f.app.database.prepare('VACUUM INTO ?').run(file);
   const restored = openSqliteApplicationPersistence({ databasePath: file, catalog: SQLITE_APPLICATION_CATALOG });
@@ -1483,6 +1485,7 @@ test('assigned cash search has an indexed binding lookup and equals the general 
 
 test('optimized cash reads work beside an uncommitted writer and survive file restore with fresh runtime', async t => {
   const fs = require('node:fs'), path = require('node:path'), { DatabaseSync } = require('node:sqlite');
+  fs.mkdirSync(path.resolve(__dirname, '../tmp'), { recursive: true, mode: 0o700 });
   const root = fs.realpathSync(path.resolve(__dirname, '../tmp')), dir = fs.mkdtempSync(path.join(root, 'cash-block5-'));
   const databasePath = path.join(dir, 'source.db'), f = await fixture(t, { databasePath, count: 205 });
   await f.activate(); const writer = new DatabaseSync(databasePath); let restored;

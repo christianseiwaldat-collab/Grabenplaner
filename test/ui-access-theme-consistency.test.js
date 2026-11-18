@@ -13,7 +13,7 @@ const serverSource = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
 const TEAM_PERMISSIONS = ["employees:read", "employees:display:write", "employees:write"];
 const PREFERENCE_VIEWS = [
-  "startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations",
+  "startDashboard", "filialAdministration", "branchWebgl", "planning", "requests", "timeTracking", "vacations",
   "personnelAdministration", "personnel", "salesAdministration", "salesAnalytics", "tradeInsights",
   "loans", "branchOrders", "rightsDashboard", "settings",
 ];
@@ -91,7 +91,7 @@ function navigationContext(permissions, options = {}) {
     salesArticleReportWorkspace: null, salesBwlWorkspace: null, gpDefinitionsWorkspace: null,
     employeeProfileIsOpen: () => false, accessibleDashboardModes: () => ["rights"],
     setPersonnelAdministrationTab: () => {}, setSettingsTab: () => {}, setSalesAnalyticsTab: () => {},
-    activateTradeArea: () => {}, activatePrivacyOrganizationView: () => {},
+    activateTradeArea: () => {}, activatePrivacyOrganizationView: () => {}, activateBranchWebgl: () => {},
   });
   context.state.crm = {};
   context.state.salesArticleCatalog = {};
@@ -224,14 +224,15 @@ test("Disabled vacation feature closes the central vacation card and direct tab 
   }
 });
 
-test("Global theme reaches every actual main view while the persisted UI/API preference contract stays at 15 views", () => {
+test("Global theme reaches every actual main view including the persisted WebGL preference", () => {
   const context = {}, allNodes = [];
   const walk = node => { allNodes.push(node); for (const child of node.children || []) walk(child); };
   walk(parseDocument(html));
   const viewIds = allNodes.filter(node => /(?:^|\s)view(?:\s|$)/.test(node.attribs?.class || "")
     && /(?:^|\s)main-content(?:\s|$)/.test(node.parent?.attribs?.class || ""))
     .map(node => node.attribs.id);
-  assert.equal(viewIds.length, 25);
+  assert.equal(viewIds.length, 26);
+  assert.ok(viewIds.includes("branchWebglView"));
   const nodes = new Map(viewIds.map(id => [id, element(id)]));
   const main = element("main"), toggle = element("sidebarDarkmodeToggle");
   const choices = [element("lightChoice", { globalThemeChoice: "light" }), element("darkChoice", { globalThemeChoice: "dark" })];
