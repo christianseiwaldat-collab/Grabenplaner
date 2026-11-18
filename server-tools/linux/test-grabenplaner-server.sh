@@ -293,6 +293,13 @@ else
   check_fail "Caddy-Konfiguration" "Validierung fehlgeschlagen"
 fi
 
+core_deploy_qualified=0
+if (( deploy_checks == 1 )) && [[ -f "$app_dir/server-tools/linux/lib/core-deploy-proof.js" ]]; then
+  if "$node" "$app_dir/server-tools/linux/lib/core-deploy-proof.js" inspect "$app_dir" "$app_dir" >/dev/null 2>&1; then
+    core_deploy_qualified=1
+  fi
+fi
+
 if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]; then
   offsite_status_file="/var/lib/grabenplaner-offsite/status.json"
   offsite_status_group="grabenplaner-offsite-status"
@@ -318,7 +325,7 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]
   # A recovery fix cannot clear a previous restore failure until its candidate
   # code is installed. Re-test that exact failure before judging the candidate;
   # never suppress/reset the status or run this work from the regular monitor.
-  if (( deploy_checks == 1 && failures == 0 && offsite_timer_ok == 1 )) \
+  if (( deploy_checks == 1 && core_deploy_qualified == 0 && failures == 0 && offsite_timer_ok == 1 )) \
     && [[ -f "$offsite_status_reader" && ! -L "$offsite_status_reader" ]] \
     && [[ "$("$node" - "$offsite_status_reader" "$offsite_status_file" <<'NODE'
 const [restoreReaderPath, restoreStatusPath] = process.argv.slice(2);
@@ -360,12 +367,16 @@ NODE
   if [[ "$offsite_status_gid" =~ ^[0-9]+$ && -f "$offsite_status_file" && ! -L "$offsite_status_file" \
     && "$(stat --format='%u:%g:%a:%h' -- "$offsite_status_file")" == "0:$offsite_status_gid:640:1" \
     && -f "$offsite_status_reader" && ! -L "$offsite_status_reader" ]] \
-    && offsite_status_kind="$("$node" - "$offsite_status_reader" "$offsite_status_file" "$deploy_checks" <<'NODE'
-const [readerPath, statusPath, deployChecks] = process.argv.slice(2);
+    && offsite_status_kind="$("$node" - "$offsite_status_reader" "$offsite_status_file" "$deploy_checks" "$core_deploy_qualified" <<'NODE'
+const [readerPath, statusPath, deployChecks, qualifiedCore] = process.argv.slice(2);
 const { readOffsiteBackupStatus } = require(readerPath);
 const diagnostics = readOffsiteBackupStatus({ configured: true, statusPath });
 if (!diagnostics.statusAvailable || diagnostics.blocksMainReadiness !== false) process.exit(1);
-if (diagnostics.state === "ok") process.stdout.write("complete");
+// The root-only Core proof already authenticates this installed target, the
+// exact restored point and its recent signed external basis. Keep historical
+// full-nightly failures visible; they do not force another full deploy test.
+if (deployChecks === "1" && qualifiedCore === "1") process.stdout.write("qualified-core-plus");
+else if (diagnostics.state === "ok") process.stdout.write("complete");
 else {
   // The first complete recovery proof follows the committed core/module update.
   // Missing/stale full proofs must not make that very update impossible. This
@@ -384,7 +395,9 @@ NODE
     offsite_status_current=1
   fi
   if (( offsite_timer_ok == 1 && offsite_status_current == 1 )); then
-    if [[ "$offsite_status_kind" == pending-full-verification ]]; then
+    if [[ "$offsite_status_kind" == qualified-core-plus ]]; then
+      check_ok "Offsite-Sicherung" "Core Plus wiederherstellungsgeprueft und externe Sicherungsbasis bestaetigt; Nachtlauf bleibt getrennt"
+    elif [[ "$offsite_status_kind" == pending-full-verification ]]; then
       check_ok "Offsite-Sicherung" "aktuelle externe Sicherung und Timer bestaetigt; vollstaendiger Recovery-Nachweis folgt"
     else
       check_ok "Offsite-Sicherung" "lokaler Status und Timer sind aktuell"
