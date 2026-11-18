@@ -40,6 +40,13 @@ function jsonFile(file, maximum = 2 * 1024 * 1024) {
   return { bytes, value: JSON.parse(bytes) };
 }
 
+function decodeRestoreReceipt(encoded) {
+  if (typeof encoded !== 'string' || !encoded.length || encoded.length > Math.ceil(2 * 1024 * 1024 / 3) * 4) fail('CORE_DEPLOY_RESTORE_ENCODING');
+  const bytes = Buffer.from(encoded, 'base64');
+  if (bytes.length > 2 * 1024 * 1024 || bytes.toString('base64') !== encoded) fail('CORE_DEPLOY_RESTORE_ENCODING');
+  return { bytes, value: JSON.parse(bytes.toString('utf8')) };
+}
+
 function validateOffsiteBasis(proof, history, identity, configurationSha256, now = Date.now()) {
   const at = Date.parse(proof?.verifiedAt);
   if (proof?.format !== legacy.FORMAT || !legacy.sameDatabaseIdentity(proof, identity) || proof.configurationSha256 !== configurationSha256
@@ -76,7 +83,7 @@ async function readProof(appRoot, candidateRoot, envFile) {
   const evidence = validateProof(proof, { installedManifest: installed.manifestSha256,
     candidateManifest: candidate?.manifestSha256, identity, configurationSha256: legacy.configurationIdentity(envFile) });
   offsiteBasis(identity, proof.configurationSha256);
-  const restore = jsonFile(proof.restoreFile);
+  const restore = Object.hasOwn(proof, 'restoreBytes') ? decodeRestoreReceipt(proof.restoreBytes) : jsonFile(proof.restoreFile);
   if (digest(restore.bytes) !== proof.restoreSha256) fail('CORE_DEPLOY_RESTORE_CHANGED');
   validateRestore(restore.value, proof.backup, proof.sourceVersion, proof.targetVersion);
   const bundle = await require('../../../lib/persistence/postgresql/operations/paired-bundle').verifyPairBundle(
@@ -105,7 +112,9 @@ async function recordProof(appRoot, candidateRoot, backupResultFile, restoreFile
     sourceManifestSha256: source.manifestSha256, targetManifestSha256: target.manifestSha256,
     sourceVersion: source.appVersion, targetVersion: target.appVersion, ...identity,
     configurationSha256: legacy.configurationIdentity(envFile), backup,
-    restoreFile, restoreSha256: digest(restored.bytes), verifiedAt: restored.value.verifiedAt };
+    // Updater staging is removed after a successful deployment. Keep the exact
+    // authenticated receipt bytes inside this durable protected proof.
+    restoreFile, restoreBytes: restored.bytes.toString('base64'), restoreSha256: digest(restored.bytes), verifiedAt: restored.value.verifiedAt };
   proof.offsiteBasis = offsiteBasis(live, proof.configurationSha256);
   validateProof(proof, { installedManifest: source.manifestSha256, candidateManifest: target.manifestSha256,
     identity: live, configurationSha256: proof.configurationSha256 });
@@ -144,4 +153,4 @@ if (require.main === module) main().then(result => process.stdout.write(JSON.str
     ? error.code || error.message : 'CORE_DEPLOY_PROOF_FAILED' }) + '\n');
   process.exitCode = 1;
 });
-module.exports = { FORMAT, PROOF_FILE, validateProof, validateRestore, validateOffsiteBasis, readProof, recordProof, main };
+module.exports = { FORMAT, PROOF_FILE, validateProof, validateRestore, validateOffsiteBasis, decodeRestoreReceipt, readProof, recordProof, main };

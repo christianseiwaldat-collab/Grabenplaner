@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { FORMAT, validateProof, validateRestore, validateOffsiteBasis } = require('../server-tools/linux/lib/core-deploy-proof');
+const { FORMAT, validateProof, validateRestore, validateOffsiteBasis, decodeRestoreReceipt } = require('../server-tools/linux/lib/core-deploy-proof');
 const hash = text => crypto.createHash('sha256').update(text).digest('hex');
 
 function fixture() {
@@ -62,6 +62,21 @@ test('the isolated restore must prove own contents for the exact point and both 
     const restore = structuredClone(f.restore);mutate(restore);
     assert.throws(() => validateRestore(restore, f.proof.backup, '0.92.103-beta', '0.92.104-beta'));
   }
+});
+
+test('durable restore evidence preserves exact authenticated bytes and both application versions', () => {
+  const f = fixture(), bytes = Buffer.from(JSON.stringify(f.restore, null, 2) + '\n');
+  const restored = decodeRestoreReceipt(bytes.toString('base64'));
+  assert.deepEqual(restored.bytes, bytes);
+  assert.equal(hash(restored.bytes), hash(bytes));
+  validateRestore(restored.value, f.proof.backup, '0.92.103-beta', '0.92.104-beta');
+});
+
+test('malformed, noncanonical or oversized embedded receipts cannot replace a protected restore', () => {
+  for (const encoded of [null, '', 'e30', 'e30=\n', '%%%=', 'a'.repeat(Math.ceil(2 * 1024 * 1024 / 3) * 4 + 1)]) {
+    assert.throws(() => decodeRestoreReceipt(encoded), { code: 'CORE_DEPLOY_RESTORE_ENCODING' });
+  }
+  assert.throws(() => decodeRestoreReceipt(Buffer.from('invalid JSON').toString('base64')), SyntaxError);
 });
 
 test('a signed external recovery stays attributable while a separate nightly backup failure remains visible', () => {
