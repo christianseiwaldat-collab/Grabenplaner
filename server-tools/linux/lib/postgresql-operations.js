@@ -11,7 +11,13 @@ async function main(){
  if(action==='deploy-backup-scope'&&!args.length)return R.readDeployBackupScope(config);
  if(action==='check-paths'&&args.length===2){if(config.sourceFiles!==args[0]||config.backupDirectory!==args[1])throw new Error('PG_OPERATIONS_PATH_BINDING');return {verified:true};}
  if(action==='identity'&&!args.length)return require('./deploy-policy').postgresqlPairIdentity(await R.inspectPair(config));
- if(action==='backup-standalone-core'&&!args.length)return R.createBackup(config,{scope:'deploy-owned',standaloneCore:true});
+ if(action==='backup-standalone-core'&&!args.length)return R.createBackup(config,{
+  scope:'deploy-owned',standaloneCore:true,
+  onSnapshotReady:async()=>{
+   require('node:child_process').execFileSync('/usr/bin/systemctl',['start','grabenplaner.service'],{stdio:['ignore','ignore','inherit'],env:{PATH:'/usr/sbin:/usr/bin:/sbin:/bin'}});
+   process.stderr.write('CORE_BACKUP_SNAPSHOT_FROZEN_APP_STARTED '+new Date().toISOString()+'\n');
+  },
+ });
  if(action==='backup-deploy-owned'&&!args.length){
   const result=await R.createBackup(config,{scope:'deploy-owned'});
   return {...result,retention:await prunePairedSnapshots(config.backupDirectory,{scope:'deploy-owned',keepCount:2})};
