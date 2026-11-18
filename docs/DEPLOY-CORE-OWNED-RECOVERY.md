@@ -265,20 +265,44 @@ Entscheider. Eine fehlende Einstellung verwendet den Standardumfang `full`.
 Bei einem unlesbaren oder ungültigen Wert bricht der Updater vor der Sicherung ab.
 `full` wählt den Vollablauf ausdrücklich.
 
-Der kleinere Weg benötigt weiterhin einen gültigen signierten Vollnachweis
-innerhalb von 36 Stunden, unveränderte Paar-/Schema- und Konfigurationsbindungen
-sowie den bestätigten Nachttermin mit unveränderlicher Frist. Er erlaubt nur
-Änderungen an bereits bekannten GP-Geschäftsdateien. Änderungen an Sales, Import,
-Persistenz, Schema, Backup/Recovery, Serverwerkzeugen, Abhängigkeiten oder der
-Dateiliste verlangen den gesondert gewählten Vollablauf. Bei gewähltem
-Core-Umfang beendet der Updater einen solchen Lauf vor der Sicherung. Das
-gilt auch bei einem weiteren kleinen Deploy vor dem nächsten passenden Nachweis.
+Für den gewählten Core-Umfang wird der konkrete Sicherungspunkt am exakten
+Kandidaten wiederhergestellt und geprüft. Der root-geschützte Nachweis bindet
+Paar, Schema, Konfiguration, Sicherungsmanifest, ursprüngliche und vorgesehene
+App-Manifeste sowie den tatsächlichen Restore-Beleg. Der Updater kann diesen
+Punkt verwenden, sobald die Bindungen bestätigt sind. Neue Paketdateien werden
+durch die vollständige Paketprüfung und die Wiederherstellung des Kandidaten
+abgedeckt. Der frühere konservative Entscheider bleibt als Rückfallprüfung
+für vorhandene ältere Nachweise erhalten.
+
+Die externe Grundlage bleibt an einen bestätigten signierten Recovery-Lauf
+innerhalb des bestehenden 36-Stunden-Fensters gebunden. Ein späterer Fehler
+im vollständigen Nachtprofil bleibt sichtbar. Die frische Core-Wiederherstellung
+liefert den gesonderten Nachweis für den gewählten Umfang.
 
 Schlägt der frische Core-Sicherungspunkt fehl, beendet der Updater den Lauf
 vor dem App-Tausch. Das Fehlen alter Access-Dateien allein verhindert den V4-Punkt nicht.
 Ein Fehler im gewählten Restore-/GP-Test verhindert den erfolgreichen
 Update-Abschluss. Die signierte Nachtqueue und ihre feste Frist werden dadurch
 nicht als bestanden markiert.
+
+### Eigenständige Core-Aufnahme
+
+`backup-grabenplaner.sh --standalone-core --lock-already-held` verwendet eine
+übernommene Wartungssperre und einen kontrolliert gestoppten GP. SQL-Abfragen,
+native Dumps und der gesamte eigenständige Sicherungsauftrag haben keine
+zeitgesteuerte Abbruchgrenze.
+
+Bei der Aufnahme werden beide PostgreSQL-Snapshots und die eigenen Dateien
+gemeinsam fixiert. Die reduzierten Datenbank-Dumps und die Sequenzstände
+entstehen während dieser Pause. Danach übernehmen eigene Transaktionen die
+Snapshots mit Lesesperren gegen Tabellenänderungen. GP wird wieder gestartet.
+Auswahl, Verweisprüfung, verschlüsselter Export und Abschluss arbeiten weiter
+am fixierten Stand. Normale Datensätze können währenddessen geändert werden.
+Die Wartungssperre bleibt bis zum vollständigen Abschluss erhalten.
+
+Die getrennte Übergabe wurde auf einem isolierten PostgreSQL-Cluster mit
+Schreibzugriff nach dem Wiederanlauf geprüft. Wiederhergestellte Dumps,
+Datensätze, Dateien und Sequenzstände entsprachen dem aufgenommenen Stand.
 
 ## Größen, Prüfstand und verbleibende Gates
 

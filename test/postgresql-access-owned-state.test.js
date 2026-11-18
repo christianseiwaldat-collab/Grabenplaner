@@ -363,6 +363,21 @@ test('indexed history closure checks the complete composite key of retained segm
   await assert.rejects(fs.access(path.join(f.directory, P.FILE)), { code: 'ENOENT' });
 });
 
+test('matching retained selectors use enforced foreign keys while disabled or unknown constraints require row checks', async t => {
+  for (const change of [null, { enforced: false }, { validated: false }, { deferrable: true }, { noInheritance: false }]) {
+    const f = await fixture(t, { bulk: 1, authenticated: true }), native = f.sales.query.bind(f.sales);
+    let checkedSegments = 0;
+    f.sales.query = async (sql, args) => {
+      if (sql.startsWith('SELECT EXISTS(') && sql.includes('FROM "integration"."import_history_segments" c')) checkedSegments++;
+      const result = await native(sql, args);
+      if (change && sql.includes('FROM pg_constraint f')) result.rows = result.rows.map(edge => ({ ...edge, ...change }));
+      return result;
+    };
+    await P.exportOwnedState({ ...f, basis: P.FRESH_BASIS });
+    assert.equal(checkedSegments > 0, Boolean(change), JSON.stringify(change));
+  }
+});
+
 async function onlyCompletedRuns(t,{strictRunKeys=true}={}) {
  const f=await fixture(t,{bulk:1,authenticated:true,strictRunKeys});
  f.salesDb.exec('DELETE FROM data_import_change_payload_refs; DELETE FROM data_import_row_payload_refs; DELETE FROM data_import_changes; DELETE FROM data_import_rows; DELETE FROM data_import_run_state_counts; DELETE FROM data_import_events;');

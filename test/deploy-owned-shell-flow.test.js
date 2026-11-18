@@ -104,7 +104,7 @@ printf 'final-decision:%s\\n' "$deploy_decision" >> "$EVENTS_FILE"
 });
 
 for(const scenario of ['owned','policy-drift','failed-owned-recovery','invalid-owned-proof','failed-readiness','explicit-full'])test('actual updater phase ordering: '+scenario,{skip:!fs.existsSync(bash)},t=>{
- const f=fixture(t),entry='gp_begin_update_backup_ownership "$database"',start=source.indexOf(entry);assert.ok(start>0);
+ const f=fixture(t),entry='\ngp_begin_update_backup_ownership "$database"',start=source.indexOf(entry)+1;assert.ok(start>0);
  const workflow=source.slice(start).replaceAll('/usr/local/sbin/grabenplaner-offsite-pre-update','$TEST_MODULE_ROOT/grabenplaner-offsite-pre-update.sh').replaceAll('/opt/grabenplaner-offsite/module','$TEST_MODULE_ROOT');
  f.write('app/old.txt','old synthetic app');
  f.write('candidate/package.json','{}');

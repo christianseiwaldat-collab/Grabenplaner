@@ -1044,6 +1044,36 @@ trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 
+prepare_core_candidate() {
+  local helper="$extract_root/server-tools/linux/lib/core-deploy-proof.js"
+  local source_result="$maintenance_root/core-source-proof.json"
+  local point_result="$maintenance_root/core-prepared-backup.json"
+  local recovery_result="$maintenance_root/core-prepared-restore.json"
+  local point
+  if root_node "$helper" inspect "$app_dir" "$extract_root" >"$source_result" 2>/dev/null; then return; fi
+  if root_node "$helper" inspect "$app_dir" >"$source_result" 2>/dev/null; then
+    root_node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).backup)+"\n")' "$source_result" >"$point_result"
+  else
+    bind_rollback_service_restart
+    gp_begin_update_backup_ownership "$database" "$node" "$SCRIPT_DIR/../../lib/backup-maintenance.js"
+    services_touched=1
+    gp_stop_service "$service" 150
+    "$extract_root/server-tools/linux/backup-grabenplaner.sh" --env-file "$env_file" --app-dir "$extract_root" \
+      --data-dir "$data_dir" --database "$database" --backup-dir "$backup_dir" --service "$service" --node "$node" \
+      --standalone-core --lock-already-held >"$point_result" \
+      || gp_die 'Der Core-Plus-Sicherungspunkt konnte nicht abgeschlossen werden.'
+    gp_start_service "$service"
+    wait_deployment_ready "$internal_ready_url" "$health_timeout" || gp_die 'GP ist nach der Core-Aufnahme nicht bereit.'
+    wait_deployment_ready "$public_ready_url" "$health_timeout" || gp_die 'GP ist nach der Core-Aufnahme nicht oeffentlich bereit.'
+  fi
+  point="$(root_node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).bundle)' "$point_result")"
+  root_node "$extract_root/server-tools/linux/lib/deploy-owned-recovery.js" "$point" "$point.complete.json" \
+    "$app_dir" "$extract_root" >"$recovery_result" \
+    || gp_die 'Der Core-Sicherungspunkt konnte mit der vorgesehenen App nicht wiederhergestellt werden.'
+  root_node "$helper" record "$app_dir" "$extract_root" "$point_result" "$recovery_result" >/dev/null \
+    || gp_die 'Der Core-Recovery-Nachweis konnte nicht an das Release gebunden werden.'
+}
+
 create_exact_local_backup() {
   local backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
   local backup_app_dir="$app_dir"
@@ -1075,6 +1105,20 @@ create_exact_local_backup() {
   [[ -x "$backup_script" ]] || gp_die "Installiertes Linux-Backupwerkzeug fehlt: $backup_script"
   if [[ "$database_provider" == postgresql ]]; then
     postgresql_before_identity="$(root_node "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json)" || gp_die 'Der PostgreSQL-Paarstand konnte nicht gebunden werden.'
+  fi
+  if [[ "$deploy_mode" == owned ]] && root_node -e 'let d;try{d=JSON.parse(process.argv[1]);}catch{process.exit(1);}if(d.reason!=="CORE_PLUS_RESTORE_VERIFIED")process.exit(1)' "${deploy_decision:-}"; then
+    local core_checked="$maintenance_root/checked-core-proof.json"
+    root_node "$backup_app_dir/server-tools/linux/lib/core-deploy-proof.js" inspect "$app_dir" "$extract_root" >"$core_checked" \
+      || gp_die 'Der gepruefte Core-Sicherungspunkt ist nicht mehr an App und Paket gebunden.'
+    root_node - "$core_checked" "$deploy_decision" <<'NODE' >"$backup_result_file" \
+      || gp_die 'Die beiden Core-Sicherungsbelege stimmen nicht ueberein.'
+const fs=require('node:fs'),checked=JSON.parse(fs.readFileSync(process.argv[2],'utf8')),decision=JSON.parse(process.argv[3]);
+if(checked.verified!==true||checked.backup.sha256!==decision.coreBackup?.sha256)process.exit(1);
+process.stdout.write(JSON.stringify(checked.backup)+'\n');
+NODE
+    backup_database="$(root_node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).bundle)' "$backup_result_file")"
+    backup_amu="$backup_database/private/amu"
+    return
   fi
   if ! "$backup_script" --env-file "$env_file" --app-dir "$backup_app_dir" --data-dir "$data_dir" --database "$database" \
     --backup-dir "$backup_dir" --keep "$backup_keep" --service "$service" --node "$node" \
@@ -1443,6 +1487,10 @@ if [[ "$verification_policy" == auto && "$database_provider" == postgresql ]]; t
     gp_die 'Die gespeicherte Sicherungswahl ist nicht lesbar. Der Deploy wird vor der Sicherung abgebrochen.'
   fi
 fi
+if [[ "$effective_verification_policy" == deploy-owned && -f "$extract_root/server-tools/linux/lib/core-deploy-proof.js" ]]; then
+  begin_deploy_phase core-candidate-recovery
+  prepare_core_candidate
+fi
 if [[ "$verification_policy" == full || -n "$runtime_v5_transition" ]]; then
   deploy_decision='{"mode":"full","reason":"EXPLICIT_FULL_VERIFICATION"}'
 elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
@@ -1591,7 +1639,7 @@ begin_deploy_phase deployment-checks
   --env-file "$env_file" --app-dir "$app_dir" --data-dir "$data_dir" --database "$database" --backup-dir "$backup_dir" \
   --public-url "$public_url" --service "$service" --caddy-service "$caddy_service" >&2 \
   || gp_die "Die kurzen Betriebspruefungen nach dem Versionswechsel sind fehlgeschlagen."
-if [[ "$deploy_mode" == owned ]]; then
+if [[ "$deploy_mode" == owned ]] && ! root_node -e 'const d=JSON.parse(process.argv[1]);if(d.reason!=="CORE_PLUS_RESTORE_VERIFIED"||d.ownedRecovery?.verified!==true)process.exit(1)' "$deploy_decision"; then
   begin_deploy_phase owned-recovery
   owned_recovery_result="$maintenance_root/owned-recovery-result.json"
   root_node "$app_dir/server-tools/linux/lib/deploy-owned-recovery.js" "$backup_database" "$backup_database.complete.json" "$rollback_root" "$app_dir" >"$owned_recovery_result" \

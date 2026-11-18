@@ -440,6 +440,21 @@ fi
 
 # The optional module's self-test checks structure, not successful recovery.
 # Inspect only its protected, redacted status; never read provider credentials.
+core_proof_verified=0
+if [[ "${DB_PROVIDER:-}" == postgresql && -f "$SCRIPT_DIR/lib/core-deploy-proof.js" ]]; then
+  core_scope="$(root_node "$app_dir/server-tools/linux/lib/postgresql-operations.js" deploy-backup-scope /etc/grabenplaner/postgresql-operations.json)" \
+    || gp_die 'Die gespeicherte Sicherungswahl ist nicht lesbar.'
+  if root_node -e 'const s=JSON.parse(process.argv[1]);if(s.scope!=="deploy-owned"||s.valid!==true)process.exit(1)' "$core_scope"; then
+    if ! root_node "$SCRIPT_DIR/lib/core-deploy-proof.js" inspect "$app_dir" >/dev/null 2>&1; then
+      root_node "$SCRIPT_DIR/lib/core-deploy-proof.js" baseline "$app_dir" >/dev/null \
+        || gp_die 'Die vorhandene externe Sicherungsgrundlage fuer den Core-Deploy ist nicht bestaetigt.'
+      gp_info 'Der Core-Sicherungspunkt wird vor dem App-Tausch erstellt und am Kandidaten wiederherstellungsgeprueft.'
+    fi
+    core_proof_verified=1
+    gp_info 'Core und eigene GP-Inhalte sind mit einem vollstaendig geprueften Sicherungspunkt nachgewiesen.'
+  fi
+fi
+if (( core_proof_verified == 0 )); then
 root_node - "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" <<'NODE' \
   || gp_die "Die Offsite-Wiederherstellbarkeit ist nicht bestaetigt. Zuerst Recovery Assurance abschliessen."
 const fs = require('node:fs');
@@ -480,6 +495,7 @@ try {
   process.exitCode = 1;
 }
 NODE
+fi
 
 free_bytes_for() {
   local target="$1" blocks block_size filesystem_stats

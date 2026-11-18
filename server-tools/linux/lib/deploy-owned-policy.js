@@ -78,6 +78,12 @@ async function main(args=process.argv.slice(2)) {
  const [action,appRoot,candidateRoot,databasePath,envFile,timerActive,...extra]=args;
  if(action!=='decide'||extra.length||[appRoot,candidateRoot,databasePath,envFile,timerActive].some(value=>typeof value!=='string'||!value))throw new Error('DEPLOY_ARGUMENTS_INVALID');
  try {
+  const checked=await require('./core-deploy-proof').readProof(appRoot,candidateRoot,envFile);
+  return {mode:'owned',reason:'CORE_PLUS_RESTORE_VERIFIED',classification:'qualified-core-plus',
+   installedManifestSha256:checked.installedManifestSha256,candidateManifestSha256:checked.candidateManifestSha256,
+   coreBackup:checked.backup,ownedRecovery:checked.ownedRecovery};
+ } catch { /* An absent or mismatched Core proof still needs the legacy qualification below. */ }
+ try {
   const schedule=/^1:([0-9]{13})$/.exec(timerActive);
   let queueSchedule;
   try{queueSchedule=require('../../../lib/pending-recovery').readPendingRecoveryDocument();}
