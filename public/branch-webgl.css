@@ -10,7 +10,7 @@
 .branch-webgl-map[hidden]{display:none}.branch-webgl-map svg{display:block;width:100%;height:620px;touch-action:none;cursor:grab;background:#f3f4f0}.branch-webgl-map svg:active{cursor:grabbing}.branch-webgl-map svg:focus-visible{outline:3px solid #568b76;outline-offset:-3px}
 .branch-map-credit{margin:0;padding:10px 16px;font-size:.7rem;line-height:1.5;color:#607269;background:#f3f4f0}.branch-map-credit a{color:inherit}
 [data-webgl-mode="map"] .branch-webgl-stage{height:auto;min-height:0}[data-webgl-mode="map"] .branch-webgl-stage-note{display:none}.branch-webgl-stage:fullscreen .branch-webgl-map svg{height:calc(100vh - 54px)}
-[data-webgl-preset="fotowelt"] .branch-webgl-stage-note{display:none}
+[data-webgl-preset="fotowelt"] .branch-webgl-stage-note,[data-webgl-preset="street"] .branch-webgl-stage-note{display:none}
 .branch-webgl-crosshair{position:absolute;left:50%;top:50%;width:5px;height:5px;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 0 0 1px #151b19cc,0 1px 4px #0009;pointer-events:none}
 .branch-webgl-crosshair[hidden],.branch-webgl-walk-controls[hidden]{display:none}
 .branch-webgl-walk-controls{position:absolute;bottom:14px;right:14px;display:grid;grid-template-columns:repeat(3,38px);gap:4px;padding:7px;border-radius:10px;background:#18211ed9}

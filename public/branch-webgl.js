@@ -33,7 +33,27 @@
     return [Math.max(1,Math.floor(width*scale)),Math.max(1,Math.floor(height*scale))];
   }
 
-  const sky = [.69,.79,.84];
+  const horizon = [.74,.82,.865];
+  const skyVertex=`
+    attribute vec2 position;
+    uniform vec3 forward;
+    uniform vec3 screenRight;
+    uniform vec3 screenUp;
+    varying mediump vec3 ray;
+    void main(){
+      ray=forward+position.x*screenRight+position.y*screenUp;
+      gl_Position=vec4(position,1.0,1.0);
+    }`;
+  const skyFragment=`
+    precision mediump float;
+    varying mediump vec3 ray;
+    void main(){
+      vec3 direction=normalize(ray);
+      float height=smoothstep(0.0,0.62,direction.y);
+      vec3 gradient=mix(vec3(${horizon.join(',')}),vec3(0.32,0.57,0.75),height);
+      float glow=pow(max(0.0,dot(direction,vec3(-0.43,0.52,0.74))),12.0);
+      gl_FragColor=vec4(gradient+glow*vec3(0.105,0.075,0.035),1.0);
+    }`;
   const colorVertex=`
     attribute vec3 position;
     attribute vec4 color;
@@ -57,7 +77,7 @@
       depth=gl_Position.w;
     }`;
   const fog=`vec3 distanceTint(vec3 base, float z){
-    return mix(base, vec3(${sky.join(',')}), smoothstep(42.0, 164.0, z));
+    return mix(base, vec3(${horizon.join(',')}), smoothstep(48.0, 224.0, z));
   }`;
   const colorFragment=`
     precision mediump float;
@@ -83,7 +103,7 @@
     const canvas=root.querySelector('canvas'),status=root.querySelector('[data-webgl-status]'),fallback=root.querySelector('[data-webgl-fallback]');
     const stage=root.querySelector('.branch-webgl-stage'),dot=root.querySelector('[data-webgl-crosshair]'),walkControls=root.querySelector('[data-webgl-walk-controls]'),mapNode=root.querySelector('[data-webgl-map]');
     const doc=root.ownerDocument,win=doc.defaultView,scene=Scene.create();
-    let active=false,destroyed=false,gl=null,colorProgram=null,textureProgram=null,frame=0,last=0,drag=null,lost=false,mode='overview',camera=initialCamera(),target=[7,0,6],player=Scene.spawn(),mapWorkspace=null;
+    let active=false,destroyed=false,gl=null,colorProgram=null,textureProgram=null,skyProgram=null,frame=0,last=0,drag=null,lost=false,mode='overview',camera=initialCamera(),target=[7,0,6],player=Scene.spawn(),mapWorkspace=null;
     const keys=new Set(),disposers=[],buffers=[],textures=[],parts={},labelParts=[],surfaceParts=[];
     let anisotropic=null,renderLimit=4096;
     const walking=()=>['KeyW','KeyA','KeyS','KeyD'].some(key=>keys.has(key));
@@ -93,7 +113,7 @@
     function clearInput(){keys.clear();last=0;}
     function freeMouse(){clearInput();if(doc.pointerLockElement===canvas)doc.exitPointerLock();}
     function endDrag(){if(drag&&canvas.hasPointerCapture?.(drag.id))canvas.releasePointerCapture(drag.id);drag=null;}
-    function release(){if(gl){for(const b of buffers)gl.deleteBuffer(b);for(const t of textures)gl.deleteTexture(t);if(colorProgram)gl.deleteProgram(colorProgram);if(textureProgram)gl.deleteProgram(textureProgram);}buffers.length=textures.length=labelParts.length=surfaceParts.length=0;colorProgram=textureProgram=null;}
+    function release(){if(gl){for(const b of buffers)gl.deleteBuffer(b);for(const t of textures)gl.deleteTexture(t);for(const p of [colorProgram,textureProgram,skyProgram])if(p)gl.deleteProgram(p);}buffers.length=textures.length=labelParts.length=surfaceParts.length=0;colorProgram=textureProgram=skyProgram=null;}
     function program(vertex,fragment){
       const result=gl.createProgram(),shaders=[];try{for(const[type,source]of[[gl.VERTEX_SHADER,vertex],[gl.FRAGMENT_SHADER,fragment]]){const shader=gl.createShader(type);shaders.push(shader);gl.shaderSource(shader,source);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw Error('Shader failed');gl.attachShader(result,shader);}gl.linkProgram(result);if(!gl.getProgramParameter(result,gl.LINK_STATUS))throw Error('Program failed');return result;}catch(error){gl.deleteProgram(result);throw error;}finally{for(const shader of shaders)gl.deleteShader(shader);}
     }
@@ -159,6 +179,8 @@
         renderLimit=Math.min(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),...gl.getParameter(gl.MAX_VIEWPORT_DIMS));
         colorProgram=program(colorVertex,colorFragment);
         textureProgram=program(materialVertex,materialFragment);
+        skyProgram=program(skyVertex,skyFragment);
+        parts.sky=upload(new Float32Array([-1,-1,3,-1,-1,3]),2);
         for(const name of['opaque','glass','ceiling','lines','shadows'])parts[name]=upload(scene[name],7);
         for(const {material,vertices} of scene.surfaces) {
           surfaceParts.push({...upload(vertices,5),texture:surfaceTexture(material)});
@@ -188,17 +210,38 @@
         gl.drawArrays(gl.TRIANGLES,0,part.count);
       }
     }
+    function drawSky(matrix) {
+      // The view-projection rows carry the camera basis with its horizontal
+      // and vertical focal lengths. Their scaled inverses give world rays.
+      const axis = row => {
+        const vector = [matrix[row],matrix[row+4],matrix[row+8]];
+        const scale = vector.reduce((length,value)=>length+value*value,0);
+        return vector.map(value=>value/scale);
+      };
+      gl.depthFunc(gl.LEQUAL);
+      gl.useProgram(skyProgram);
+      gl.bindBuffer(gl.ARRAY_BUFFER,parts.sky.buffer);
+      const position=gl.getAttribLocation(skyProgram,'position');
+      gl.enableVertexAttribArray(position);
+      gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
+      gl.uniform3fv(gl.getUniformLocation(skyProgram,'forward'),[matrix[3],matrix[7],matrix[11]]);
+      gl.uniform3fv(gl.getUniformLocation(skyProgram,'screenRight'),axis(0));
+      gl.uniform3fv(gl.getUniformLocation(skyProgram,'screenUp'),axis(1));
+      gl.drawArrays(gl.TRIANGLES,0,parts.sky.count);
+      gl.depthFunc(gl.LESS);
+    }
     function draw(at){
       frame=0;if(!active||destroyed||lost||doc.hidden||mode==='map'||!gl||!colorProgram)return;
       if(mode==='walk'&&walking()){const seconds=last?Math.min(.05,(at-last)/1000):.016;player=Scene.move(scene,player,(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0),(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),seconds,keys.has('ShiftLeft')||keys.has('ShiftRight'));}last=at;
       const bounds=canvas.getBoundingClientRect(),[width,height]=renderSize(bounds.width,bounds.height,win.devicePixelRatio,renderLimit);
       if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
       const matrix=mode==='walk'?walkProjection(player,width/height):viewProjection(camera,width/height,target);
-      gl.viewport(0,0,width,height);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(true);
+      gl.viewport(0,0,width,height);gl.clearColor(...horizon,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(true);
       colored(parts.opaque,matrix,gl.TRIANGLES);
       if(mode==='walk')colored(parts.ceiling,matrix,gl.TRIANGLES);
       textured(surfaceParts,matrix,false);
       colored(parts.lines,matrix,gl.LINES);
+      drawSky(matrix);
       gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
       colored(parts.shadows,matrix,gl.TRIANGLES);
       textured(labelParts,matrix,true);
@@ -222,7 +265,7 @@
       if(!colorProgram)return;
       if(action==='walk'){setMode('walk');canvas.focus({preventScroll:true});}
       if(action==='outside'){player={...Scene.entranceView(10),fieldOfView:45};setMode('walk');announce('Ich-Perspektive · 10 Modellmeter vor dem Eingang · Augenhöhe 1,55 m · engerer Bildausschnitt mit 45° Blickfeld');canvas.focus({preventScroll:true});}
-      if(action==='street'){player=Scene.streetView();setMode('walk');announce('Blick vom Grabenweg Richtung Süden · Fassade nach deinen Street-View-Bildern · Filialgrenze gelb markiert');canvas.focus({preventScroll:true});}
+      if(action==='street'){player=Scene.streetView();setMode('walk','street');announce('Blick vom Grabenweg Richtung Süden · Fassade und Umgebung als Proportionsmodell');canvas.focus({preventScroll:true});}
       if(action==='reset'){camera=initialCamera();target=[7,0,6];setMode('overview');}
       if(action==='building'){camera={yaw:3.6,pitch:.9,distance:104};target=[6,0,29];setMode('overview');}
       if(action==='fotowelt'){({camera,target}=Scene.fotoweltView());setMode('overview','fotowelt');announce('Fotowelt · Zwei Canon imagePROGRAF PRO-2000 · Aufstellung vorläufig');}
@@ -251,7 +294,7 @@
     listen(win,'blur',()=>{freeMouse();endDrag();mapWorkspace?.suspend();});
     listen(doc,'visibilitychange',()=>{if(doc.hidden){freeMouse();endDrag();mapWorkspace?.suspend();}else schedule();});
     listen(canvas,'webglcontextlost',event=>{event.preventDefault();lost=true;freeMouse();controls(false);fallback.hidden=false;announce('3D-Ansicht unterbrochen. Sie wird nach Wiederherstellung der Grafik neu aufgebaut.');});
-    listen(canvas,'webglcontextrestored',()=>{lost=false;buffers.length=textures.length=labelParts.length=surfaceParts.length=0;colorProgram=textureProgram=null;if(initialize())schedule();});
+    listen(canvas,'webglcontextrestored',()=>{lost=false;buffers.length=textures.length=labelParts.length=surfaceParts.length=0;colorProgram=textureProgram=skyProgram=null;if(initialize())schedule();});
     const observer=win.ResizeObserver?new win.ResizeObserver(schedule):null;if(!observer)listen(win,'resize',schedule);
     return {
       activate(){if(destroyed)return;active=true;observer?.observe(canvas);if(!gl&&!initialize())return;schedule();},

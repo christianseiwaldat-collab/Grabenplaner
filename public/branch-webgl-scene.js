@@ -40,7 +40,7 @@
   }
   function distanceToSegment(x,z,a,b){const dx=b[0]-a[0],dz=b[1]-a[1],length=dx*dx+dz*dz,t=length?Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/length)):0;return Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz);}
   function create(){
-    const opaque=[],glass=[],ceiling=[],lines=[],shadows=[],labels=[],obstacles=[],walls=[],equipment=[];
+    const opaque=[],glass=[],ceiling=[],lines=[],shadows=[],labels=[],obstacles=[],exteriorObstacles=[],walls=[],equipment=[];
     const surfaceVertices=new Map();
     const vertex=(bucket,p,color)=>bucket.push(...p,color[0],color[1],color[2],color[3]??1);
     const tri=(bucket,a,b,c,color)=>{for(const p of[a,b,c])vertex(bucket,p,color);};
@@ -92,6 +92,24 @@
       quad(bucket,[a[0],base,a[1]],[b[0],base,b[1]],[b[0],height,b[1]],[a[0],height,a[1]],color);
       if(collide)walls.push([a,b]);
     }
+    function cladWall(a,b,height=assumptions.provisionalHeight,base=0,collide=true) {
+      const scale=Materials.surfaces.facade.tileMetres;
+      const span=Math.hypot(b[0]-a[0],b[1]-a[1])/scale;
+      texturedQuad('facade',[[a[0],base,a[1]],[b[0],base,b[1]],[b[0],height,b[1]],[a[0],height,a[1]]],
+        [[0,base/scale],[span,base/scale],[span,height/scale],[0,height/scale]]);
+      if(collide)walls.push([a,b]);
+    }
+    function windowBay(a,b,height,color=palette.glass) {
+      wall(a,b,color,height,0,true,glass);
+      const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      const divisions=Math.max(1,Math.ceil(length/1.36));
+      for(let i=0;i<=divisions;i+=1) {
+        const ratio=i/divisions;
+        const x=a[0]+(b[0]-a[0])*ratio,z=a[1]+(b[1]-a[1])*ratio;
+        box(x-.037,0,z-.037,.074,height,.074,[.45,.47,.47]);
+      }
+      for(const y of [.1,height-.11]) wall(a,b,[.41,.43,.43],y+.048,y,false);
+    }
     const line=(a,b,color)=>{vertex(lines,a,color);vertex(lines,b,color);};
     const label=(text,a,b,c,d,theme='dark',vertical=false)=>labels.push({text,points:[a,b,c,d],theme,vertical});
     // A simplified context volume for the remainder of the shared building.
@@ -102,6 +120,25 @@
     const roadside = offset => roadAxis.map(([x, z]) => [x, z + offset]);
     ground(rectangle(-100,-78,120,125), -.225, 'grass');
     ground([...roadside(-4.45), ...roadside(4.45).reverse()], roadY, 'road');
+
+    // Low-detail ridges suggest the valley setting from the supplied street photos.
+    function ridge(z,mean,seed,color) {
+      const height=x=>mean+5*Math.sin((x+seed)/24)+3.2*Math.cos((x-seed)/12)+1.6*Math.sin((x+seed)/5.7);
+      const groundColor=shade(color,.77);
+      const peak=(x,y)=>vertex(opaque,[x,y,z],shade(color,.91+.09*Math.sin((x+seed)/17)));
+      for(let x=-438;x<198;x+=6) {
+        const next=x+6,y=height(x),endY=height(next);
+        vertex(opaque,[x,-.23,z],groundColor);
+        vertex(opaque,[next,-.23,z],groundColor);
+        peak(next,endY);
+        vertex(opaque,[x,-.23,z],groundColor);
+        peak(next,endY);
+        peak(x,y);
+      }
+    }
+    ridge(190,31,38,[.47,.56,.65]);
+    ridge(151,21,-38,[.40,.51,.54]);
+    ridge(126,12,12,[.36,.47,.43]);
 
     // A paved forecourt links the Grabenweg driveway with the parking-side entrance.
     const forecourt = [[-15,-3.6],[18.8,-3.6],[24.9,-2.9],[27.2,-3.7],[28,-5.45],[36.8,-5.5],
@@ -149,25 +186,90 @@
       box(x,parkingY,z,.44,.016,.27,[.17,.18,.179]);
       for (let i=0;i<7;i+=1) box(x+.041+i*.053,parkingY+.017,z+.025,.011,.003,.22,[.34,.348,.339]);
     }
+    function parkedCar(x,z,paint,length=4.2) {
+      const y=parkingY;
+      const half=length/2;
+      const outline=[[-half+.18,-.86],[half-.17,-.86],[half,-.67],[half,.67],
+        [half-.17,.86],[-half+.18,.86],[-half,.67],[-half,-.67]];
+      const body=outline.map(([px,pz])=>[x+px,z+pz]);
+      floor(body,y+.83,shade(paint,1.24));
+      for(let i=0;i<body.length;i+=1) wall(body[i],body[(i+1)%body.length],shade(paint,i<4?.92:.76),y+.83,y+.28,false);
+      const belt=[[-1.28,-.82],[1.27,-.82],[1.27,.82],[-1.28,.82]];
+      const upper=[[-.69,-.66],[.65,-.66],[.65,.66],[-.69,.66]];
+      const at=(p,h)=>[x+p[0],y+h,z+p[1]];
+      for(let i=0;i<4;i+=1) {
+        const next=(i+1)%4,glassTint=i%2?[.20,.28,.31]:[.15,.23,.26];
+        quad(opaque,at(belt[i],.83),at(belt[next],.83),at(upper[next],1.42),at(upper[i],1.42),glassTint);
+      }
+      quad(opaque,...upper.map(p=>at(p,1.42)),shade(paint,1.19));
+      for(const px of [-half+.84,half-.81]) {
+        for(const side of [-1,1]) {
+          const wz=z+side*.87,center=[x+px,y+.29,wz],edge=(i,r)=>[center[0]+Math.cos(i*Math.PI/8)*r,center[1]+Math.sin(i*Math.PI/8)*r,wz];
+          for(let i=0;i<16;i+=1) {
+            tri(opaque,center,edge(i,.29),edge(i+1,.29),[.062,.067,.068]);
+            const rim=[center[0],center[1],wz+side*.012];
+            const turn=p=>[p[0],p[1],rim[2]];
+            tri(opaque,rim,turn(edge(i,.157)),turn(edge(i+1,.157)),i%2?[.46,.48,.49]:[.32,.34,.35]);
+          }
+        }
+      }
+      for(const offset of [-.7,.39]) {
+        box(x-half-.009,y+.63,z+offset,.018,.125,.30,[.82,.855,.845]);
+        box(x+half-.009,y+.62,z+offset,.018,.14,.30,[.53,.072,.075]);
+      }
+      shadow(x-half,z-.91,length,1.82,y+.006,.32);
+      exteriorObstacles.push({kind:'car',minX:x-half,maxX:x+half,minZ:z-.91,maxZ:z+.91});
+    }
+    parkedCar(28.34,10.88,[.13,.21,.28]);
+    parkedCar(28.31,15.98,[.55,.57,.57],4.35);
+    parkedCar(28.37,21.08,[.35,.11,.12],4.05);
+    parkedCar(28.24,28.73,[.21,.27,.24],4.45);
+
+    function tree(x,z,scale,color) {
+      const y=-.22;
+      box(x-.1*scale,y,z-.1*scale,.2*scale,2.7*scale,.2*scale,[.37,.29,.22]);
+      for(const [ox,oy,oz,radius] of [[0,3.28,0,1.56],[-.61,2.89,.25,1.07],[.66,3.05,-.33,1.19],[.1,4.13,-.18,.92]]) {
+        const shell=(ring,sector)=>{
+          const elevation=(ring-2)*Math.PI/4,azimuth=sector*Math.PI/5;
+          const extent=radius*scale*(1+.09*Math.sin(sector*2.4+ring*1.7));
+          return [x+ox*scale+Math.cos(azimuth)*Math.cos(elevation)*extent,
+            y+oy*scale+Math.sin(elevation)*extent,z+oz*scale+Math.sin(azimuth)*Math.cos(elevation)*extent];
+        };
+        for(let ring=0;ring<4;ring+=1)for(let sector=0;sector<10;sector+=1) {
+          const next=(sector+1)%10;
+          const light=.77+.12*ring+.11*Math.cos(sector*.73);
+          quad(opaque,shell(ring,sector),shell(ring,next),shell(ring+1,next),shell(ring+1,sector),shade(color,light));
+        }
+      }
+    }
+    tree(-16.6,26,1.24,[.35,.41,.25]);
+    tree(-23.2,29,1.38,[.51,.45,.25]);
+    tree(-31.2,35,1.10,[.32,.39,.26]);
+    tree(44.1,18,1.24,[.43,.44,.26]);
+    tree(46.5,32,1.41,[.34,.39,.24]);
+    tree(-20.47,1.8,.92,[.44,.43,.24]);
+    ground(rectangle(33.3,13.94,35.05,16.18),-.057,'grass');
+    tree(34.22,15.10,1.15,[.49,.47,.25]);
+    exteriorObstacles.push({kind:'tree',minX:34.02,maxX:34.42,minZ:14.90,maxZ:15.30});
+
     shadow(.8,-.98,20.8,.66,walkY+.01,.24);
     shadow(22.64,1.65,1.98,12.17,walkY+.012,.21);
     floor(context,4.15,[.64,.67,.65]);
-    for(let i=0;i<context.length;i++)wall(context[i],context[(i+1)%context.length],[.61,.64,.63],4.15);
+    for(let i=0;i<context.length;i++)cladWall(context[i],context[(i+1)%context.length],4.15);
     ground(footprint,0,'ceramic');floor(footprint,3.3,[.86,.86,.83],ceiling);
     floor(neighborFootprint,0,[.70,.72,.73]);floor(neighborFootprint,3.3,[.82,.83,.82],ceiling);
     for(let i=0;i<footprint.length;i++){
       const a=footprint[i],b=footprint[(i+1)%footprint.length];
       if(a[1]===tenancy.shopEnd&&b[1]===tenancy.shopEnd)wall(a,b,palette.wall);
-      else if(i===3){const start=entrancePoint(-entrance.width/2),end=entrancePoint(entrance.width/2);wall(a,start,palette.glass,2.65,0,true,glass);wall(end,b,palette.glass,2.65,0,true,glass);wall(a,b,palette.wall,3.3,2.65,false);}
-      else if(i>=7){wall(a,b,[.52,.72,.77,.23],3.05,0,true,glass);wall(a,b,palette.wall,3.3,3.05,false);}
-      else wall(a,b,palette.wall);
+      else if(i===3){const start=entrancePoint(-entrance.width/2),end=entrancePoint(entrance.width/2);windowBay(a,start,2.65);windowBay(end,b,2.65);cladWall(a,b,3.3,2.65,false);}
+      else if(i>=7){windowBay(a,b,3.05,[.52,.72,.77,.23]);cladWall(a,b,3.3,3.05,false);}
+      else cladWall(a,b);
       line([a[0],.025,a[1]],[b[0],.025,b[1]],[.12,.46,.31]);
     }
     // Adjacent Orion glazing begins beyond the solid separation pier.
     const facadeAt=z=>[entranceEdge[0][0]+entranceDelta[0]*(z-entranceEdge[0][1])/entranceDelta[1],z];
     const neighborStart=facadeAt(tenancy.shopEnd),glassStart=facadeAt(tenancy.orionGlassStart),neighborEnd=buildingFootprint[4];
-    wall(neighborStart,glassStart,palette.wall);wall(glassStart,neighborEnd,[.40,.55,.60,.36],2.8,0,true,glass);wall(glassStart,neighborEnd,palette.wall,3.3,2.8,false);
-    for(let z=tenancy.orionGlassStart;z<neighborEnd[1];z+=1.85){const p=facadeAt(z);box(p[0]-.045,0,z,.09,2.8,.06,palette.frame);}
+    cladWall(neighborStart,glassStart);windowBay(glassStart,neighborEnd,2.8,[.40,.55,.60,.36]);cladWall(glassStart,neighborEnd,3.3,2.8,false);
     for(let i=0;i<neighborFootprint.length;i++){const a=neighborFootprint[i],b=neighborFootprint[(i+1)%neighborFootprint.length];if(a[1]===tenancy.shopEnd&&b[1]===tenancy.shopEnd)continue;if(Math.abs(a[0]-facadeAt(a[1])[0])<.01&&Math.abs(b[0]-facadeAt(b[1])[0])<.01)continue;wall(a,b,[.67,.69,.69]);}
     box(neighborStart[0]-.12,0,tenancy.shopEnd,.26,3.3,tenancy.orionGlassStart-tenancy.shopEnd,palette.wall);
     box(neighborStart[0]+.15,0,tenancy.shopEnd-.015,.025,3.3,.03,[.98,.73,.12]);
@@ -223,6 +325,20 @@
     }
     box(4.6,1.78,.002,5.9,.42,.04,palette.frame);
     label('FOTOWELT  ·  FINEART-DRUCK',[4.65,1.82,.044],[10.45,1.82,.044],[10.45,2.16,.044],[4.65,2.16,.044],'red');
+    box(4.28,0,.022,8.33,.11,.028,[.49,.47,.43]);
+    for(const [x,artwork] of [[5.30,'fine-art-colour'],[8.25,'fine-art-mono']]) {
+      const center=[x+.59,1.27,.023],lit=[1,.96,.84,.29],unlit=[1,.96,.84,0];
+      const edge=i=>[center[0]+1.54*Math.cos(i*Math.PI/16),center[1]+.48*Math.sin(i*Math.PI/16),center[2]];
+      for(let i=0;i<32;i+=1) {
+        vertex(shadows,center,lit);
+        vertex(shadows,edge(i),unlit);
+        vertex(shadows,edge(i+1),unlit);
+      }
+      box(x,1.03,.028,1.18,.62,.035,[.15,.167,.17]);
+      box(x+.025,1.055,.064,1.13,.57,.003,[.92,.9,.84]);
+      texturedQuad(artwork,[[x+.12,1.12,.069],[x+1.06,1.12,.069],
+        [x+1.06,1.558,.069],[x+.12,1.558,.069]],[[0,1],[1,1],[1,0],[0,0]]);
+    }
     fixture('mittelvitrine-1',14.4,2.3,3,.65,1.75);fixture('mittelvitrine-2',14.4,6.7,3,.65,1.75);
     fixture('beratungstheke',5,6.4,7.4,1.1,1.25);
     label('FOTOWELT  ·  FINEART',[4.6,2.2,7.94],[12.8,2.2,7.94],[12.8,2.9,7.94],[4.6,2.9,7.94]);
@@ -237,7 +353,7 @@
     for(let x=-5;x<1;x+=2.2)if(contains(x,5.5))fixture('fotorahmen-'+x,x,5.5,.7,1.7,1.8);
     const surfaces = Array.from(surfaceVertices, ([material, vertices]) => ({ material, vertices: new Float32Array(vertices) }));
     return {opaque:new Float32Array(opaque),glass:new Float32Array(glass),ceiling:new Float32Array(ceiling),
-      lines:new Float32Array(lines),shadows:new Float32Array(shadows),surfaces,labels,obstacles,walls,footprint,
+      lines:new Float32Array(lines),shadows:new Float32Array(shadows),surfaces,labels,obstacles,exteriorObstacles,walls,footprint,
       buildingFootprint,neighborFootprint,tenancy,assumptions,equipment,entrance};
   }
   const entranceView=distance=>({x:entrance.center[0]+entrance.normal[0]*distance,z:entrance.center[1]+entrance.normal[1]*distance,yaw:Math.atan2(entrance.normal[0],entrance.normal[1]),pitch:0});
@@ -247,7 +363,8 @@
   function blocked(scene,x,z,radius=.25){
     if(!Number.isFinite(x)||!Number.isFinite(z)||x< -20||x>35||z< -15||z>72)return true;
     if(scene.walls.some(([a,b])=>distanceToSegment(x,z,a,b)<radius))return true;
-    return scene.obstacles.some(o=>x>o.minX-radius&&x<o.maxX+radius&&z>o.minZ-radius&&z<o.maxZ+radius);
+    const overlaps=o=>x>o.minX-radius&&x<o.maxX+radius&&z>o.minZ-radius&&z<o.maxZ+radius;
+    return scene.obstacles.some(overlaps)||scene.exteriorObstacles.some(overlaps);
   }
   function move(scene,player,right,forward,seconds,running=false){
     const distance=Math.min(.1,Math.max(0,seconds))*(running?3.6:1.7),length=Math.max(1,Math.hypot(right,forward));

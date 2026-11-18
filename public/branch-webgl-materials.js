@@ -14,6 +14,7 @@
     pavers: { tileMetres: 2.4, rgb: [175, 171, 159], aggregate: .59, joints: 6, seed: 37 },
     grass: { tileMetres: 2.7, rgb: [111, 118, 79], aggregate: .9, grass: true, seed: 53 },
     paint: { tileMetres: 1.8, rgb: [223, 222, 207], aggregate: .48, seed: 79 },
+    facade: { tileMetres: 2.4, rgb: [184, 184, 176], aggregate: .27, panels: 2, seed: 83 },
     ceramic: { tileMetres: 2.1, rgb: [217, 215, 201], aggregate: .24, joints: 3, seed: 89 },
     wood: { tileMetres: 2.4, rgb: [154, 119, 88], aggregate: .36, wood: true, seed: 97 },
   };
@@ -63,6 +64,12 @@
           else if (edge < joint * 2) value += 11;
         }
         if (material.grass) value += (noise(u, v, 12, 17, seed + 2) - .5) * 27;
+        if (material.panels) {
+          const column = u * material.panels;
+          value += (hash(Math.floor(column), 0, seed + 8) - .5) * 8;
+          if (column % 1 < .007) value -= 39;
+          else if (column % 1 < .014) value += 13;
+        }
         if (material.wood) {
           const plank = v * 12;
           value += (noise(u, v, 8, 204, seed + 2) - .5) * 38;

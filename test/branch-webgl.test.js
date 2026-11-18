@@ -121,20 +121,27 @@ test('the two FineArt plotters use Canon dimensions and stop walking through the
   const {width,depth,height}=model.equipment[i].dimensions;
   assert.ok(vertices.length>30&&vertices.length%30===0);
   const depths=new Set();
+  let galleryVertices=0;
   for(let j=0;j<vertices.length;j+=5){
    const [px,py,pz,u,v]=vertices.subarray(j,j+5);
-   assert.ok(px>=x&&px<=x+width&&py>0&&py<=height&&pz>=z&&pz<=z+depth);
    assert.ok(u>=0&&u<=1&&v>=0&&v<=1);
+   if(pz<.1){
+    assert.ok(py>1.1&&py<1.6);
+    galleryVertices+=1;
+    continue;
+   }
+   assert.ok(px>=x&&px<=x+width&&py>0&&py<=height&&pz>=z&&pz<=z+depth);
    depths.add(pz);
   }
   assert.ok(depths.size>2);
+  assert.equal(galleryVertices,6);
  }
 });
 
 test('exterior geometry uses separate repeatable high-resolution materials',()=>{
  const model=require('../public/branch-webgl-scene').create(),materials=require('../public/branch-webgl-materials');
  assert.equal(materials.size,512);
- for(const name of ['road','parking','pavers','concrete','grass','paint']){
+ for(const name of ['road','parking','pavers','concrete','grass','paint','facade']){
   const vertices=model.surfaces.find(surface=>surface.material===name).vertices;
   assert.ok(vertices.length>0&&vertices.length%15===0);
   assert.ok(vertices.every(Number.isFinite));
@@ -145,6 +152,21 @@ test('exterior geometry uses separate repeatable high-resolution materials',()=>
  const index=read('index.html'),order=['materials','plotter','scene','map-data','map'].map(name=>index.indexOf('/branch-webgl-'+name+'.js'));
  order.push(index.indexOf('/branch-webgl.js'));
  assert.ok(order.every((position,i)=>position>=0&&(i===0||position>order[i-1])));
+});
+
+test('painted parking bays contain their parked vehicles without blocking the approaches to the shop',()=>{
+ const scene=require('../public/branch-webgl-scene'),model=scene.create();
+ const vehicles=model.exteriorObstacles.filter(obstacle=>obstacle.kind==='car');
+ assert.equal(vehicles.length,4);
+ for(const vehicle of vehicles){
+  const x=(vehicle.minX+vehicle.maxX)/2,z=(vehicle.minZ+vehicle.maxZ)/2;
+  assert.ok(!scene.contains(x,z));
+  assert.ok(scene.blocked(model,x,z));
+  assert.ok(!scene.blocked(model,vehicle.maxX+.5,z));
+ }
+ for(const start of [scene.streetView(),scene.entranceView(10),scene.spawn()]){
+  assert.ok(!scene.blocked(model,start.x,start.z));
+ }
 });
 
 test('the local map contains the requested surrounding shops and roads, attributed source geometry and bounded zoom',()=>{
