@@ -546,6 +546,50 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.deepEqual(actions, ["team-meeting.create", "team-meeting.update", "team-meeting.delete"]);
 });
 
+test("Kalle may move and cancel only the acknowledged meeting through the guarded GP routes", async () => {
+  const positionId = db.prepare("SELECT id FROM positions ORDER BY sort_order, id LIMIT 1").get().id;
+  ensureEmployee("Kalle", positionId);
+  const planner = session(DEVELOPER);
+  const kalle = session("Kalle", "manager");
+  const weekStart = "2035-03-26", dateFrom = "2035-03-27", nextDate = "2035-03-28";
+  const option = { teamWide: true, locationId: LOCATION, departmentId, weekStart, dateFrom, dateTo: dateFrom,
+    optionType: "team_meeting", allDay: false, startTime: "18:00", endTime: "19:00", note: "Absage-Prüfung" };
+  const created = await request("/api/week-options", { method: "POST", auth: planner, body: option });
+  assert.equal(created.response.status, 201, created.text);
+  const { groupId, id, employeeCount } = created.payload;
+  const route = `/api/week-options/${id}`;
+  const expected = { groupId, locationId: LOCATION, weekStart, dateFrom, dateTo: dateFrom,
+    allDay: false, startTime: "18:00", endTime: "19:00" };
+  const stored = () => db.prepare("SELECT id,date_from,start_time FROM week_options WHERE group_id=? ORDER BY id").all(groupId);
+  const before = stored();
+  assert.equal((await request("/api/portal/v1/session", { auth: kalle })).payload.capabilities.teamMeetingMutation.atomic, true);
+  const wrongActor = await request(route + "/team-meeting-cancel", { method: "POST", auth: planner, body: expected });
+  assert.equal(wrongActor.response.status, 403, wrongActor.text);
+  assert.equal(wrongActor.payload.code, "TEAM_MEETING_ACTOR_DENIED");
+  const wrongBranch = await request(route + "/team-meeting-cancel", { method: "POST", auth: kalle,
+    body: { ...expected, locationId: "18" } });
+  assert.equal(wrongBranch.response.status, 403, wrongBranch.text);
+  const wrongDate = await request(route + "/team-meeting-cancel", { method: "POST", auth: kalle,
+    body: { ...expected, dateFrom: nextDate, dateTo: nextDate } });
+  assert.equal(wrongDate.response.status, 409, wrongDate.text);
+  assert.deepEqual(stored(), before);
+  const moved = await request(route, { method: "PUT", auth: kalle,
+    body: { ...option, dateFrom: nextDate, dateTo: nextDate, expectedTeamMeeting: expected } });
+  assert.equal(moved.response.status, 200, moved.text);
+  assert.equal(moved.payload.groupId, groupId);
+  assert.equal(moved.payload.employeeCount, employeeCount);
+  assert.ok(stored().every(row => row.date_from === nextDate));
+  const stale = await request(route + "/team-meeting-cancel", { method: "POST", auth: kalle, body: expected });
+  assert.equal(stale.response.status, 409, stale.text);
+  const unrelatedBefore = db.prepare("SELECT COUNT(*) AS count FROM week_options WHERE option_type!='team_meeting'").get();
+  const cancelled = await request(route + "/team-meeting-cancel", { method: "POST", auth: kalle,
+    body: { ...expected, dateFrom: nextDate, dateTo: nextDate } });
+  assert.equal(cancelled.response.status, 200, cancelled.text);
+  assert.deepEqual(cancelled.payload, { id, groupId, removed: true, employeeCount });
+  assert.deepEqual(stored(), []);
+  assert.deepEqual(db.prepare("SELECT COUNT(*) AS count FROM week_options WHERE option_type!='team_meeting'").get(), unrelatedBefore);
+});
+
 test("v0.92.10: UI kennzeichnet Teamsitzung und ordnet Kontakt sowie Darkmode kompakt an", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const appSource = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");

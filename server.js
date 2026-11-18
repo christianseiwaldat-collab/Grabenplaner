@@ -15,7 +15,7 @@ const { browserSessionLifetime, isSessionTimeValid, mobileSessionLifetime,
   clampMobileAccessExpiry, isPrivilegedSession, instant: sessionInstant } = require("./lib/portal-session-security");
 const net = require("node:net");
 const zlib = require("node:zlib");
-const { promisify } = require("node:util");
+const { isDeepStrictEqual, promisify } = require("node:util");
 const updateRequestLifecycle = require("./lib/update-request-lifecycle").createUpdateRequestLifecycle();
 const { executeUpdateCommand } = require("./lib/update-command");
 const { completeProcessShutdown } = require("./lib/complete-process-shutdown");
@@ -34664,7 +34664,10 @@ app.get("/api/portal/v1/session", (request, response) => {
     loginRequired: status.loginRequired,
     user: publicPortalUser(session),
     status,
-    ...(session ? { capabilities: { atomicShiftUpdate: { version: 1, expectedRevision: "sha256", atomic: true } } } : {}),
+    ...(session ? { capabilities: {
+      atomicShiftUpdate: { version: 1, expectedRevision: "sha256", atomic: true },
+      ...(session.employeeNumber === "Kalle" ? { teamMeetingMutation: { version: 1, atomic: true } } : {}),
+    } } : {}),
   });
 });
 
@@ -62592,18 +62595,18 @@ function requestCreatesTeamMeetingGroup(body = {}) {
   return body.teamWide === true && String(body.optionType || "") === "team_meeting";
 }
 
-async function listTeamMeetingGroupRows(groupId, sample) {
+async function listTeamMeetingGroupRows(groupId, sample, repository = planningSettingsRepository) {
   if (!isTeamMeetingGroupId(groupId) || !sample || !isIsoDate(sample.week_start)) return [];
   const rows = [sample];
   const seenIds = new Set([Number(sample.id)]);
-  const employees = await planningSettingsRepository.listCentralVacationEmployees({
+  const employees = await repository.listCentralVacationEmployees({
     includeInactive: 1,
     costCenterId: "",
     locationId: "",
     departmentId: null,
   });
   for (const employee of employees) {
-    const overlapping = await planningSettingsRepository.listOverlappingWeekOptions({
+    const overlapping = await repository.listOverlappingWeekOptions({
       employeeNumber: employee.personnel_number,
       dateFrom: sample.week_start,
       dateTo: addDays(sample.week_start, 6),
@@ -62613,13 +62616,76 @@ async function listTeamMeetingGroupRows(groupId, sample) {
     for (const candidate of overlapping) {
       const candidateId = Number(candidate.id);
       if (candidate.group_id !== groupId || seenIds.has(candidateId)) continue;
-      const row = await planningSettingsRepository.getWeekOptionById({ id: candidateId });
+      const row = await repository.getWeekOptionById({ id: candidateId });
       if (!row || row.group_id !== groupId || row.option_type !== "team_meeting") continue;
       rows.push(row);
       seenIds.add(candidateId);
     }
   }
   return rows;
+}
+
+function requireExpectedTeamMeeting(request, expected) {
+  const session = requireEmployeePortalSession(request, "schedule:write");
+  assertPortalCsrf(request);
+  if (session.employeeNumber !== "Kalle" || session.sessionKind !== "employee" || session.mustChangePassword) {
+    throw httpError(403, "Für diesen Zugang ist die automatische Änderung einer Teamsitzung nicht freigegeben.", "TEAM_MEETING_ACTOR_DENIED");
+  }
+  const keys = ["groupId", "locationId", "weekStart", "dateFrom", "dateTo", "allDay", "startTime", "endTime"];
+  const time = value => typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+  if (!expected || typeof expected !== "object" || Object.keys(expected).length !== keys.length
+    || !keys.every(key => Object.hasOwn(expected, key))
+    || typeof expected.groupId !== "string" || !/^team-meeting:[A-Za-z0-9-]{1,100}$/.test(expected.groupId)
+    || typeof expected.locationId !== "string" || !/^[A-Za-z0-9_-]{1,24}$/.test(expected.locationId)
+    || ![expected.weekStart, expected.dateFrom, expected.dateTo].every(isIsoDate)
+    || getMonday(expected.dateFrom) !== expected.weekStart || expected.dateTo < expected.dateFrom
+    || expected.dateTo > addDays(expected.weekStart, 6) || typeof expected.allDay !== "boolean"
+    || (expected.allDay ? expected.startTime !== null || expected.endTime !== null
+      : !time(expected.startTime) || !time(expected.endTime) || expected.startTime >= expected.endTime)) {
+    throw httpError(400, "Bitte die eindeutig zugeordnete Teamsitzung mit Filiale, Zeitraum und Uhrzeit angeben.", "TEAM_MEETING_EXPECTATION_INVALID");
+  }
+  assertSessionContextScope(session, { locationId: expected.locationId });
+  return expected;
+}
+
+function teamMeetingChanged() {
+  return httpError(409, "Die Teamsitzung stimmt nicht mehr mit dem bestätigten Termin überein.", "TEAM_MEETING_CONCURRENT_CHANGE");
+}
+
+function assertExpectedTeamMeeting(rows, expected) {
+  if (!rows.length || rows.some(row => (
+    row.option_type !== "team_meeting" || row.group_id !== expected.groupId || row.week_start !== expected.weekStart
+    || row.date_from !== expected.dateFrom || row.date_to !== expected.dateTo || Boolean(row.all_day) !== expected.allDay
+    || !expected.allDay && (row.start_time !== expected.startTime || row.end_time !== expected.endTime)
+  ))) throw teamMeetingChanged();
+}
+
+async function assertCurrentTeamMeeting(repository, rows, expected) {
+  const anchor = await repository.getWeekOptionById({ id: rows[0].id });
+  const current = await listTeamMeetingGroupRows(expected.groupId, anchor, repository);
+  const byId = list => [...list].sort((left, right) => left.id - right.id);
+  if (!isDeepStrictEqual(byId(current), byId(rows))) throw teamMeetingChanged();
+  for (const row of current) {
+    const employee = await repository.getPlanningEmployee({ employeeNumber: row.employee_number });
+    if (String(employee?.home_location_id || "") !== expected.locationId) {
+      throw teamMeetingChanged();
+    }
+  }
+}
+
+function mutateTeamMeeting(request, rows, expected, work) {
+  if (!expected) return planningSettingsRepository.transaction(work);
+  return persistenceProvider.transaction(async executor => {
+    const repositories = createApplicationRepositories(executor);
+    const current = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+    if (current?.id !== request.portalSession?.id || current?.employeeNumber !== "Kalle"
+      || current.sessionKind !== "employee" || current.mustChangePassword || !current.permissions.includes("schedule:write")) {
+      throw httpError(403, "Der GP-Zugang darf diese Teamsitzung derzeit nicht ändern.", "TEAM_MEETING_ACTOR_DENIED");
+    }
+    assertSessionContextScope(current, { locationId: expected.locationId });
+    await assertCurrentTeamMeeting(repositories.planningSettings, rows, expected);
+    return work(repositories.planningSettings);
+  }, { isolation: "serializable" });
 }
 
 async function validateTeamMeetingGroup(body, session, {
@@ -62807,6 +62873,8 @@ app.post("/api/week-options", async (request, response) => {
 app.put("/api/week-options/:id", async (request, response) => {
   const id = Number(request.params.id);
   if (!Number.isInteger(id) || id <= 0) throw httpError(400, "Die Planungsoption ist ungültig.");
+  const expected = request.body?.expectedTeamMeeting === undefined ? null
+    : requireExpectedTeamMeeting(request, request.body.expectedTeamMeeting);
   const existing = await planningSettingsRepository.getWeekOptionById({ id });
   if (!existing) {
     throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
@@ -62814,6 +62882,10 @@ app.put("/api/week-options/:id", async (request, response) => {
   if (isTeamMeetingGroupId(existing.group_id)) {
     assertApprovedAbsenceEntryAccess(request.portalSession, "team_meeting");
     const existingRows = await listTeamMeetingGroupRows(existing.group_id, existing);
+    if (expected) {
+      assertExpectedTeamMeeting(existingRows, expected);
+      if (String(request.body.locationId || "") !== expected.locationId) throw teamMeetingChanged();
+    }
     const requestedType = String(request.body?.optionType || "team_meeting");
     if (requestedType !== "team_meeting" || request.body?.teamWide === false) {
       throw httpError(
@@ -62830,7 +62902,7 @@ app.put("/api/week-options/:id", async (request, response) => {
       existingRows,
     });
     try {
-      await planningSettingsRepository.transaction(async (repository) => {
+      await mutateTeamMeeting(request, existingRows, expected, async (repository) => {
         for (let index = 0; index < existingRows.length; index += 1) {
           await repository.updateWeekOption({ id: existingRows[index].id, ...group.options[index] });
         }
@@ -62849,6 +62921,7 @@ app.put("/api/week-options/:id", async (request, response) => {
     });
     return;
   }
+  if (expected) throw teamMeetingChanged();
   if (request.body?.teamWide === true) {
     throw httpError(
       409,
@@ -62900,13 +62973,14 @@ app.put("/api/week-options/:id", async (request, response) => {
   response.json({ id, ...option, ...(workRuleAssessments ? { workRuleAssessments } : {}) });
 });
 
-app.delete("/api/week-options/:id", async (request, response) => {
+async function removeWeekOption(request, response, expected = null) {
   const id = Number(request.params.id);
   const existing = await planningSettingsRepository.getWeekOptionById({ id });
   if (!existing) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   if (isTeamMeetingGroupId(existing.group_id)) {
     assertApprovedAbsenceEntryAccess(request.portalSession, "team_meeting");
     const existingRows = await listTeamMeetingGroupRows(existing.group_id, existing);
+    if (expected) assertExpectedTeamMeeting(existingRows, expected);
     const scopedEmployees = await Promise.all(existingRows.map((row) => (
       planningSettingsRepository.getPlanningEmployee({ employeeNumber: row.employee_number })
     )));
@@ -62928,7 +63002,7 @@ app.delete("/api/week-options/:id", async (request, response) => {
         scopedEmployees[index]?.home_location_id,
       );
     }
-    await planningSettingsRepository.transaction(async (repository) => {
+    await mutateTeamMeeting(request, existingRows, expected, async (repository) => {
       for (const row of existingRows) {
         const result = await repository.deleteWeekOption({ id: row.id });
         if (result.rowsAffected !== 1) {
@@ -62938,9 +63012,11 @@ app.delete("/api/week-options/:id", async (request, response) => {
     });
     await invalidateWeekOptionReviews(existingRows);
     (await auditTeamMeetingGroup(request.portalSession, "team-meeting.delete", existing.group_id, context, existingRows));
-    response.status(204).end();
+    if (expected) response.json({ id, groupId: existing.group_id, removed: true, employeeCount: existingRows.length });
+    else response.status(204).end();
     return;
   }
+  if (expected) throw teamMeetingChanged();
   assertApprovedAbsenceEntryAccess(request.portalSession, existing.option_type);
   await assertSessionEmployeeScope(request.portalSession, existing.employee_number);
   const existingLocation = (await planningSettingsRepository.getPlanningEmployee({
@@ -62965,6 +63041,13 @@ app.delete("/api/week-options/:id", async (request, response) => {
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
   (await auditApprovedAbsenceEntry(request.portalSession, "approved-absence.delete", id, existing));
   response.status(204).end();
+}
+
+app.delete("/api/week-options/:id", (request, response) => removeWeekOption(request, response));
+app.post("/api/week-options/:id/team-meeting-cancel", async (request, response) => {
+  const id = Number(request.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) throw httpError(400, "Die Planungsoption ist ungültig.");
+  return removeWeekOption(request, response, requireExpectedTeamMeeting(request, request.body));
 });
 
 app.post("/api/global-day-blocks", async (request, response) => {
