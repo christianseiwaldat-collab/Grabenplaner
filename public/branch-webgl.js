@@ -271,9 +271,9 @@
       if(action==='fotowelt'){({camera,target}=Scene.fotoweltView());setMode('overview','fotowelt');announce('Fotowelt · Zwei Canon imagePROGRAF PRO-2000 · Aufstellung vorläufig');}
       if(action==='top'){setMode('overview');camera={...camera,yaw:Math.PI,pitch:1.54};schedule();}
       if(action==='spawn'){player=Scene.spawn();setMode('walk');canvas.focus({preventScroll:true});}
-      if(action==='in'||action==='out'){if(mode==='walk')step(0,action==='in'?1:-1);else{camera=boundedCamera({...camera,distance:camera.distance*(action==='in'?.85:1.15)});schedule();}}
+      if(action==='in'||action==='out'){if(mode==='walk')step(0,action==='in'?1:-1);else{camera=boundedCamera({...camera,distance:camera.distance*(action==='in'? 0.85:1.15)});schedule();}}
       if(action==='forward')step(0,1);if(action==='back')step(0,-1);if(action==='left')step(-1,0);if(action==='right')step(1,0);
-      if(action==='turn-left'||action==='turn-right'){player.yaw+=action==='turn-left'?.18:-.18;schedule();}
+      if(action==='turn-left'||action==='turn-right'){player.yaw+=action==='turn-left'? 0.18:-.18;schedule();}
     });
     listen(canvas,'click',()=>{if(!active||mode!=='walk'||doc.pointerLockElement===canvas)return;canvas.focus({preventScroll:true});try{const result=canvas.requestPointerLock?.();result?.catch?.(()=>announce('Mausblick nicht freigegeben · zum Umschauen ziehen; WASD funktioniert weiterhin.'));}catch{announce('Zum Umschauen ziehen · WASD zum Gehen');}});
     listen(canvas,'pointerdown',event=>{if(!active||event.button!==0||doc.pointerLockElement===canvas)return;drag={id:event.pointerId,x:event.clientX,y:event.clientY};canvas.setPointerCapture(event.pointerId);canvas.focus({preventScroll:true});});

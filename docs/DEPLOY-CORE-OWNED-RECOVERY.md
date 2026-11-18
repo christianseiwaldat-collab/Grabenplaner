@@ -1,6 +1,6 @@
 # Deploy-Recovery: Core und eigene GP-Inhalte
 
-Stand: 17.11.2026, Entwicklungszweig
+Stand: 18.11.2026, Entwicklungszweig
 `feature/deploy-recovery-core-owned-20261116`. Der kleinere Modus verwendet V4 mit
 `basis:fresh-source-rebuild`. Er sichert GP-eigene Inhalte und erlaubt, reine
 Importbestände später aus sechs frisch erzeugten Access-Dateien neu aufzubauen.
@@ -485,5 +485,12 @@ Rollenkontext und tatsächlicher PostgreSQL-Statistikwerte.
 Vor produktiver Aktivierung bleiben außerdem die Qualifikation des endgültigen
 Pakets, vollständige CI-/Security-Prüfungen, der genaue Übergang mit den
 tatsächlich installierten alten und neuen Einstiegspunkten samt Rollback sowie
-die reguläre Offsite-/Assurance-Freigabe erforderlich. Die erste Einführung
-verwendet den Vollablauf. Aus den lokalen Arbeiten folgt keine Deploy-Freigabe.
+die geschützte Sicherungs- und Recovery-Freigabe erforderlich. Auch die erste
+Einführung kann den Core-Plus-Weg verwenden. Dafür werden der tatsächliche
+Core-Sicherungspunkt und seine isolierte Wiederherstellung an die genaue
+installierte App, den geprüften Kandidaten, das Datenbankpaar und die
+Konfiguration gebunden. Ein gültiger vorhandener externer Sicherungsnachweis
+bleibt zugeordnet. Die vollständige nächtliche Assurance bleibt ein eigener
+Lauf. Bei gewähltem Core-Umfang gibt es keinen automatischen Wechsel zur
+vollständigen Sales-Sicherung. Aus lokalen Arbeiten allein folgt keine
+produktive Deploy-Freigabe.

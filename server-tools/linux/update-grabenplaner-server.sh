@@ -57,8 +57,8 @@ Aenderung mit dem Hinweis auf eine explizite Servermigration abgelehnt.
                                  Standard auto: kurzer Ablauf nur mit aktuellem,
                                  gebundenem vollstaendigem Recovery-Nachweis.
                                  full erzwingt den umfassenden Ablauf.
-                                 deploy-owned prueft Core und eigene Sales-Daten;
-                                 fehlende Voraussetzungen erzwingen full.
+                                 deploy-owned prueft Core und eigene GP-Inhalte;
+                                 fehlende Voraussetzungen brechen den Core-Weg ab.
 Archivabschluss und vollstaendiger Restore folgen beim kurzen Ablauf nachts.
 Ein frischer, zum ausgewaehlten Umfang gepruefter Rueckkehrpunkt bleibt erforderlich.
   --package-verifier-sha256 HEX  Expliziter Vertrauenswechsel auf den separat

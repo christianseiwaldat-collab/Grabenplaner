@@ -193,7 +193,7 @@
         [half-.17,.86],[-half+.18,.86],[-half,.67],[-half,-.67]];
       const body=outline.map(([px,pz])=>[x+px,z+pz]);
       floor(body,y+.83,shade(paint,1.24));
-      for(let i=0;i<body.length;i+=1) wall(body[i],body[(i+1)%body.length],shade(paint,i<4?.92:.76),y+.83,y+.28,false);
+      for(let i=0;i<body.length;i+=1) wall(body[i],body[(i+1)%body.length],shade(paint,i<4? 0.92:.76),y+.83,y+.28,false);
       const belt=[[-1.28,-.82],[1.27,-.82],[1.27,.82],[-1.28,.82]];
       const upper=[[-.69,-.66],[.65,-.66],[.65,.66],[-.69,.66]];
       const at=(p,h)=>[x+p[0],y+h,z+p[1]];

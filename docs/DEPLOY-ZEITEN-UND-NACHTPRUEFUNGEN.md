@@ -21,13 +21,15 @@ Bestandskopie umfasst 580723970 Byte (0,581 GB); die Sicherungsoperation dauerte
 15 min 35 s. Restore, Neuaufbau und Inhaltsprüfungen sind gesonderte Phasen.
 Die globale
 Auswahl unter **Einstellungen → System & Backups → Sicherungsumfang bei Updates**
-gilt für `--verification auto`. Erfordert ein Kandidat den Vollablauf, endet ein
-Lauf mit gewähltem Core-Umfang vor der Sicherung. Der vollständige
+gilt für `--verification auto`. Der Core-Weg bindet seinen tatsächlichen Punkt
+und den isolierten Restore an den genauen Kandidaten. Kann dieser Nachweis
+nicht geführt werden, endet der Lauf vor dem App-Tausch. Der Umfang wechselt
+nicht automatisch zur vollständigen Sales-Sicherung. Der vollständige
 Vergleichspunkt umfasst 14092664854 Byte einschließlich Manifest und Marker;
 Core und private Dateien allein bestimmen die neue Punktgröße nicht.
-Die folgenden Voll-/Kurzabläufe und ihre
-Nachweise bleiben bis zur gesonderten Einführung maßgeblich; diese Einführung
-benötigt selbst den Vollablauf.
+Die folgenden Voll-/Kurzabläufe beschreiben den bisherigen Vertrag. Für
+Core Plus gilt zusätzlich der gesonderte Nachweis des genauen Kandidaten;
+dieser Weg ist auch für seine erste Einführung zulässig.
 
 ## Vor dem Paketbau: Bereitschaft und Zeitbedarf
 

@@ -91,8 +91,10 @@ Rezepte für jede Importzeile und verspricht keine bytegleiche frühere
 Importhistorie. Eigene Werte und erforderliche ursprüngliche Anker bleiben
 geschützt. Der kleinere Punkt benötigt für den vollständigen Importneuaufbau
 neue Access-Dateien. Vollständige Nacht-,
-Offsite- und Assurance-Nachweise behalten ihre bisherige Bedeutung. Die erste
-Einführung erfordert den Vollablauf. Grenzen, Quellarchiv, Rückfallregeln und der lokale
+Offsite- und Assurance-Nachweise bleiben getrennt zugeordnet. Auch die erste
+Einführung kann mit einem vollständig geprüften Core-Plus-Punkt und isoliertem
+Restore am genauen Kandidaten erfolgen. Ein gewählter Core-Umfang wechselt
+niemals automatisch auf den vollständigen Sales-Weg. Grenzen, Quellarchiv, Rückfallregeln und der lokale
 Qualifikationsstand stehen unter [Core und eigene GP-Inhalte](docs/DEPLOY-CORE-OWNED-RECOVERY.md).
 Der native durchgängige V4-Test mit sechs neuen Testdateien ist bestanden.
 Der echte kleinere Punkt ist auf einer isolierten Bestandskopie versiegelt und
