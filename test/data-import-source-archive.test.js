@@ -19,6 +19,42 @@ async function fixture(t) {
   return { parent, directory, vault, make, archive };
 }
 
+test('nightly backup authenticates its private copy when native copying retains the GP file owner', {
+  skip: process.platform !== 'linux' || process.getuid?.() !== 0,
+}, async t => {
+  const f = await fixture(t), value = input('copied source');
+  await f.archive.stage(value);
+  await f.archive.promote({ source: applied(value.source) });
+  const expected = await f.archive.verify();
+  const source = path.join(f.parent, 'source'), target = path.join(f.parent, 'target');
+  const privateSource = path.join(source, 'private'), archivedSource = path.join(privateSource, 'import-sources');
+  const copiedArchive = path.join(target, 'private', 'import-sources');
+  await fsp.mkdir(privateSource, { recursive: true, mode: 0o700 });
+  await fsp.mkdir(target, { mode: 0o700 });
+  await fsp.rename(f.directory, archivedSource);
+  const names = await fsp.readdir(archivedSource), appUid = 65534;
+  await fsp.chown(archivedSource, appUid, appUid);
+  for (const name of names) await fsp.chown(path.join(archivedSource, name), appUid, appUid);
+
+  const copy = fs.cpSync;
+  t.mock.method(fs, 'cpSync', (from, to, options) => {
+    copy(from, to, options);
+    if (from === privateSource) {
+      for (const name of names) fs.chownSync(path.join(copiedArchive, name), appUid, appUid);
+    }
+  });
+  require('../lib/persistence/postgresql/operations/runtime').copyRecoveryFiles(source, target);
+
+  const proof = await verifyImportSourceArchive({ directory: copiedArchive, vault: f.vault, allowMissing: false });
+  assert.equal(proof.generationSha256, expected.generationSha256);
+  for (const name of names) {
+    const original = await fsp.stat(path.join(archivedSource, name)), frozen = await fsp.stat(path.join(copiedArchive, name));
+    assert.equal(original.uid, appUid);
+    assert.equal(frozen.uid, 0);
+    assert.equal(frozen.mode & 0o777, 0o600);
+  }
+});
+
 test('only acknowledged applied sources rotate current/previous; newer candidates never evict success', async t => {
   const f = await fixture(t), first = input('first-private-source'), second = input('second-private-source'), third = input('third-private-source');
   assert.equal((await f.archive.verify()).available, false);
