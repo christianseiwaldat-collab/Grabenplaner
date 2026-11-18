@@ -32,12 +32,13 @@ schreibt `/api/backup/deploy-scope` mit der bestätigten Revision. Eine parallel
 geänderte Einstellung muss neu geladen werden, bevor sie überschrieben wird.
 Ohne bestätigte Serverantwort bleibt die Bearbeitung gesperrt.
 
-Die Präferenz gilt ausschließlich für Vorsicherungen bei Updates mit
-automatischer Auswahl (`--verification auto`). Erforderliche Vollprüfungen
-haben Vorrang und können auch bei gewähltem kleineren Umfang eine vollständige
-Sicherung verlangen. Eine explizite CLI-Auswahl hat Vorrang vor der Präferenz.
-Nächtliche Vollsicherungen und Recovery Assurance bleiben vollständig. Die
-Einstellung startet keine Aktualisierung und keine Sicherung.
+Die Präferenz gilt für Vorsicherungen bei Updates mit automatischer Auswahl
+(`--verification auto`). Ist Core Plus gewählt und das Paket dafür ungeeignet
+oder schlägt die Core-Plus-Sicherung fehl, endet der Deploy vor dem App-Tausch.
+Der volle Umfang erfordert die ausdrückliche CLI-Auswahl oder die gespeicherte
+Voll-Einstellung. Nächtliche Vollsicherungen und Recovery Assurance verwenden
+weiterhin den vollständigen Umfang. Die Einstellung wird bei einem ausgelösten
+Update angewendet.
 
 ## Manuelle Google-Drive-Sicherung
 
