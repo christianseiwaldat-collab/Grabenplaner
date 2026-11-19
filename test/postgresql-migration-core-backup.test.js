@@ -16,8 +16,9 @@ function fixture(t,change=()=>{},options={}){
  const app=path.resolve(path.dirname(file),'../../../..');
  const context={module:{exports},exports,__dirname:path.dirname(file),Buffer,URL,Date,
   process:{platform:'linux',getuid:()=>0},require(id){
-   if(id==='../../../../server-tools/linux/lib/core-deploy-proof')return {async readProof(installed,candidate){
+   if(id==='../../../../server-tools/linux/lib/core-deploy-proof')return {async readProof(installed,candidate,envFile){
     calls++;assert.equal(installed,app);assert.equal(candidate,app);
+    assert.equal(envFile,'/etc/grabenplaner/grabenplaner.env');
     if(options.rejectProof)throw new Error('CORE_DEPLOY_PACKAGE_BINDING');return point;
    }};
    return realRequire(id);
