@@ -1609,8 +1609,10 @@ fi
 if [[ "$database_provider" == postgresql ]]; then
 begin_deploy_phase import-deletion-schema-migration
 installed_manifest_sha256="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.json")"
+import_delete_migration_args=("$installed_manifest_sha256" --maintenance-lock-held)
+if [[ "$deploy_mode" == owned ]]; then import_delete_migration_args+=(--defer-reference-proof); fi
 root_node "$app_dir/server-tools/linux/lib/import-delete-migrate.js" \
-  "$installed_manifest_sha256" --maintenance-lock-held >"$schema_migration_result" \
+  "${import_delete_migration_args[@]}" >"$schema_migration_result" \
   || gp_die "Die Erweiterung zum Loeschen nicht uebernommener Importe ist fehlgeschlagen; die neue App wird nicht gestartet."
 root_node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.coreUnchanged!==true)process.exit(1)' "$schema_migration_result" \
   || gp_die "Der Import-Loeschnachweis ist unvollstaendig."

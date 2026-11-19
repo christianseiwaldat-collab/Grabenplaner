@@ -3,8 +3,8 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const R=require('../../../lib/persistence/postgresql/operations/runtime');
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 async function main(args=process.argv.slice(2)){
- const [expectedManifest,lease]=args,app='/opt/grabenplaner/app';
- if(process.platform!=='linux'||process.getuid()!==0||args.length!==2||! /^[a-f0-9]{64}$/.test(expectedManifest||'')
+ const [expectedManifest,lease,option]=args,app='/opt/grabenplaner/app';
+ if(process.platform!=='linux'||process.getuid()!==0||![2,3].includes(args.length)||![undefined,'--defer-reference-proof'].includes(option)||! /^[a-f0-9]{64}$/.test(expectedManifest||'')
    ||lease!=='--maintenance-lock-held'||fs.realpathSync(path.resolve(__dirname,'../../..'))!==app)throw new Error('PG_IMPORT_DELETE_MIGRATION_INSTALLED_SCOPE');
  if(fs.realpathSync('/proc/self/fd/9')!=='/run/grabenplaner/maintenance.lock'
    ||require('node:child_process').spawnSync('/usr/bin/flock',['--nonblock','9'],{stdio:Array.from({length:10},(_,i)=>i===9?9:'ignore')}).status!==0)throw new Error('PG_IMPORT_DELETE_MIGRATION_LEASE');
@@ -23,10 +23,11 @@ async function main(args=process.argv.slice(2)){
  const before=await R.inspectPair(config),domain=config.domains.find(d=>d.domain==='sales');
  const client=new (require('pg').Client)(R.url(config,domain));let result;
  try{await client.connect();await client.query("SET lock_timeout='5s';SET statement_timeout='15min'");
-  result=await require('../../../lib/persistence/postgresql/sales/import-delete').migrate(client,{binding:config.binding});
+  result=await require('../../../lib/persistence/postgresql/sales/import-delete').migrate(client,{binding:config.binding,deferReferenceProof:option==='--defer-reference-proof'});
  }finally{await client.end();}
  const after=await R.inspectPair(config);
  if(before.core.schemaSha256!==after.core.schemaSha256||before.sales.database!==after.sales.database)throw new Error('PG_IMPORT_DELETE_MIGRATION_DOMAIN_DRIFT');
+ if(option==='--defer-reference-proof'&&before.sales.schemaSha256!==after.sales.schemaSha256)throw new Error('PG_IMPORT_DELETE_MIGRATION_SCHEMA_CHANGE');
  return {verified:true,appVersion:manifest.appVersion,sourceCommit:manifest.sourceCommit,...result,backup,salesBefore:before.sales.schemaSha256,salesAfter:after.sales.schemaSha256,coreUnchanged:true};
 }
 if(require.main===module)main().then(result=>process.stdout.write(JSON.stringify(result)+'\n')).catch(e=>{process.stderr.write(JSON.stringify({failed:true,code:/^PG_/.test(e.message)?e.message:e.code||'PG_IMPORT_DELETE_MIGRATION_FAILED'})+'\n');process.exitCode=1;});

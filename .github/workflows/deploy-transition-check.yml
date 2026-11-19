@@ -2,6 +2,8 @@ name: Core deploy transition checks
 
 on:
   workflow_dispatch:
+  push:
+    branches: [feature/deploy-recovery-core-owned-20261116]
 
 permissions:
   contents: read
@@ -28,6 +30,7 @@ jobs:
           node --test --test-concurrency=1
           test/core-deploy-proof.test.js
           test/core-deploy-offsite-status.test.js
+          test/core-deploy-sales-schema.test.js
           test/postgresql-migration-core-backup.test.js
           test/postgresql-session-security-cli.test.js
           test/postgresql-deploy-owned-bundle.test.js

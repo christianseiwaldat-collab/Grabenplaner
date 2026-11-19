@@ -139,6 +139,18 @@ jobs:
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
       - name: Check private SAST context evidence contracts
         run: node --test test/security-sast-context-evidence.test.js test/security-sast-reviews.test.js
+      - name: Admit actual exception policy before expensive source qualification
+        run: |
+          python - <<'PY'
+          import datetime as dt, json, pathlib, sys
+          sys.path.insert(0, 'scripts/security')
+          from gates import validate_exceptions
+          policy = json.loads(pathlib.Path('scripts/security/exceptions.json').read_text())
+          now = dt.datetime.now(dt.timezone.utc)
+          validate_exceptions(policy, today=now.date())
+          validate_exceptions(policy, today=(now + dt.timedelta(minutes=300)).date())
+          print('Exact exception policy remains valid throughout the configured SAST job window')
+          PY
       - name: Acquire the reviewed compiler or build cold, then qualify current whole files
         env:
           GITHUB_TOKEN: ${{ github.token }}
