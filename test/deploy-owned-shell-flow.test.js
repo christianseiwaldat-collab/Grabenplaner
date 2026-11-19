@@ -184,3 +184,40 @@ ${workflow}
   assert.ok(!events.includes('owned-policy-recheck'));assert.ok(!events.includes('owned-recovery-proof'));assert.ok(!events.includes('queue-deadline'));
  }
 });
+
+for (const scenario of ['qualified','local-basis','drive','failed-drive','resume']) {
+  test('candidate preparation runs exactly the required restore: ' + scenario, { skip: !fs.existsSync(bash) }, t => {
+    const f = fixture(t), start = source.indexOf('prepare_core_candidate() {'), end = source.indexOf('\ncreate_exact_local_backup()', start);
+    assert.ok(start > 0 && end > start);
+    const helper = 'candidate/server-tools/linux/lib/';
+    const point = { bundle: 'example.owned', sha256: 'a'.repeat(64) };
+    f.write(helper + 'core-deploy-proof.js', [
+      "const fs = require('node:fs'), action = process.argv[2];",
+      "fs.appendFileSync('events', action + '\\n');",
+      "if (action === 'inspect') process.exit(process.env.SCENARIO === 'qualified' || fs.existsSync('signed') ? 0 : 1);",
+      "if (action === 'basis-for-point') process.exit(process.env.SCENARIO === 'local-basis' ? 0 : 1);",
+      "if (action === 'local-point' && process.env.SCENARIO === 'resume') process.exit(1);",
+      "if (action === 'local-point') console.log(JSON.stringify({backup:" + JSON.stringify(point) + "}));",
+    ].join('\n'));
+    f.write(helper + 'core-drive-proof.js', "require('node:fs').appendFileSync('events',process.argv[2]+'\\n');console.log(" +
+      JSON.stringify(JSON.stringify({ backup: point })) + ");");
+    f.write(helper + 'deploy-owned-recovery.js', "require('node:fs').appendFileSync('events','local-restore\\n');console.log('{}');");
+    f.write('candidate/server-tools/linux/core-drive-recovery.sh', [
+      '#!/usr/bin/env bash', 'echo drive-restore >>events', '[[ $1 == example.owned && $4 == --lock-already-held ]] || exit 3',
+      '[[ $SCENARIO != failed-drive ]] || exit 1', 'touch signed',
+    ].join('\n'));
+    const result = f.run([
+      'set -euo pipefail', 'mkdir maintenance', 'maintenance_root=maintenance', 'app_dir=installed', 'extract_root=candidate',
+      'export SCENARIO=' + scenario, nodePrelude, 'gp_die() { exit 42; }', source.slice(start, end), 'prepare_core_candidate',
+    ].join('\n'));
+    assert.equal(result.status, scenario === 'failed-drive' ? 42 : 0, result.stderr);
+    const expected = {
+      qualified: ['inspect'],
+      'local-basis': ['inspect','local-point','basis-for-point','local-restore','record'],
+      drive: ['inspect','local-point','basis-for-point','drive-restore','inspect'],
+      'failed-drive': ['inspect','local-point','basis-for-point','drive-restore'],
+      resume: ['inspect','local-point','resume','basis-for-point','drive-restore','inspect'],
+    };
+    assert.deepEqual(result.events, expected[scenario]);
+  });
+}

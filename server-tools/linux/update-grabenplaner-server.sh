@@ -1046,12 +1046,14 @@ trap 'exit 130' INT
 
 prepare_core_candidate() {
   local helper="$extract_root/server-tools/linux/lib/core-deploy-proof.js"
+  local drive_helper="$extract_root/server-tools/linux/lib/core-drive-proof.js"
   local source_result="$maintenance_root/core-source-proof.json"
   local point_result="$maintenance_root/core-prepared-backup.json"
   local recovery_result="$maintenance_root/core-prepared-restore.json"
-  local point
+  local point manifest
   if root_node "$helper" inspect "$app_dir" "$extract_root" >"$source_result" 2>/dev/null; then return; fi
-  if root_node "$helper" inspect "$app_dir" >"$source_result" 2>/dev/null; then
+  if root_node "$helper" local-point "$app_dir" >"$source_result" 2>/dev/null ||
+     root_node "$drive_helper" resume "$app_dir" >"$source_result" 2>/dev/null; then
     root_node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).backup)+"\n")' "$source_result" >"$point_result"
   else
     bind_rollback_service_restart
@@ -1065,8 +1067,21 @@ prepare_core_candidate() {
     gp_start_service "$service"
     wait_deployment_ready "$internal_ready_url" "$health_timeout" || gp_die 'GP ist nach der Core-Aufnahme nicht bereit.'
     wait_deployment_ready "$public_ready_url" "$health_timeout" || gp_die 'GP ist nach der Core-Aufnahme nicht oeffentlich bereit.'
+    point="$(root_node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).bundle)' "$point_result")"
+    root_node "$drive_helper" remember "$app_dir" "$app_dir" "$point" >/dev/null ||
+      gp_die 'Der versiegelte Core-Punkt konnte fuer die Wiederaufnahme nicht gebunden werden.'
   fi
   point="$(root_node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).bundle)' "$point_result")"
+  manifest="$(root_node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).sha256)' "$point_result")"
+  if ! root_node "$helper" basis-for-point "$app_dir" "$manifest" >/dev/null 2>&1; then
+    # This round trip also supplies the candidate-specific application restore.
+    bash "$extract_root/server-tools/linux/core-drive-recovery.sh" "$point" "$app_dir" "$extract_root" --lock-already-held \
+      >"$maintenance_root/core-drive-snapshot.txt" \
+      || gp_die 'Der eigenstaendige Core-Plus-Nachweis auf Drive ist fehlgeschlagen.'
+    root_node "$helper" inspect "$app_dir" "$extract_root" >/dev/null \
+      || gp_die 'Der signierte Core-Plus-Drive-Nachweis passt nicht zum Deploy.'
+    return
+  fi
   root_node "$extract_root/server-tools/linux/lib/deploy-owned-recovery.js" "$point" "$point.complete.json" \
     "$app_dir" "$extract_root" >"$recovery_result" \
     || gp_die 'Der Core-Sicherungspunkt konnte mit der vorgesehenen App nicht wiederhergestellt werden.'

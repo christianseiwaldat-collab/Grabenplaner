@@ -494,3 +494,30 @@ bleibt zugeordnet. Die vollständige nächtliche Assurance bleibt ein eigener
 Lauf. Bei gewähltem Core-Umfang gibt es keinen automatischen Wechsel zur
 vollständigen Sales-Sicherung. Aus lokalen Arbeiten allein folgt keine
 produktive Deploy-Freigabe.
+
+### Eigenständiger Core-Plus-Nachweis auf Google Drive
+
+Ein versiegelter Core-Plus-Punkt lässt sich unter der Wartungssperre mit
+`bash server-tools/linux/core-drive-recovery.sh BUNDLE SOURCE_ROOT TARGET_ROOT`
+prüfen. Der Auftrag verwendet das für diese Installation eingerichtete
+verschlüsselte Drive-Repository. Er sucht zuerst nach dem Snapshot für genau
+dieses Punktmanifest. Er lädt das Archiv vom vollständigen Snapshot-Identifier
+zurück, vergleicht dessen SHA-256 mit dem lokalen Archiv und führt die
+isolierte PostgreSQL- und GP-Prüfung mit dem Zielpaket auf den geladenen Daten aus.
+
+Nach Erfolg steht der Ed25519-signierte Beleg in
+`/var/lib/grabenplaner-assurance/core-drive-verification.json`. Er enthält die
+ursprüngliche Aufnahmezeit, Snapshot-, Installations- und Repositorykennung,
+Punkt- und Pakethashes sowie den Restore-Beleg. Eine verschlüsselte Kopie
+desselben signierten Belegs liegt unter dem eigenen Restic-Tag
+`grabenplaner-core-plus-receipt` auf Drive. Der Updater kann diesen
+Nachweis unmittelbar für das geprüfte Paket verwenden. Ein anderer Kandidat
+benötigt seine eigene Qualifikation. Fehlt die gültige externe Grundlage,
+nutzt der Updater die Drive-Wiederherstellung zugleich als Kandidatenprüfung.
+Bei einem erneuten Versuch kann er den bereits versiegelten Punkt und dessen
+Drive-Snapshot wiederverwenden. Die Gültigkeit bemisst sich ab der Aufnahme.
+Die nächtliche vollständige Assurance verwendet ihre eigenen Snapshots und Belege.
+
+Mit dem vierten Argument `--receipt-only` lässt sich ein vorhandener
+signierter Restore-Beleg auf Drive abgleichen. Dazu liest der Auftrag die
+Snapshot-Metadaten und überträgt ausschließlich den kleinen Beleg.

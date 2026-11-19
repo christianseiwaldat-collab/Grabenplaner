@@ -440,21 +440,30 @@ fi
 
 # The optional module's self-test checks structure, not successful recovery.
 # Inspect only its protected, redacted status; never read provider credentials.
-core_proof_verified=0
+core_recovery_state=not-applicable
 if [[ "${DB_PROVIDER:-}" == postgresql && -f "$SCRIPT_DIR/lib/core-deploy-proof.js" ]]; then
   core_scope="$(root_node "$app_dir/server-tools/linux/lib/postgresql-operations.js" deploy-backup-scope /etc/grabenplaner/postgresql-operations.json)" \
     || gp_die 'Die gespeicherte Sicherungswahl ist nicht lesbar.'
   if root_node -e 'const s=JSON.parse(process.argv[1]);if(s.scope!=="deploy-owned"||s.valid!==true)process.exit(1)' "$core_scope"; then
-    if ! root_node "$SCRIPT_DIR/lib/core-deploy-proof.js" inspect "$app_dir" >/dev/null 2>&1; then
-      root_node "$SCRIPT_DIR/lib/core-deploy-proof.js" baseline "$app_dir" >/dev/null \
-        || gp_die 'Die vorhandene externe Sicherungsgrundlage fuer den Core-Deploy ist nicht bestaetigt.'
-      gp_info 'Der Core-Sicherungspunkt wird vor dem App-Tausch erstellt und am Kandidaten wiederherstellungsgeprueft.'
+    if root_node "$SCRIPT_DIR/lib/core-deploy-proof.js" inspect "$app_dir" >/dev/null 2>&1; then
+      core_recovery_state=verified-installed
+      gp_info 'Ein gepruefter Core-Plus-Sicherungspunkt liegt vor.'
+    elif root_node "$SCRIPT_DIR/lib/core-deploy-proof.js" baseline "$app_dir" >/dev/null 2>&1; then
+      core_recovery_state=pending-candidate
+      gp_info 'Die externe Grundlage liegt vor. Der Updater prueft den Core-Punkt am Zielpaket.'
+    else
+      core_recovery_state=pending-drive-restore
+      [[ -f "$SCRIPT_DIR/core-drive-recovery.sh" && "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]] \
+        || gp_die 'Der Core-Plus-Drive-Nachweis fehlt und kann mit dieser Installation nicht erstellt werden.'
+      ( source /opt/grabenplaner-offsite/module/lib/offsite-common.sh
+        offsite_assert_installed_contract && offsite_assert_credentials "$OFFSITE_CONFIG_ROOT" &&
+          [[ "$("$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/offsite-contract.js" provider-id "$OFFSITE_INSTALLED_CONTRACT")" == google_drive ]]
+      ) || gp_die 'Die Voraussetzungen fuer den Core-Plus-Drive-Nachweis fehlen.'
+      gp_info 'Core-Plus-Drive-Nachweis ausstehend. Der Updater muss ihn vor dem App-Tausch erfolgreich erstellen.'
     fi
-    core_proof_verified=1
-    gp_info 'Core und eigene GP-Inhalte sind mit einem vollstaendig geprueften Sicherungspunkt nachgewiesen.'
   fi
 fi
-if (( core_proof_verified == 0 )); then
+if [[ "$core_recovery_state" == not-applicable ]]; then
 root_node - "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" <<'NODE' \
   || gp_die "Die Offsite-Wiederherstellbarkeit ist nicht bestaetigt. Zuerst Recovery Assurance abschliessen."
 const fs = require('node:fs');
@@ -519,5 +528,5 @@ for storage_path in "$(dirname -- "$app_dir")" "$data_dir" "$backup_probe" "$bui
 done
 
 checked_at="$(date --utc '+%Y-%m-%dT%H:%M:%S.%3NZ')"
-printf '{"ok":true,"format":"grabenplaner-deploy-preflight","schemaVersion":1,"checkedAt":"%s","databaseProvider":"%s","minimumFreeBytes":%s}\n' \
-  "$checked_at" "$database_provider" "$minimum_free_bytes"
+printf '{"ok":true,"format":"grabenplaner-deploy-preflight","schemaVersion":1,"checkedAt":"%s","databaseProvider":"%s","minimumFreeBytes":%s,"coreRecovery":"%s"}\n' \
+  "$checked_at" "$database_provider" "$minimum_free_bytes" "$core_recovery_state"

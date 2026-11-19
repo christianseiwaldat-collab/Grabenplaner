@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const legacy = require('./deploy-policy');
+const drive = require('./core-drive-proof');
 const FORMAT = 'grabenplaner-core-deploy-proof';
 const PROOF_FILE = '/var/lib/grabenplaner-assurance/core-deploy-verification.json';
 const SHA = /^[a-f0-9]{64}$/;
@@ -58,7 +59,11 @@ function validateOffsiteBasis(proof, history, identity, configurationSha256, now
   return { verifiedAt: proof.verifiedAt, receiptSha256: proof.receiptSha256, scope: 'full' };
 }
 
-function offsiteBasis(identity, configurationSha256) {
+function offsiteBasis(appRoot, identity, configurationSha256, fields = {}) {
+  try {
+    const point = drive.readSigned(appRoot, identity, configurationSha256, fields);
+    return { verifiedAt: point.verifiedAt, receiptSha256: point.restoreSha256, snapshotId: point.snapshotId, scope: 'deploy-owned' };
+  } catch { /* A valid signed full restore is also an independent offsite basis. */ }
   const full = jsonFile('/var/lib/grabenplaner-assurance/deploy-verification.json').value;
   // The existing signed external recovery remains evidence of its own scope.
   // The new isolated Core restore supplies the current Core qualification.
@@ -72,25 +77,36 @@ function backupPaths(backup, config) {
       || backup.amuBackup !== backup.bundle + '/private/amu') fail('CORE_DEPLOY_BACKUP_PATH');
 }
 
-async function readProof(appRoot, candidateRoot, envFile) {
-  const proof = jsonFile(PROOF_FILE).value;
+async function readProof(appRoot, candidateRoot, envFile, localPointOnly = false) {
   const runtime = require('../../../lib/persistence/postgresql/operations/runtime');
   const config = runtime.loadConfiguration('/etc/grabenplaner/postgresql-operations.json');
-  backupPaths(proof.backup, config);
   const installed = legacy.applicationContract(appRoot);
-  const candidate = candidateRoot ? legacy.applicationContract(candidateRoot) : null;
+  const candidate = candidateRoot === appRoot ? installed : candidateRoot ? legacy.applicationContract(candidateRoot) : null;
   const identity = await legacy.configuredDatabaseIdentity(config.sourceFiles + '/data/postgresql-pair.json', envFile);
-  const evidence = validateProof(proof, { installedManifest: installed.manifestSha256,
-    candidateManifest: candidate?.manifestSha256, identity, configurationSha256: legacy.configurationIdentity(envFile) });
-  offsiteBasis(identity, proof.configurationSha256);
+  const configurationSha256 = legacy.configurationIdentity(envFile);
+  const context = { installedManifest: installed.manifestSha256, candidateManifest: candidate?.manifestSha256, identity, configurationSha256 };
+  try {
+    const signed = drive.readSigned(appRoot, identity, configurationSha256);
+    const proof = { ...signed, format: FORMAT, schemaVersion: 1, scope: 'deploy-owned', backup: drive.backupOf(signed), restoreFile: drive.FILE };
+    return await inspectQualified(proof, config, context,
+      { scope: signed.scope, snapshotId: signed.snapshotId, receiptSha256: signed.restoreSha256 });
+  } catch { /* The signed cloud point and the established local restore are independent candidates. */ }
+  const proof = jsonFile(PROOF_FILE).value;
+  const offsite = localPointOnly ? undefined : offsiteBasis(appRoot, identity, configurationSha256, { manifestSha256: proof.backup.sha256 });
+  return inspectQualified(proof, config, context, offsite);
+}
+
+async function inspectQualified(proof, config, context, offsite) {
+  backupPaths(proof.backup, config);
+  const evidence = validateProof(proof, context);
   const restore = Object.hasOwn(proof, 'restoreBytes') ? decodeRestoreReceipt(proof.restoreBytes) : jsonFile(proof.restoreFile);
   if (digest(restore.bytes) !== proof.restoreSha256) fail('CORE_DEPLOY_RESTORE_CHANGED');
   validateRestore(restore.value, proof.backup, proof.sourceVersion, proof.targetVersion);
   const bundle = await require('../../../lib/persistence/postgresql/operations/paired-bundle').verifyPairBundle(
     proof.backup.bundle, proof.backup.commitMarker, { scope: 'deploy-owned', expectedSha256: proof.backup.sha256, verifyContent: false });
-  if (bundle.manifest.recovery.basis !== 'fresh-source-rebuild'
-      || legacy.postgresqlPairIdentity(bundle.manifest.checkpoint.domains).databaseIdentitySha256 !== identity.databaseIdentitySha256) fail('CORE_DEPLOY_PAIR_BINDING');
-  return { ...evidence, ownedRecovery: { verified: true, manifestSha256: proof.backup.sha256,
+  if (bundle.manifest.createdAt !== proof.backup.createdAt || bundle.manifest.recovery.basis !== 'fresh-source-rebuild'
+      || legacy.postgresqlPairIdentity(bundle.manifest.checkpoint.domains).databaseIdentitySha256 !== context.identity.databaseIdentitySha256) fail('CORE_DEPLOY_PAIR_BINDING');
+  return { ...evidence, offsiteBasis: offsite, ownedRecovery: { verified: true, manifestSha256: proof.backup.sha256,
     verifiedAt: proof.verifiedAt, fullRecovery: false } };
 }
 
@@ -115,7 +131,7 @@ async function recordProof(appRoot, candidateRoot, backupResultFile, restoreFile
     // Updater staging is removed after a successful deployment. Keep the exact
     // authenticated receipt bytes inside this durable protected proof.
     restoreFile, restoreBytes: restored.bytes.toString('base64'), restoreSha256: digest(restored.bytes), verifiedAt: restored.value.verifiedAt };
-  proof.offsiteBasis = offsiteBasis(live, proof.configurationSha256);
+  proof.offsiteBasis = offsiteBasis(appRoot, live, proof.configurationSha256, { manifestSha256: backup.sha256 });
   validateProof(proof, { installedManifest: source.manifestSha256, candidateManifest: target.manifestSha256,
     identity: live, configurationSha256: proof.configurationSha256 });
   const directory = path.dirname(PROOF_FILE), parent = fs.lstatSync(directory);
@@ -130,10 +146,10 @@ async function recordProof(appRoot, candidateRoot, backupResultFile, restoreFile
   return { verified: true, scope: proof.scope, verifiedAt: proof.verifiedAt, manifestSha256: backup.sha256 };
 }
 
-async function checkBaseline(appRoot, envFile) {
+async function checkBaseline(appRoot, envFile, manifestSha256) {
   const installed = legacy.applicationContract(appRoot);
   const identity = await legacy.configuredDatabaseIdentity('/var/lib/grabenplaner/data/postgresql-pair.json', envFile);
-  const checked = offsiteBasis(identity, legacy.configurationIdentity(envFile));
+  const checked = offsiteBasis(appRoot, identity, legacy.configurationIdentity(envFile), manifestSha256 ? { manifestSha256 } : {});
   return { verified: true, installedManifestSha256: installed.manifestSha256, offsiteBasis: checked };
 }
 
@@ -142,6 +158,10 @@ async function main(args = process.argv.slice(2)) {
   const [action, appRoot, candidateRoot, backupFile, restoreFile, ...extra] = args;
   const envFile = '/etc/grabenplaner/grabenplaner.env';
   if (action === 'baseline' && appRoot && !candidateRoot && !backupFile && !restoreFile && !extra.length) return checkBaseline(appRoot, envFile);
+  if (action === 'basis-for-point' && appRoot && SHA.test(candidateRoot || '') && !backupFile && !restoreFile && !extra.length)
+    return checkBaseline(appRoot, envFile, candidateRoot);
+  if (action === 'local-point' && appRoot && !candidateRoot && !backupFile && !restoreFile && !extra.length)
+    return { backup: (await readProof(appRoot, undefined, envFile, true)).backup };
   if (action === 'inspect' && appRoot && !backupFile && !restoreFile && !extra.length) return readProof(appRoot, candidateRoot, envFile);
   if (action === 'record' && appRoot && candidateRoot && backupFile && restoreFile && !extra.length)
     return recordProof(appRoot, candidateRoot, backupFile, restoreFile, envFile);
