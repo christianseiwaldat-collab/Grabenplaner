@@ -347,6 +347,12 @@ try {
     $requiredPackageFiles = @(
         'server.js',
         'backup.js',
+        'lib\data-import-completion.js',
+        'lib\data-import-completion-format.js',
+        'lib\data-import-completion-pdf.js',
+        'server-tools\linux\core-drive-recovery.sh',
+        'server-tools\linux\lib\core-drive-proof.js',
+        'server-tools\linux\lib\core-deploy-proof.js',
         'scripts\run-background-backup.js',
         'scripts\manage-local-backup-archive.js',
         'lib\backup-workspace.js',
