@@ -36,6 +36,27 @@ function fixture() {
 const context = { projection: { inventory: true, purchasing: true, customers: true, repairs: true, classify: true }, locations: [{ id: '93', label: 'Testfiliale' }], today: '2026-09-16' };
 const tick = () => new Promise(setImmediate);
 
+test('opening device history from a receipt starts the saved search with the exact serial and article', async t => {
+  const FormData = globalThis.FormData;
+  globalThis.FormData = class {
+    constructor(form) { this.entries = Object.entries(form.elements).map(([key, field]) => [key, field.value]); }
+    [Symbol.iterator]() { return this.entries[Symbol.iterator](); }
+  };
+  t.after(() => { globalThis.FormData = FormData; });
+  const f = fixture();
+  const pending = f.workspace.openDeviceHistory({ serial: 'DEVICE-000042', articleNumber: '000042' });
+  f.requests[0].resolve(context);
+  await tick();
+  const request = f.requests.at(-1), params = JSON.parse(request.options.body);
+  assert.equal(f.workspace.getTab(), 'device-history');
+  assert.equal(params.kind, 'device-history');
+  assert.equal(params.query.serial, 'DEVICE-000042');
+  assert.equal(params.query.articleNumber, '000042');
+  request.resolve({ id: 'device-lookup', status: 'queued' });
+  await pending;
+  f.workspace.destroy();
+});
+
 test('Mount is lazy; leaving during access loading rejects stale data and permits re-entry', async () => {
   const f = fixture(); assert.equal(f.requests.length, 0);
   const old = f.workspace.activate('purchasing'); assert.equal(f.requests.length, 1);

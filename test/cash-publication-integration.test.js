@@ -50,6 +50,32 @@ test('receipt timestamps, device lookup and checked tax survive publication, war
   const restricted=(await document()).items[0];assert.ok(!Object.hasOwn(restricted,'personnel'));assert.ok(!Object.hasOwn(restricted.lines[0],'personnel'));
   assert.equal(restricted.time,'16:40:27.000');
 });
+
+test('receipt device history requires the exact article and device on the same position', async t => {
+  const f = await fixture(t), data = rows({ count: 2 });
+  Object.assign(data.Umsatz_Kasse_Details[0], { EAN: '00042', KameraNr: 'DEVICE*042' });
+  Object.assign(data.Umsatz_Kasse_Details[1], { EAN: '00424', KameraNr: 'DEVICE-OTHER' });
+  const id = await f.build(data);
+  await f.activate(f.request(id));
+  const runtime = f.history(), find = extra => runtime.run(f.get, workspace => workspace.receipts.search(f.query(extra)));
+  assert.equal((await find({ deviceNumber: 'DEVICE*042', deviceArticle: '00042' })).items.length, 1);
+  assert.equal((await find({ deviceNumber: 'DEVICE*042', deviceArticle: '00424' })).items.length, 0);
+  assert.equal((await find({ deviceNumber: 'DEVICE*', deviceArticle: '00042' })).items.length, 0);
+});
+
+test('cash completion follows durable publications and is visible only to the importing owner', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.publish.operation(f.get,'status',{sourceId:f.id})).completion, null);
+  await f.activate();
+  const newSource = await f.build(rows({ price: '15' }));
+  await f.activate(f.request(newSource,1));
+  const active = (await f.publish.operation(f.get,'status',{sourceId:newSource})).completion;
+  assert.equal(active.active, true);
+  assert.equal(active.finishedAt, TIME);
+  assert.equal(active.previous.sourceId, f.id);
+  assert.equal((await f.publish.operation(f.get,'status',{sourceId:f.id})).completion.active, false);
+  assert.equal((await f.publish.operation(async()=>({...f.session,employeeNumber:'other-owner'}),'status',{sourceId:newSource})).completion, null);
+});
 // Exercise the PostgreSQL repository branch through a real transactional
 // synthetic database. The adapter delegates each batch to equivalent scalar
 // statements; native PostgreSQL SQL is checked separately.

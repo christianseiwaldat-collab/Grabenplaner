@@ -22,9 +22,10 @@ async function fixture(t){
 const query={dateFrom:'2026-11-01',dateTo:'2026-11-14',locations:['18'],deviceNumber:'DEVICE-000042',sellers:'252'};
 
 test('branch search accepts the device filter and returns the additive receipt context through the real HTTP route',async t=>{
- const f=await fixture(t),result=await f.post(query);
+ const f=await fixture(t),result=await f.post({...query,deviceArticle:'00042'});
  assert.equal(result.status,200);assert.equal(result.headers.get('cache-control'),'private, no-store');
  assert.equal(f.calls[0].deviceNumber,query.deviceNumber);assert.deepEqual(f.calls[0].sourceLocationIds,['18']);assert.deepEqual(f.calls[0].sellerIds,['252']);
+ assert.equal(f.calls[0].deviceArticle,'00042');
  assert.equal(result.body.items[0].time,'16:40:27.000');assert.equal(result.body.items[0].lines[0].deviceNumber,'DEVICE-000042');
  assert.equal(result.body.items[0].net,'50.00');
 });

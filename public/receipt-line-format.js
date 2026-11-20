@@ -44,5 +44,19 @@
     if(value.headerStatus==='unavailable_zero_placeholder')return 'Quellbetrag 0,00 ist ein bestätigter Platzhalter; kein Nachweis einer kostenlosen Abgabe oder Zahlung.';
     return `Belegabgleich auf ${basis}${value.difference==null?' · Differenz nicht ermittelt':' · Differenz '+money(value.difference)}${row.gross==null?' · Prüfung offen':''}`;
   }
-  return Object.freeze({ total, money, groups, note,taxText,reconciliationText });
+  const escape = text => String(text).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  function deviceHistory(line, tradeHistory = false) {
+    const serial = String(line.deviceNumber ?? '').trim(), article = String(line.article ?? '').trim();
+    if (!serial) return '';
+    const label = 'Erfasste Gerätenummer: ' + escape(serial);
+    const cash = serial.length <= 80 && article && article !== '0' && article.length <= 150;
+    const trade = tradeHistory && serial.length <= 150;
+    if (!cash && !trade) return '<small>' + label + '</small>';
+    const attributes = ' data-device-serial="' + escape(serial) + '" data-device-article="' + escape(article) + '"';
+    return '<details class="receipt-device-history"><summary>' + label + '</summary>' +
+      (cash ? '<button type="button" class="secondary-button" data-device-history="cash"' + attributes + '>Kassenbelege zum Gerät</button>' : '') +
+      (trade ? '<button type="button" class="secondary-button" data-device-history="trade"' + attributes + '>Gerätehistorie im Einkauf</button>' : '') +
+      '</details>';
+  }
+  return Object.freeze({ total, money, groups, note,taxText,reconciliationText,deviceHistory });
 }));

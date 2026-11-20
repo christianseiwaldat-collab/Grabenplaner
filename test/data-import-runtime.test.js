@@ -71,6 +71,29 @@ test('progress timings survive runtime reconstruction without resetting an activ
  assert.equal(source.progress.startedAt,startedAt);
  source=await f.finish(source,'review');assert.equal(source.progress.finishedAt,at);
  f.reload();assert.deepEqual((await f.runtime.sourceOperation(f.getSession,source.id,'read')).progress,source.progress);
+ assert.deepEqual(source.reportPhases.review,{startedAt,finishedAt:at});
+});
+
+test('import completion keeps the prior successfully applied source and durable phase timestamps', async t => {
+ const f = await fixture(t);
+ let at = TIME;
+ f.options.clock = () => at; f.reload();
+ const finish = async source => {
+  at = new Date(Date.parse(at) + 60000).toISOString();
+  source = await f.finish(source,'review');
+  at = new Date(Date.parse(at) + 120000).toISOString();
+  return f.finish(source,'apply');
+ };
+ const first = await finish(await f.upload());
+ at = new Date(Date.parse(at) + 60000).toISOString();
+ const different = sourceBuffer(); different[3999] = 27;
+ const second = await finish(await f.upload(different));
+ f.reload();
+ const current = await f.runtime.sourceOperation(f.getSession,second.id,'read');
+ assert.equal(current.status,'applied');
+ assert.equal(current.reportPhases.apply.finishedAt,at);
+ assert.equal((await f.runtime.previousCompletion(f.getSession,current)).id,first.id);
+ assert.equal(await f.runtime.previousCompletion(async()=>({...base(),employeeNumber:'another'}),current),null);
 });
 
 test('unapplied source deletion removes rows, exclusive payloads and source while preserving shared blocks',async t=>{

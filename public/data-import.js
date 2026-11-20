@@ -135,7 +135,15 @@
     const totals=progressUI.summarize(source),applied=totals.confirmed,takingOver=job?.phase==='applying'||['applying','applied'].includes(source.status),jobName=job?.phase==='content-date'?'Ermittlung des Datenstands':job?.phase==='applying'?'Übernahme':'Prüfung';
     const fileDeleted=job?.error==='IMPORT_JOB_FILE_DELETED'||job?.error==='IMPORT_SOURCE_ARCHIVE_REUPLOAD_REQUIRED',archiveIssue=archiveErrorMessages[job?.error];
     const cashTakeover=takingOver&&source.storage==='cash-compact-v1';
+    const reportAvailable=source.complete&&!source.retirement&&!source.catalogUpdatePending&&(source.status==='applied'||
+      source.cashPublication?.active||source.cashPublication?.reportAvailable);
     return `<header><h3>${escape(sourceFileName(source))}</h3><p>${escape(sourceStateLabel(source))} · Datenstand: ${contentDate(source)}</p></header>
+      ${reportAvailable?`<div class="data-import-actions" role="group" aria-label="Import-Abschlussbericht">
+        <strong>Abschlussbericht</strong>
+        <button type="button" data-i-report="html">HTML</button>
+        <button type="button" data-i-report="md">Markdown</button>
+        <button type="button" data-i-report="pdf">PDF</button>
+      </div>`:''}
       ${progressUI.render(source,projection.progressTracker)}
       ${cashTakeover?'<p>Die Zuordnungen werden geprüft und der gesamte Kassenstand gemeinsam freigegeben. Bis zum erfolgreichen Abschluss bleibt der bisherige Kassenstand aktiv.</p>':takingOver?`<p>${number(applied)} / ${number(totals.eligible)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied'&&t.deferred!=='INCOMPLETE_STOCK_SNAPSHOT').length)} / ${number(tables.filter(t=>t.deferred!=='INCOMPLETE_STOCK_SNAPSHOT').length)} Tabellen abgeschlossen.</p>`:''}
       ${source.currentStep&&!tables.some(t=>t.name===source.currentStep.table)&&source.currentStep.table!=='Artikelkatalog'&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}
@@ -173,7 +181,7 @@
       ${tables.map(t=>`<tr><td>${escape(t.name)}</td><td>${number(t.run?.receivedRows)} / ${number(t.declaredRows)}</td><td>${escape(t.deferred==='INCOMPLETE_STOCK_SNAPSHOT'?'Bestandsaufnahme zurückgestellt':label(t.run?.status||'staging'))}${t.run?.counts?.invalid?` · ${number(t.run.counts.invalid)} ungültig`:''}${t.run?.counts?.conflict?` · ${number(t.run.counts.conflict)} offene Prüffälle`:''}${source.kind==='lieferantenrechnungen'&&t.name==='Rechnungsdetails_A'&&t.run?.status==='needs_review'&&invoiceHeads(source)&&invoiceHeads(source).run?.status!=='applied'?'<small class="data-import-table-hint">Erneute Prüfung nach Übernahme der Rechnungsköpfe aus derselben Datei. Einzelne Gründe: „Zeilenstatus“.</small>':''}${t.run?.gates?.length?` · ${t.run.gates.map(escape).join(', ')}`:''}</td><td>${t.run?`${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-log="${escape(t.run.id)}">Protokoll</button> `}<button type="button" data-i-rows="${escape(t.run.id)}">Zeilenstatus</button>${projection.undo&&['applied','applying','reverting'].includes(t.run.status)?` <button type="button" data-i-undo-preview="${escape(t.run.id)}">Rücknahme prüfen</button>`:''}`:'–'}</td></tr>`).join('')}
       </tbody></table></div><p class="data-import-note">Nicht übernommene technische Tabellen: ${(source.excludedTableNames||[]).map(escape).join(', ')||'Noch nicht ermittelt'}.</p></details>`;
   }
-  function mount(root,{api,confirmAction=message=>globalThis.confirm(message)}) {
+  function mount(root,{api,rawApi,confirmAction=message=>globalThis.confirm(message)}) {
     const body=root.querySelector('[data-import-body]');
     let disposed=false,generation=0,controller=null,timer=null,context=null,selected=null,cursor=null,sourcePage={},working=false,pendingAction=null,unconfirmedCashSource=null,logState=null,publicationView=null,uploadPolicySave=null;
     const progressTracker=progressUI.createTracker();let issueView=null;
@@ -365,9 +373,35 @@
       logState={action,runId,cursor:nextCursor};
       el('log').innerHTML=`<h3>${action==='events'?'Importprotokoll':action==='rows'?'Zeilenstatus':'Rücknahmeprüfung'}</h3><p>Diese Seite zeigt ${rows.length} Einträge.${action==='undo-preview'?' Die Rücknahme prüft jede Änderung erneut.':action==='rows'?' Offene Prüffälle werden hier einzeln erklärt.':''}</p><ul>${rows.map(r=>`<li>${escape(action==='events'?`${r.at} · ${/^import\.source-tolerance\.accepted(?::[a-f0-9]{64})?$/.test(r.action)?'Bestätigte Quellzähler-Abweichung protokolliert':r.action} · Revision ${r.revision}`:action==='rows'?rowStatusText(selected,runId,r):`Zeile ${r.rowNumber} · ${r.canUndo?'rücknehmbar':'nicht rücknehmbar'} ${r.issue||''}`)}</li>`).join('')}</ul>${nextCursor?'<button type="button" data-i-log-next>Weitere Einträge prüfen</button>':''}`;
     }
+    async function downloadReport(button) {
+      if (!selected || !rawApi) return;
+      const { id } = selected, extension = button.dataset.iReport, ticket = generation;
+      button.disabled = true;
+      try {
+        const reply = await rawApi('/api/data-import/sources/' + encodeURIComponent(id) + '/completion-report/' + extension,
+          { signal: controller?.signal });
+        const blob = await reply.blob();
+        if (disposed || ticket !== generation || selected?.id !== id) return;
+        const filename = /filename="(GP-Importabschluss-[a-z0-9.-]+)"/.exec(reply.headers.get('Content-Disposition') || '')?.[1];
+        const url = URL.createObjectURL(blob);
+        const link = root.ownerDocument.createElement('a');
+        try {
+          link.href = url;
+          link.download = filename || 'GP-Importabschluss.' + extension;
+          root.append(link);
+          link.click();
+        } finally {
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+      } catch (error) {
+        if (!disposed && ticket === generation && error.name !== 'AbortError') showError(error);
+      } finally { button.disabled = false; }
+    }
     async function click(event) {
       const target=event.target.closest?.('button');if(!target||working&& !target.hasAttribute('data-i-stop'))return;
       if(target.disabled)return;
+      if(target.dataset.iReport)return downloadReport(target);
       if(!target.hasAttribute('data-i-stop')){cancel();controller=new AbortController();}
       const ticket=generation;
       try {

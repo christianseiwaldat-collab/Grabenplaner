@@ -72,7 +72,7 @@
       ${item.invoice ? `<p>Rechnungsreferenz: ${esc(item.invoice)}</p>` : ""}
       <div class="branch-receipt-lines">${item.lines.map(row => `<article><div><strong>${esc(row.description)}</strong>
         <small>Artikelnr. ${esc(row.article || "–")}${lines?.note(row.status) ? " · " + esc(lines.note(row.status)) : ""}</small></div>
-        ${row.deviceNumber?`<p>Erfasste Gerätenummer: ${esc(row.deviceNumber)}</p>`:''}${Object.hasOwn(item,'personnel')?`<p>Positionsverkäufer: ${esc(row.personnel||'nicht zugeordnet')}</p>`:''}
+        ${lines?.deviceHistory?.(row) || (row.deviceNumber ? '<p>Erfasste Gerätenummer: ' + esc(row.deviceNumber) + '</p>' : '')}${Object.hasOwn(item,'personnel')?`<p>Positionsverkäufer: ${esc(row.personnel||'nicht zugeordnet')}</p>`:''}
         <p>${esc(row.quantity)} × ${esc(money(row.sourcePrice))} = <b>${esc(lines?.money(lines.total(row.sourcePrice, row.quantity)) || "–")}</b></p>${lines?.taxText?.(row)?`<p>${esc(lines.taxText(row))}</p>`:''}</article>`).join("")}</div>
         ${item.gross!=null?`<p>Geprüfter Warenumsatz: ${esc(money(item.gross))} ${esc(item.currency||'')} · Netto ${esc(money(item.net))} · Steuer ${esc(money(item.tax))}</p>`:'<p>Warenumsatz nicht freigegeben · Belegabgleich offen</p>'}
         <p>Originaler Quellbetrag des Belegkopfs: ${esc(money(item.sourceAmount))} ${esc(item.currency||'')}</p>${lines?.reconciliationText?.(item)?`<p>${esc(lines.reconciliationText(item))}</p>`:''}`;
@@ -84,6 +84,7 @@
     const identity = owner(getUser());
     let disposed = false, generation = 0, busy = false, downloading = false, paused = false;
     let initialized = false, loading = null, available = false, offset = 0, total = 0, next = null, detailId = null;
+    let deviceArticle = '';
     let detailGeneration = 0, today = "", context = null, scanner = null, pdfWindow = null, pdfActive = true;
     const pdfAllowed = () => valid(generation) && available && !getUser()?.mustChangePassword;
     const pdfContext = () => JSON.stringify({generation,source:context?.sourceLabel,coverage:context?.coverageLabel,locations:[...selectedLocations].sort()});
@@ -92,6 +93,14 @@
     const articles = new Map(), pendingArticles = new WeakSet();
     const valid = ticket => !disposed && ticket === generation && owner(getUser()) === identity && allowed(tab, getUser());
     const el = name => root.querySelector(`[data-b="${name}"]`);
+    function setDeviceArticle(value) {
+      deviceArticle = value;
+      const note = el('device-match');
+      if (note) {
+        note.hidden = !value;
+        note.textContent = value ? 'Gerätenummer exakt · Artikel ' + value : '';
+      }
+    }
     function message(text, error = false) { el("message").textContent = text; el("message").classList.toggle("error", error); }
     function actions() {
       el("search").disabled = busy || !available;
@@ -113,7 +122,7 @@
           <input type="search" data-b="query" maxlength="160" autocomplete="off" placeholder="${kind === "articles" ? "z. B. Kamera oder 000042" : "z. B. Objektiv"}"></label>${kind==='articles'?'<button type="button" class="text-button branch-scan-button" data-b="scan" aria-label="EAN oder QR-Code mit Kamera scannen"><span aria-hidden="true">📷</span><span>Scannen</span></button>':''}</div>
         ${kind === "articles" ? '<label><span>Status</span><select data-b="status"><option value="active">Aktiv</option><option value="all">Alle</option><option value="inactive">Archiviert</option></select></label>'
           : `<label class="branch-search-receipt"><span>Belegnummer / Rechnungsreferenz</span><input type="search" data-b="receipt" maxlength="80" autocomplete="off"></label>
-            <label><span>Gerätenummer</span><input type="search" data-b="device" maxlength="80" autocomplete="off" placeholder="Erfasste Gerätenummer oder Teil mit *"></label>
+            <label><span>Gerätenummer</span><input type="search" data-b="device" maxlength="80" autocomplete="off" placeholder="Erfasste Gerätenummer oder Teil mit *"><small data-b="device-match" hidden></small></label>
             <label><span>Von</span><input type="date" data-b="from" required min="1900-01-01"></label><label><span>Bis</span><input type="date" data-b="to" required min="1900-01-01"></label>
             <label class="branch-search-wide branch-search-customer"><span>Kunde</span><input type="search" data-b="customer" maxlength="160" autocomplete="off" placeholder="z. B. Müller 6020"><small>Name, Straße, PLZ, Ort, Nummer, Telefon oder E-Mail.</small></label>
             <label class="branch-search-sellers"><span>Belegverkäufer · Personalnummern</span><input type="text" data-b="sellers" maxlength="440" autocomplete="off" placeholder="z. B. 12, 34, 56"><small>Mehrere Nummern durch Beistriche trennen.</small></label>
@@ -134,8 +143,11 @@
         el('scan-close').addEventListener('click',()=>scanner.close());
       }
       el("form").addEventListener("submit", event => { event.preventDefault(); void search(0); });
-      el("form").addEventListener("input", event => { locationInput(event.target); invalidate(); message("Suchangaben geändert. Suche starten."); });
-      el("reset").addEventListener("click", () => { invalidate(); el("form").reset(); dates(); resetLocations(); message("Suchangaben zurückgesetzt."); });
+      el("form").addEventListener("input", event => {
+        if (event.target === el('device')) setDeviceArticle('');
+        locationInput(event.target); invalidate(); message("Suchangaben geändert. Suche starten.");
+      });
+      el("reset").addEventListener("click", () => { invalidate(); el("form").reset(); setDeviceArticle(''); dates(); resetLocations(); message("Suchangaben zurückgesetzt."); });
       el("previous").addEventListener("click", () => void search(Math.max(0, offset - 20)));
       el("next").addEventListener("click", () => void search(kind === "articles" ? offset + 20 : next));
       el("pause").addEventListener("click", () => { paused = true; message("Suche pausiert nach diesem Abschnitt …"); });
@@ -230,6 +242,7 @@
           try { Filters.sellers(el('sellers').value); } catch { throw new Error('Bitte bis zu 20 vollständige Personalnummern durch Beistriche getrennt eingeben.'); }
           const query = { query: el("query").value, receipt: el("receipt").value,deviceNumber:el('device')?.value||'',dateFrom: el("from").value, dateTo: el("to").value,
             customer: el('customer').value, sellers: el('sellers').value, locations: [...selectedLocations].sort() };
+          if (query.deviceNumber && deviceArticle) query.deviceArticle = deviceArticle;
           do {
             const result = await api("/api/portal/v1/branch-receipts/search", { method: "POST", body: JSON.stringify({ ...query, cursor }) });
             if (!valid(ticket)) return;
@@ -302,6 +315,14 @@
     }
     function click(event) {
       const button = event.target.closest("button"); if (!button || !root.contains(button)) return;
+      if (button.dataset.deviceHistory === 'cash' && detailId && el('dialog')?.open && valid(generation)) {
+        for (const filter of ['query','receipt','customer','sellers']) el(filter).value = '';
+        el('device').value = button.dataset.deviceSerial;
+        setDeviceArticle(button.dataset.deviceArticle);
+        invalidate();
+        void search('');
+        return;
+      }
       if (button.hasAttribute?.('data-location-own')) { resetLocations(); invalidate(); message('Suche auf die eigene Filiale zurückgesetzt.'); }
       if (button.hasAttribute?.('data-stock')) {
         const stock = button.closest('.branch-article-stock'), open = stock.dataset.open !== 'true';

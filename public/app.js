@@ -36455,14 +36455,20 @@ function syncSalesHistoryAccess() {
   document.getElementById("receiptSearchDashboardCard")?.classList.toggle("hidden", !user?.salesHistory?.read);
   if (user?.salesHistory?.read) receiptSearchWorkspace = window.GrabenplanerReceiptSearch?.mount(document.getElementById("receiptSearchWorkspace"), { api, rawApi,
     accessKey: startDashboardWorkspaceActorKey, canUse: () => state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword && state.portalSession?.user?.salesHistory?.read === true,
-    active: () => state.currentView === "receiptSearch", windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale });
+    active: () => state.currentView === "receiptSearch", windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale,
+    openTradeDeviceHistory: user.salesHistory.customerPurchases && tradeInsightsAccess ? criteria => {
+      if (!canAccessTradeInsights() || !state.portalSession?.user?.salesHistory?.customerPurchases) return;
+      tradeInsightsTab = "device-history";
+      setView("tradeInsights");
+      void tradeInsightsWorkspace?.openDeviceHistory(criteria);
+    } : undefined });
   if (state.currentView === "receiptSearch") { if (user?.salesHistory?.read) void receiptSearchWorkspace?.load(); else setView("startDashboard"); }
   salesHistoryWorkspace?.destroy(); salesHistoryWorkspace = null;
   dataImportWorkspace?.destroy(); dataImportWorkspace = null;
   importMappingWorkspace?.destroy(); importMappingWorkspace = null;
   const importPanel = document.getElementById("dataImportPanel");
   importPanel?.classList.toggle("hidden", !user?.dataImport?.read);
-  if (importPanel && user?.dataImport?.read) dataImportWorkspace = window.GrabenplanerDataImport?.mount(importPanel, { api });
+  if (importPanel && user?.dataImport?.read) dataImportWorkspace = window.GrabenplanerDataImport?.mount(importPanel, { api, rawApi });
   const mappingPanel = document.getElementById("importMappingPanel");
   mappingPanel?.classList.toggle("hidden", !user?.dataImport?.read);
   if (mappingPanel && user?.dataImport?.read) importMappingWorkspace = window.GrabenplanerImportMappings?.mount(mappingPanel, { api });

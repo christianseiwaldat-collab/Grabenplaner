@@ -9,6 +9,9 @@
 .receipt-workspace input[type="checkbox"] { flex:0 0 16px; width:16px; height:16px; min-width:16px; min-height:16px; padding:0; margin:0; accent-color:var(--green); }
 .receipt-workspace [hidden] { display: none !important; }
 .receipt-workspace .settings-note { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.receipt-device-history { margin: 5px 0; }
+.receipt-device-history summary { color: var(--green, #205746); cursor: pointer; overflow-wrap: anywhere; }
+.receipt-device-history button { margin: 5px 6px 2px 0; white-space: normal; }
 .receipt-filters { max-width: 1200px; }
 .receipt-filters input, .receipt-filters select, .receipt-filters button { font: inherit; }
 .receipt-filters { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 11px 14px; align-items: end; }

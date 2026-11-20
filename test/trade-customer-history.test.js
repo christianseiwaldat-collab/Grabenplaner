@@ -33,3 +33,18 @@ test('Customer history includes Kassenbelege without turning source invoices int
  let page=await f.run('customer-history',{customer:'42'});assert.equal(page.rows.length,4);assert.ok(page.rows.every(r=>r.kind==='cash'&&r.revenueContribution===null));assert.ok(page.rows.some(r=>r.amount==='240.00'));assert.ok(page.rows.some(r=>r.amount==='-120.00'));
  const another=await f.run('customer-history',{customer:'142'});assert.equal(another.rows.length,0);
 });
+
+test('device history launched by a receipt distinguishes a credit note and filters its article', async t => {
+ const f=await fixture(t);
+ await f.ingest('Rechnung_Z',[
+  {Rechnungsnr:11,KUND_NR:42,Filialid:18,Anlegedatum:'2026-07-01T10:00:00.000',Gutschrift:true},
+  {Rechnungsnr:12,KUND_NR:42,Filialid:18,Anlegedatum:'2026-07-01T10:00:00.000',Gutschrift:false},
+ ]);
+ await f.ingest('Rechnungsdetails_Z',[
+  {aid:1,Rechnungsnr:11,Filialid:18,Ean:'00042',KameraNr:'DEVICE42',menge:-1},
+  {aid:2,Rechnungsnr:12,Filialid:18,Ean:'00424',KameraNr:'DEVICE42',menge:1},
+ ]);
+ const report=await f.run('device-history',{serial:'DEVICE42',articleNumber:'00042'});
+ assert.deepEqual(report.rows.map(row=>[row.documentNumber,row.kind,row.articleNumber]),[['11','credit','00042']]);
+ assert.equal(report.rows[0].identityConfirmed,false);
+});

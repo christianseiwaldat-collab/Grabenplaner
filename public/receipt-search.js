@@ -41,7 +41,7 @@
       ${columns.map(k => `<td class="${['gross', 'inflow', 'outflow', 'positions'].includes(k) ? 'receipt-number' : ''}" title="${escape(cell(row, k))}">${escape(cell(row, k))}</td>`).join('')}
       <td><button type="button" data-r-detail="${escape(row.id)}">Öffnen</button> <button type="button" data-r-pdf="${escape(row.id)}">PDF</button></td></tr>`).join('')}</tbody></table></div>`;
   }
-  function renderDetail(row) {
+  function renderDetail(row, tradeHistory = false) {
     return `<p class="receipt-info-note"><strong>Beleginformation – keine Rechnung</strong><br>Informationsauszug aus dem importierten Kassenstand. Kein Ersatz für den Originalbeleg.</p>
       <dl class="receipt-meta"><dt>Beleg / Zeitpunkt</dt><dd>${escape(row.receipt)} · ${escape(SourceTime.rowLabel(row))}</dd><dt>Filiale / Kasse</dt><dd>${escape(row.location)} · ${escape(row.register || '–')}</dd>
       ${Object.hasOwn(row, 'personnel') ? `<dt>Personalnummer (Beleg)</dt><dd><strong>${escape(row.personnel || 'Zuordnung offen')}</strong></dd>` : ''}
@@ -53,11 +53,12 @@
       ${row.invoice ? `<dt>Rechnungsreferenz</dt><dd>${escape(row.invoice)}</dd>` : ''}<dt>Datenstand</dt><dd>${escape(row.provenance.sourceLabel)}</dd><dt>Importiert</dt><dd>${escape(date(row.provenance.importedAt?.slice(0, 10)))}</dd></dl>
       ${row.kind === 'receipts' ? `<p>${row.positions} vollständige Belegpositionen · ${escape(row.state)}</p><div class="receipt-table-scroll receipt-lines" role="region" tabindex="0" aria-label="Belegpositionen"><table><thead><tr><th scope="col">Menge</th><th scope="col">Artikelnr.</th><th scope="col">Bezeichnung</th><th scope="col" class="receipt-number">Einzelpreis</th><th scope="col" class="receipt-number">Gesamtpreis</th></tr></thead>
       ${Lines.groups(row).map(group => `<tbody>${group.personnel !== null ? `<tr class="receipt-personnel-group"><th colspan="5" scope="rowgroup"><strong>Personalnr.: ${escape(group.personnel || 'nicht zugeordnet')}</strong></th></tr>` : ''}
-      ${group.lines.map(l => `<tr><td class="receipt-number">${escape(number(l.quantity))}</td><td>${escape(l.article)}</td><td>${escape(l.displayDescription || l.description)}${l.deviceNumber?`<small>Erfasste Gerätenummer: ${escape(l.deviceNumber)}</small>`:''}${Lines.taxText(l)?`<small>${escape(Lines.taxText(l))}</small>`:''}${ArticleHistory.referenceMarkup(l.articleDisplay,l.description)}${Lines.note(l.status) ? `<small class="receipt-line-note">${escape(Lines.note(l.status))}</small>` : ''}</td><td class="receipt-number">${escape(Lines.money(l.sourcePrice))}</td><td class="receipt-number">${escape(Lines.money(Lines.total(l.sourcePrice, l.quantity)))}</td></tr>`).join('')}</tbody>`).join('')}</table></div><p class="settings-note">Gesamtpreis = Menge × Einzelpreis, je Position auf Cent gerundet. Gutscheinausgaben, Zahlungsmittel und UID-Zwischenbuchungen sind kein Warenumsatz.</p><p><strong>${row.gross == null ? 'Geprüfter Warenumsatz nicht freigegeben' : 'Geprüfter Warenumsatz: '+escape(Lines.money(row.gross))+' '+escape(row.currency || '')}</strong></p>
+      ${group.lines.map(l => `<tr><td class="receipt-number">${escape(number(l.quantity))}</td><td>${escape(l.article)}</td><td>${escape(l.displayDescription || l.description)}${Lines.deviceHistory(l, tradeHistory)}${Lines.taxText(l)?`<small>${escape(Lines.taxText(l))}</small>`:''}${ArticleHistory.referenceMarkup(l.articleDisplay,l.description)}${Lines.note(l.status) ? `<small class="receipt-line-note">${escape(Lines.note(l.status))}</small>` : ''}</td><td class="receipt-number">${escape(Lines.money(l.sourcePrice))}</td><td class="receipt-number">${escape(Lines.money(Lines.total(l.sourcePrice, l.quantity)))}</td></tr>`).join('')}</tbody>`).join('')}</table></div><p class="settings-note">Gesamtpreis = Menge × Einzelpreis, je Position auf Cent gerundet. Gutscheinausgaben, Zahlungsmittel und UID-Zwischenbuchungen sind kein Warenumsatz.</p><p><strong>${row.gross == null ? 'Geprüfter Warenumsatz nicht freigegeben' : 'Geprüfter Warenumsatz: '+escape(Lines.money(row.gross))+' '+escape(row.currency || '')}</strong></p>
       ${row.net!=null?`<p>Netto: ${escape(Lines.money(row.net))} · Steuer: ${escape(Lines.money(row.tax))} ${escape(row.currency||'')}</p>`:''}<p>Originaler Quellbetrag des Belegkopfs: ${escape(Lines.money(row.sourceAmount))} ${escape(row.currency||'')}</p>${Lines.reconciliationText(row)?`<p>${escape(Lines.reconciliationText(row))}</p>`:''}${row.gross == null ? '<p class="settings-note">Belegabgleich offen. Die angezeigten Positionsbeträge sind noch keine freigegebene Umsatzsumme.</p>' : ''}`
         : `<p>${escape(row.description)} · Konto ${escape(row.account)}</p>${row.descriptionSupplement?`<p>Zusätzlicher Journaltext: ${escape(row.descriptionSupplement)}</p>`:''}<p>Einzahlung ${escape(number(row.inflow))} · Auszahlung ${escape(number(row.outflow))}</p><p>Separate Kassenbuchung; kein zusätzlicher Verkauf.</p>`}`;
   }
-  function mount(root, { api, rawApi, accessKey = () => '', canUse = () => true, active, windowPreferences, scale, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar } = {}) {
+  function mount(root, { api, rawApi, accessKey = () => '', canUse = () => true, active, windowPreferences, scale,
+    openTradeDeviceHistory, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar } = {}) {
     let detailRequest = null;
     let disposed = false, generation = 0, controller = null, context = null, loading = null, calendar = null;
     let from, to, query = null, next = null, resultSet = null, total = null, scanned = 0, items = [], selected = new Set(), columns = [], allColumns = [], sort = { key: 'date', direction: -1 };
@@ -66,9 +67,18 @@
     const printContext = () => JSON.stringify({ generation, query, resultSet, sources: context?.sources, selection: [...selected].sort() });
     function syncPrint() { if (!pdfWindow) return; if (pdfActive && (active?.() ?? true)) pdfWindow.activate(); else pdfWindow.deactivate(); pdfWindow.sync(); }
     let running = false, paused = false, exporting = false, detailId = null, displayKind = null;
+    let deviceArticle = '';
     let columnWidths = {}, tableResize = null, preferenceRevision = 0, preferenceSaves = Promise.resolve();
     const el = key => root.querySelector(`[data-r="${key}"]`);
     const message = text => { if (!disposed && el('message')) el('message').textContent = text; };
+    function setDeviceArticle(value) {
+      deviceArticle = value;
+      const note = el('device-match');
+      if (note) {
+        note.hidden = !value;
+        note.textContent = value ? 'Gerätenummer exakt · Artikel ' + value : '';
+      }
+    }
     function cancel() { generation++; controller?.abort(); controller = null; running = false; }
     function clear() {
       cancel(); pdfWindow?.reset(); items = []; selected.clear(); query = next = resultSet = total = null; scanned = 0; detailId = null;
@@ -146,6 +156,7 @@
         query = { sourceId: el('source').value, kind: el('kind').value, dateFrom: from, dateTo: to, locationId: el('location').value,
           query: el('query').value, receipt: el('receipt').value,deviceNumber:el('kind').value==='receipts'?el('device')?.value||'':'',seller: el('kind').value === 'receipts' && context.projection.sellers ? el('seller').value : '', sellerRole: el('seller-role').value,
           customer: el('kind').value === 'receipts' && context.projection.customerPurchases ? el('customer').value : '', sort: sort.key, direction: sort.direction === 1 ? 'asc' : 'desc', limit: 50 };
+        if (query.deviceNumber && deviceArticle) query.deviceArticle = deviceArticle;
       } else cancel();
       const ticket = generation, target = items.length + 50;
       controller = new AbortController(); running = true; paused = false; actions();
@@ -181,7 +192,7 @@
       try {
         const result = await api('/api/receipt-search/documents', { method: 'POST', body: JSON.stringify({ ids: [id] }) });
         if (disposed || ticket !== generation || detailRequest !== detailTicket || detailId !== id) return;
-        el('detail-body').innerHTML = renderDetail(result.items[0]); el('detail-pdf').disabled = false;
+        el('detail-body').innerHTML = renderDetail(result.items[0], !!openTradeDeviceHistory); el('detail-pdf').disabled = false;
       } catch (error) { if (!disposed && ticket === generation && detailRequest === detailTicket && detailId === id) el('detail-body').textContent = error.message; }
     }
     async function load() {
@@ -198,7 +209,7 @@
           columns = context.preferences.columns.filter(k => allColumns.includes(k)); if (!columns.length) columns = ['date', 'receipt'];
           root.innerHTML = `<section class="receipt-search-card" aria-label="Belege finden"><header><span class="eyebrow">Belegsuche</span><h2>Belege finden</h2></header><form data-r="form" class="receipt-filters"><label class="receipt-query">Suchbegriff<input data-r="query" type="search" maxlength="160" placeholder="z. B. Sony A7* 24-105mm" aria-describedby="receiptSearchHelp"></label>
             <label>Beleg-/Rechnungsnummer<input data-r="receipt" type="search" maxlength="80" placeholder="Nummer oder Teil mit *"></label>
-            <label data-r="device-fields">Gerätenummer<input data-r="device" type="search" maxlength="80" placeholder="Erfasste Gerätenummer oder Teil mit *" autocomplete="off"></label>
+            <label data-r="device-fields">Gerätenummer<input data-r="device" type="search" maxlength="80" placeholder="Erfasste Gerätenummer oder Teil mit *" autocomplete="off"><small data-r="device-match" hidden></small></label>
             <label data-r="customer-fields" class="receipt-query">Kunde<input data-r="customer" type="search" maxlength="160" placeholder="Kundennummer, Name, Adresse, Telefon oder E-Mail" autocomplete="off"></label>
             <label>Datenart<select data-r="kind">${option('receipts', 'Belege')}${context.projection.finance ? option('daily', 'Tagesberichte · Buchungen') + option('journal', 'Kassenjournal · Buchungen') : ''}</select></label>
             <label>Zeitraum<button type="button" data-r="range" class="date-range-trigger" aria-haspopup="dialog">${date(from)} – ${date(to)}</button></label>
@@ -224,10 +235,13 @@
           el('range').addEventListener('click', () => calendar.open({ start: from, end: to, min: '1900-01-01', max: context.today, allowOpenEnd: false,
             onCommit: (start, end) => { from = start; to = end; el('range').textContent = `${date(from)} – ${date(to)}`; clear(); } }));
           el('form').addEventListener('submit', e => { e.preventDefault(); void search(); });
-          el('form').addEventListener('input', () => { clear(); filters(); message('Suchfilter geändert. Suche erneut starten.'); });
+          el('form').addEventListener('input', event => {
+            if (event.target === el('device')) setDeviceArticle('');
+            clear(); filters(); message('Suchfilter geändert. Suche erneut starten.');
+          });
           el('source').addEventListener('change', source); el('kind').addEventListener('change', filters);
           el('more').addEventListener('click', () => void search(true)); el('pause').addEventListener('click', () => { paused = true; message('Suche pausiert nach diesem Schritt …'); });
-          el('reset').addEventListener('click', () => { el('form').reset(); to = context.today; const d = new Date(to); d.setUTCDate(d.getUTCDate() - 30); from = d.toISOString().slice(0, 10); el('range').textContent = `${date(from)} – ${date(to)}`; source(); filters(); message('Suchfilter zurückgesetzt.'); });
+          el('reset').addEventListener('click', () => { el('form').reset(); setDeviceArticle(''); to = context.today; const d = new Date(to); d.setUTCDate(d.getUTCDate() - 30); from = d.toISOString().slice(0, 10); el('range').textContent = `${date(from)} – ${date(to)}`; source(); filters(); message('Suchfilter zurückgesetzt.'); });
           el('export').addEventListener('click', () => void exportPdf([...selected], el('export'))); el('unselect').addEventListener('click', () => { selected.clear(); render(); });
           el('detail-close').addEventListener('click', () => { detailId = null; el('detail-dialog').close(); });
           el('detail-dialog').addEventListener('close', () => { if (el('detail-dialog').open) return; detailRequest = null; detailId = null; el('detail-body').replaceChildren(); });
@@ -240,6 +254,23 @@
     }
     function click(event) {
       const button = event.target.closest('button'); if (!button || !root.contains(button)) return;
+      const { deviceHistory, deviceSerial, deviceArticle: article } = button.dataset;
+      if (deviceHistory && authorized() && detailId && el('detail-dialog')?.open) {
+        if (deviceHistory === 'trade') {
+          el('detail-dialog').close();
+          openTradeDeviceHistory?.({ serial: deviceSerial, articleNumber: article });
+        } else {
+          el('kind').value = 'receipts';
+          filters();
+          for (const filter of ['query','receipt','seller','customer']) el(filter).value = '';
+          el('device').value = deviceSerial;
+          setDeviceArticle(article);
+          sort = { key: 'date', direction: -1 };
+          cancel();
+          void search();
+        }
+        return;
+      }
       if (button.dataset.rSort) { if (running) return; const key = button.dataset.rSort; sort = { key, direction: sort.key === key ? -sort.direction : 1 }; void search(false, true); }
       if (button.dataset.rDetail) void detail(button.dataset.rDetail);
       if (button.dataset.rPdf) void exportPdf([button.dataset.rPdf], button);
