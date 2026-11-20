@@ -10,7 +10,10 @@ test('Caddy checks can repeat in the preserved assurance runtime directory', { s
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gp-caddy-repeat-'));
   try {
     const source = fs.readFileSync(path.join(__dirname, '../server-tools/linux/test-grabenplaner-server.sh'), 'utf8');
-    const section = source.slice(source.indexOf('caddy_validation_ok=0'), source.indexOf('\nif [[ "${GRABENPLANER_OFFSITE_CONFIGURED', source.indexOf('caddy_validation_ok=0')));
+    const start = source.indexOf('caddy_validation_ok=0');
+    const end = source.indexOf('\ncore_deploy_qualified=0', start);
+    assert.ok(start >= 0 && end > start, 'The isolated Caddy check precedes Core Plus qualification');
+    const section = source.slice(start, end);
     fs.writeFileSync(path.join(directory, 'caddy-validation.json'), '{"retained":true}');
     const script = `set -Eeuo pipefail
 node="$GP_TEST_NODE"
