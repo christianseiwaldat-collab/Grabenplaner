@@ -2,11 +2,12 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const S=require('../lib/sales-article-report-statements');
 const H=require('../lib/tradefoto-history-profiles');
+const connectionString=process.env.GP_REPORT_SQL_READER_URL||process.env.GP_SALES_READER_URL||process.env.TEST_POSTGRESQL_URL;
 // SELECT-only CTE fixtures exercise the real PostgreSQL engine without creating
 // schemas, changing business rows or requiring a migrator account.
 test('native report stock selection matches the portable snapshot rule for revisions, scope, legacy and empty publications',
- {skip:!process.env.GP_REPORT_SQL_READER_URL},async()=>{
- const {Client}=require('pg'),client=new Client({connectionString:process.env.GP_REPORT_SQL_READER_URL});
+ {skip:!connectionString},async()=>{
+ const {Client}=require('pg'),client=new Client({connectionString});
  await client.connect();try{
  await client.query('BEGIN READ ONLY');await client.query("SET LOCAL statement_timeout='8000ms'");
  const native=S.postgresql().find(e=>e.statement===S.stockCandidates);
