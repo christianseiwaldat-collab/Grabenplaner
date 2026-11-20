@@ -5,13 +5,35 @@ from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 
+from build_semgrep_source import Commands, replace_venv_core
 from gates import check_sast_result, source_files, stage_sources
+from semgrep_core_tool import fetch, unique_json, validate_pin
+from source_core_acquisition import reuse_approval
+from source_core_identity import canonical, inputs
 from sast_dispositions import canonical_rule_id, finding_identity, scanner_position
 from sast_profile import PROFILE_TIMEOUTS, build_rule_profiles, source_partition
 
 root = Path.cwd().resolve()
 tools, output = (Path(value).resolve() for value in sys.argv[1:])
 output.mkdir(parents=True, exist_ok=False)
+receipt = output / 'gate-result.json'
+receipt.write_text(json.dumps({
+    'gate': 'sast-diagnostic', 'diagnosticOnly': True, 'passed': False,
+    'complete': False, 'diagnosticExecutionComplete': False
+}), encoding='utf-8')
+pin_bytes = (root / '.github/security-semgrep-core-pin.json').read_bytes()
+pin = validate_pin(unique_json(pin_bytes))
+expected_repo = {'fullName': os.environ['GITHUB_REPOSITORY'], 'id': int(os.environ['GITHUB_REPOSITORY_ID'])}
+if canonical(pin) != pin_bytes or pin['repository'] != expected_repo:
+    raise ValueError('Invalid reviewed compiler pin or repository')
+identity = inputs(root)
+if pin['buildInputs'] != identity and reuse_approval(root, pin, pin_bytes, identity) is None:
+    raise ValueError('The pinned compiler is not approved for this diagnostic input')
+core, _, _ = fetch(pin, os.environ['GITHUB_TOKEN'], with_contents=True)
+binary = output.parent / 'release-diagnostic-native'
+binary.write_bytes(core)
+binary.chmod(0o700)
+scanner = replace_venv_core(binary, output, Commands(output))
 base = '837cd78f64669b55bf524d82dbea493ede6a62de'
 changed = set(subprocess.check_output(
     ['git', 'diff', '--name-only', '-z', base, 'HEAD']
@@ -36,7 +58,7 @@ for name, candidates in partitions.items():
     rules = output.parent / 'release-rule-profiles' / name / 'rules'
     with (output / (name + '.log')).open('wb') as log:
         run = subprocess.run([
-            'semgrep', 'scan', '--config', str(rules), '--json', '--output', str(result_path),
+            str(scanner), 'scan', '--config', str(rules), '--json', '--output', str(result_path),
             '--metrics', 'off', '--disable-version-check', '--disable-nosem', '--no-git-ignore',
             '--time', '--max-target-bytes', '0', '--timeout', str(PROFILE_TIMEOUTS[name]),
             '--timeout-threshold', '0', '--max-memory', '4096', '--jobs', '1', '--strict',
@@ -64,3 +86,7 @@ if not scanned or len({item['fingerprint'] for item in findings}) != len(finding
     'targets': {entry['path']: entry['sha256'] for entry in entries if entry['path'] in scanned},
     'findings': findings
 }, indent=2), encoding='utf-8')
+receipt.write_text(json.dumps({
+    'gate': 'sast-diagnostic', 'diagnosticOnly': True, 'passed': False,
+    'complete': False, 'diagnosticExecutionComplete': True
+}), encoding='utf-8')
