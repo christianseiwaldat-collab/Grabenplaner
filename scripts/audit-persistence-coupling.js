@@ -399,6 +399,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
   "server-tools/linux/postgresql/preflight-install.js",
+  // The article report regression compares SELECT-only queries on synthetic rows.
+  'test/postgresql-article-report-selection.test.js',
   // Native-only synthetic selective dump/restore; never consumes GP endpoints.
   'test/postgresql-deploy-owned-native.test.js',
   'test/postgresql-cash-rehydration-native.test.js',
@@ -3179,6 +3181,7 @@ function architectureBoundaryViolationsForText(file, text) {
     "lib/persistence/postgresql/boundary/catalog.js",
     "lib/persistence/postgresql/boundary/transaction-activity.js",
     "lib/persistence/postgresql/reporting/catalog.js",
+    "lib/persistence/postgresql/reporting/article-stock-selection.js",
     "lib/persistence/postgresql/boundary/personal-actions.js",
   ]);
   // Installed operations select the provider but never consume web-supplied
