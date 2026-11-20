@@ -1,6 +1,12 @@
 # Versionsstatus
 
-## v0.92.104 Beta · Quellstand
+## v0.92.105 Beta · Quellstand
+
+Kassenbelege verlinken die Gerätehistorie. Abgeschlossene Datenbankimporte bieten Berichte als HTML, Markdown und PDF.
+Der filialbezogene Artikelbericht prüft die Artikelzuordnung zum Berichtszeitraum.
+Core Plus kann seinen Wiederherstellungsnachweis eigenständig aus Google Drive führen.
+
+Enthält den bisherigen Quellstand v0.92.104 Beta:
 
 Die Filiale Grabenweg lässt sich mit Filialplan, Ich-Perspektive und zwei Canon PRO-2000 in WebGL erkunden.
 
