@@ -171,16 +171,16 @@ test("changed Linux scripts remain valid Bash and short/nightly probes use separ
 test("deploy accepts a pending first full proof only with fresh successful external backup checks", t => {
   const directory = temporary(t);
   const source = fs.readFileSync(path.join(root, "server-tools/linux/test-grabenplaner-server.sh"), "utf8").replace(/\r\n/g, "\n");
-  const begin = source.indexOf("const [readerPath, statusPath, deployChecks]");
+  const begin = source.indexOf("const [readerPath, statusPath, deployChecks, qualifiedCore]");
   assert.ok(begin > 0);
   const code = source.slice(begin, source.indexOf("\nNODE", begin));
   const reader = path.join(directory, "reader.cjs"), status = path.join(directory, "status.json");
   fs.writeFileSync(reader, 'exports.readOffsiteBackupStatus=({statusPath})=>JSON.parse(require("node:fs").readFileSync(statusPath));');
   const pending = { statusAvailable: true, blocksMainReadiness: false, state: "warning",
     agesHours: { backup: 0.5, repositoryCheck: 0.5 }, unresolvedFailures: { backup: false, fullCheck: false, restoreTest: false } };
-  function probe(value, mode = "1") {
+  function probe(value, mode = "1", qualifiedCore = "0") {
     fs.writeFileSync(status, JSON.stringify(value));
-    return spawnSync(process.execPath, ["-", reader, status, mode], { input: code, encoding: "utf8", timeout: 10000 });
+    return spawnSync(process.execPath, ["-", reader, status, mode, qualifiedCore], { input: code, encoding: "utf8", timeout: 10000 });
   }
   const initial = probe(pending);
   assert.equal(initial.status, 0, initial.stderr);
@@ -196,6 +196,10 @@ test("deploy accepts a pending first full proof only with fresh successful exter
   for (const delta of [{ statusAvailable: false }, { blocksMainReadiness: true }, { state: "error" }]) {
     assert.notEqual(probe({ ...pending, ...delta }).status, 0);
   }
+  const priorRestoreFailure = { ...pending, state: "error", unresolvedFailures: { ...pending.unresolvedFailures, restoreTest: true } };
+  assert.equal(probe(priorRestoreFailure, "1", "1").stdout, "qualified-core-plus");
+  assert.notEqual(probe(priorRestoreFailure, "0", "1").status, 0, "Core deployment proof does not waive the regular check");
+  assert.notEqual(probe({ ...priorRestoreFailure, blocksMainReadiness: true }, "1", "1").status, 0);
 });
 
 test("only an isolated current restore failure selects a real pre-commit recovery recheck", t => {
@@ -211,7 +215,7 @@ test("only an isolated current restore failure selects a real pre-commit recover
   for(const delta of [{statusAvailable:false},{blocksMainReadiness:true},{state:'ok'},{state:'warning'},{unresolvedFailures:{backup:true,fullCheck:false,restoreTest:true}},{unresolvedFailures:{backup:false,fullCheck:true,restoreTest:true}},{unresolvedFailures:{backup:false,fullCheck:false,restoreTest:false}}])assert.equal(probe({...failure,...delta}),'none');
   for(const field of ['backup','repositoryCheck'])for(const age of [null,-1,36.01])assert.equal(probe({...failure,agesHours:{...failure.agesHours,[field]:age}}),'none');
   const shell=source.slice(source.indexOf('# A recovery fix'),source.indexOf('  offsite_status_current=0'));
-  assert.match(shell,/deploy_checks == 1 && failures == 0 && offsite_timer_ok == 1/);
+  assert.match(shell,/deploy_checks == 1 && core_deploy_qualified == 0 && failures == 0 && offsite_timer_ok == 1/);
   assert.match(shell,/maintenance\.lock/);assert.match(shell,/flock --nonblock 9/);
   assert.match(shell,/if systemctl start "\$offsite_restore_unit"/);
   assert.match(shell,/offsite_restore_unit="grabenplaner-offsite-restore-test.service"/);
