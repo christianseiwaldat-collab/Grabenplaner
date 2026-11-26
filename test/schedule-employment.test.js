@@ -3,6 +3,7 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const express = require('express');
 const employment = require('../lib/schedule-employment');
+const planningShiftPrecondition = require('../lib/planning-shift-precondition');
 const { createPersistenceProviderFacade } = require('../lib/persistence/contract');
 const { POSTGRESQL_CAPABILITIES: capabilities } = require('../lib/persistence/postgresql/provider');
 const { createWorkRuleStoreRepository } = require('../lib/persistence/repositories/work-rule-store');
@@ -237,10 +238,12 @@ test('clearing the visible week preserves pre-entry history and binds its evalua
 });
 
 test('actual schedule read model excludes pre-entry work, credits and actual-day totals while retaining only planning dates', async t => {
-  const f = await fixture(t), before = { id: 1, employee_number: '434', shift_date: '2026-10-12', start_time: '09:00', end_time: '10:00', location_id: '18' },
+  const f = await fixture(t), before = { id: 1, employee_number: '434', shift_date: '2026-10-12', start_time: '09:00', end_time: '10:00', location_id: '18',
+    department_id: null, duty_code: null, area: null, note: null },
     after = { ...before, id: 2, shift_date: '2026-10-14' };
   const snapshot = structuredClone([before, after]);
   Object.assign(f.context, {
+    planningShiftPrecondition,
     normalizeTargetWorkdays: () => 5, preferredDaysOff: () => [],
     applyScopedPdfSettings: value => value, pastWeekEditingAllowedForActor: async () => true,
     getLocationsForSession: async () => [], getScheduleNote: async () => null,
@@ -270,6 +273,7 @@ test('actual schedule read model excludes pre-entry work, credits and actual-day
   vm.runInContext(['serializeEmployee', 'finiteScheduleMinutes', 'scheduleShiftMinuteBasis', 'addScheduleMinutes', 'getSchedule'].map(fn).join('\n'), f.context);
   const result = plain(await f.context.getSchedule('2026-10-12', { locationId: '18' }, null, { fast: true }));
   assert.deepEqual(result.shifts.map(row => row.id), [2]);
+  assert.equal(result.shifts[0].revision, planningShiftPrecondition.planningShiftRevision(after));
   assert.deepEqual(result.employees[0].planningDates, ['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']);
   assert.equal(result.weekOptions[0].date_from, '2026-10-14');
   assert.equal(result.sicknessCredits.length, 1); assert.equal(result.totals['434'], 150);
