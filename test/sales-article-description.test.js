@@ -48,20 +48,3 @@ test('Each mounted description switch changes only its own DOM visibility and re
   assert.deepEqual(a.buttons.map(button=>button.attributes['aria-pressed']),['false','true']);
   a.click('html');assert.deepEqual(a.views.map(view=>view.hidden),[false,true]);
 });
-test('Imported descriptions are projected without source mutation, extra rights or changes to neighboring master fields',async t=>{
-  const f=await require('../test-support/trade-insights-sqlite').fixture(t);
-  const {article,master}=await require('../test-support/sales-article-workspace-fixture').seedWorkspace({access:f.app.provider,source:f});
-  const input={...master,AKurzbeschreibung:'<h3>Gerät</h3><p onclick="bad()">Sicher <b>formatiert</b></p>',
-    ALieferumfang:'Gerät\nHandbuch',ShopText:'<svg><script>bad()</script></svg>',Meldungstext:'<p>Hinweis &amp; Zubehör</p>',LBemerkung:'<p>Unveränderte Lieferantenbemerkung</p>'};
-  await f.ingest('ARTIKEL_STAMM',[input],{master:true,snapshotAt:'2026-10-05T09:00:00.000Z'});
-  const load=projection=>loadSalesArticleDetailData({access:f.app.provider,vault:f.vault,article,projection});
-  const result=await load({read:true}),description=result.sourceSections.find(section=>section.id==='description');
-  assert.deepEqual(description.fields.map(value=>value.id),keys);
-  for(const value of description.fields)assert.equal(value.value,input[value.id]);
-  assert.equal(description.fields[0].richText.html,'<h3>Gerät</h3><p>Sicher <b>formatiert</b></p>');
-  assert.equal(description.fields[1].richText.text,'Gerät\nHandbuch');assert.equal(description.fields[2].richText.html,'');
-  assert.equal(result.sourceSections.find(section=>section.id==='supplier').fields.find(value=>value.id==='LBemerkung').richText,undefined);
-  assert.equal(result.priceMatrix.purchase,null);assert.equal(result.priceMatrix.sales,null);
-  assert.deepEqual((await load({read:false})).sourceSections,[]);
-  assert.deepEqual((await load({read:true})).sourceSections,result.sourceSections);
-});

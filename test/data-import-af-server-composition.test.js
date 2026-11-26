@@ -2,9 +2,9 @@
 // Evaluate only the actual server Runtime factory statement, never server.js itself.
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const P=require('../lib/data-import-known-af-proof'),V=require('../lib/data-import-af-verifier'),F=require('../test-support/data-import-known-af-fixture');
-test('actual server Runtime options retain the same nonempty default verifier policy as the Node asset factory',async t=>{
+test('actual server Runtime options retain the same nonempty default verifier policy as the Node asset factory',F.nativeImport,async t=>{
  const H=require('../lib/tradefoto-history-profiles'),raw={...Object.fromEntries(H.tableFor('trade',P.KNOWN.sourceTable).columns.map(column=>[column.name,null])),EAN:'0000000000701',FilialID:7,FBestand:8};
- const f=await F.fixture(t,{values:{[P.KNOWN.sourceTable]:[raw,{...raw,EAN:'0000000000702'},{...raw,EAN:'0000000000703'}]},counts:{[P.KNOWN.sourceTable]:2}});
+ await F.withFixture({values:{[P.KNOWN.sourceTable]:[raw,{...raw,EAN:'0000000000702'},{...raw,EAN:'0000000000703'}]},counts:{[P.KNOWN.sourceTable]:2}},async f=>{
  const policy=require('../lib/data-import-af-verifier-policy');assert.equal(policy.acceptedVerifierAssets.length,1);assert(policy.runtime);
  assert.equal(policy.runtime.descriptorSha256,policy.acceptedVerifierAssets[0].descriptorSha256);
  assert.equal(policy.runtime.descriptorSha256,'5730aa3a7269b2283cbe879cb52123d42a238606cd5840ec3f8108e4ba523d93');
@@ -33,4 +33,5 @@ test('actual server Runtime options retain the same nonempty default verifier po
  assert.equal(source.tables.find(table=>table.name===P.KNOWN.sourceTable).run.sourceToleranceReceipts.length,0);
  assert(source.tables.find(table=>table.name===P.KNOWN.sourceTable).run.gates.includes('SOURCE_ROW_COUNT_MISMATCH'));
  buffer.fill(0);
+ });
 });

@@ -143,6 +143,17 @@ function install() {
     if (filename && path.resolve(filename) !== fixturePath) throw new Error("PG_API_FIXTURE_INDEPENDENT_DATABASE_REQUIRED");
     return database(false, options);
   };
+  module.exports.openApplicationForCurrentTest = () => {
+    open();
+    const application = require("../../lib/persistence/postgresql/application").openDeferredPostgresqlApplication({
+      coreUrl: process.env.GP_CORE_APP_URL,
+      salesUrl: process.env.GP_SALES_APP_URL,
+      readers: { coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL },
+      authorize: async () => true,
+    });
+    applicationHandles.add(application);
+    return { database: database(false), provider: application.provider, close: () => application.provider.close() };
+  };
   module.exports.closeCurrentTestFixture = () => {
     if (subject) throw new Error("PG_API_FIXTURE_CLOSE_CURRENT_APPLICATION_FIRST");
     return raw.close();
@@ -166,8 +177,6 @@ function install() {
   if (file) {
     require("node:test").after(async () => { await closeFixture(); });
   }
-  let providerPatched = false;
-  let sqliteModule;
   Module._load = function(request, parent, isMain) {
     const resolved = Module._resolveFilename(request, parent, isMain);
     if (resolved === path.join(root, "server.js")) {
@@ -188,37 +197,7 @@ function install() {
       }
       return exported;
     }
-    const exported = load.call(this, request, parent, isMain);
-    if (request === "node:sqlite") {
-      if (!sqliteModule) sqliteModule = { ...exported, DatabaseSync: class DatabaseSync {
-        constructor(filename, options) {
-          if (filename && filename !== ":memory:" && process.env.DB_PATH && path.resolve(filename) === path.resolve(process.env.DB_PATH)) {
-            open(); return database(false, options);
-          }
-          return new exported.DatabaseSync(filename, options);
-        }
-      } };
-      return sqliteModule;
-    }
-    if (resolved === path.join(root, "lib/persistence/sqlite/provider.js") && !providerPatched) {
-      providerPatched = true;
-      const originalOpen = exported.openSqliteApplicationPersistence, originalLegacy = exported.openSqliteLegacyDatabase;
-      const originalCreate = exported.createSqlitePersistenceProvider;
-      const matching = filename => filename && filename !== ":memory:" && process.env.DB_PATH
-        && path.resolve(filename) === path.resolve(process.env.DB_PATH);
-      function application(options = {}) {
-        open();
-        const app = require("../../lib/persistence/postgresql/application").openDeferredPostgresqlApplication({
-          coreUrl: process.env.GP_CORE_APP_URL, salesUrl: process.env.GP_SALES_APP_URL,
-          readers: { coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL }, authorize: async () => true,
-        });
-        applicationHandles.add(app); return { database: database(false), provider: app.provider, close: () => app.provider.close() };
-      }
-      exported.openSqliteApplicationPersistence = options => matching(options?.databasePath) ? application(options) : originalOpen(options);
-      exported.openSqliteLegacyDatabase = (filename, ...args) => matching(filename) ? (open(), database(false)) : originalLegacy(filename, ...args);
-      exported.createSqlitePersistenceProvider = options => options?.database?.postgresqlTestFixture ? application(options).provider : originalCreate(options);
-    }
-    return exported;
+    return load.call(this, request, parent, isMain);
   };
   process.on("exit", () => {
     // A forced process exit cannot await application pools. Preserve its owned

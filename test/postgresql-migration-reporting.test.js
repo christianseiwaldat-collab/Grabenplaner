@@ -33,18 +33,33 @@ test('Live Block 8 stopped report worker resumes after its lease without partial
   let row;for(let i=0;i<20;i++){await resumed.tick();row=(await resumed.list(session)).find(j=>j.id===created.id);assert.notEqual(row.status,'failed',JSON.stringify(f.errors));if(row.status==='completed')break;}
   assert.equal(row.status,'completed');assert.equal(row.restarts,1);assert.equal(row.processed,600);assert.match((await resumed.download(session,created.id)).toString('ascii',0,8),/^%PDF-/);
 }));
-test('Live Block 8 generated search values match SQLite for accents, wildcards, exact decimals and every visible sort',live,()=>withReportFixture(async f=>{
-  const {article}=require('../test-support/postgresql-migration/trade-fixture');
+test('PostgreSQL article search preserves accents, literal wildcards, exact decimals and paginated results',live,()=>withReportFixture(async f=>{
+  const {article,articleSnapshot}=require('../test-support/postgresql-migration/trade-fixture');
   const articles=['Sony A7 II','SONY A7 III','Canon ÄÖÜ Straße','Buch 100% Qualität','Sofortdruck 10_20','Leica ! Q3','Zubehör €'].map((description,i)=>({...article('0000'+i),description,prices:i%3?[{priceType:'sales',amount:(i+1)+'.123456789012',currency:'EUR',priceBasis:'gross',qualityStatus:'confirmed',sourceField:'Verkaufspreis'}]:[]}));
-  await require('../test-support/postgresql-migration/load-articles').seedLoadArticles(f,articles);
-  const {createSalesArticleCatalogRepository}=require('../lib/persistence/repositories/sales-article-catalog'),pg=createSalesArticleCatalogRepository(f.access),sqlite=createSalesArticleCatalogRepository(f.sqliteProvider);
+  const {createSalesArticleCatalogRepository}=require('../lib/persistence/repositories/sales-article-catalog'),pg=createSalesArticleCatalogRepository(f.access);
+  await pg.importSnapshot(articleSnapshot(1,articles));
+  assert.equal((await pg.getByArticleNumber('00001')).prices[0].amount,'2.123456789012');
   const projection={pricesRead:true,costsRead:true};
-  // Numeric PostgreSQL decoding keeps the exact same decimal representation.
-  for(const query of ['Sony A7','a*7','ÄÖÜ straße','100%','10_20','!','00002','does-not-exist',''])for(const sort of ['articleNumber','description','retailGross','status','primaryIdentifier','sourceSystem'])for(const direction of ['asc','desc']){
-    const input={query,sort,direction,limit:5,offset:0};assert.deepEqual(await pg.search(input,projection),await sqlite.search(input,projection),JSON.stringify(input));
+  const expected=new Map([
+    ['Sony A7',['00000','00001']],['ÄÖÜ straße',['00002']],['100%',['00003']],
+    ['10_20',['00004']],['00002',['00002']],['does-not-exist',[]],['',articles.map(item=>item.articleNumber)],
+  ]);
+  for(const query of [...expected.keys(),'a*7','!']){
+    const baseline=await pg.search({query,sort:'articleNumber',direction:'asc',limit:10,offset:0},projection);
+    const articleNumbers=baseline.items.map(item=>item.articleNumber).sort();
+    if(expected.has(query)) assert.deepEqual(articleNumbers,expected.get(query),query);
+    for(const sort of ['articleNumber','description','retailGross','status','primaryIdentifier','sourceSystem']){
+      for(const direction of ['asc','desc']){
+        const input={query,sort,direction,limit:5,offset:0};
+        const first=await pg.search(input,projection);
+        const second=await pg.search({...input,offset:5},projection);
+        assert.equal(first.total,articleNumbers.length,JSON.stringify(input));
+        assert.deepEqual([...first.items,...second.items].map(item=>item.articleNumber).sort(),articleNumbers,JSON.stringify(input));
+      }
+    }
   }
   const folded=(await f.client.query('SELECT count(*)::int n FROM trade.sales_article_search_projection WHERE search_text_folded<>gp.ascii_fold(gp.lower(search_text))')).rows[0].n;assert.equal(folded,0);
-},{compareWithSqlite:true}));
+}));
 test('Live Block 8 real PostgreSQL worker produces a PDF, preserves cash margin and enforces revocation/cancellation',live,()=>withReportFixture(async f=>{
   const built=await f.cash.build(sourceRows([receipt(1,'120',[{}]),receipt(2,'39.08',[{VKMenge:'2',VK_Preis:'19.54',RohertragDM:'8.141667',KalkRohertrag:'16.283333'}])]));await f.cash.activate(f.cash.request(built.id));
   const session=await f.resolvePrincipal('00001');assert.ok(session.permissions.includes('sales:analytics:margin:read'));

@@ -50,9 +50,6 @@ const {
   createSqliteBranchOrderOperations,
   ensureSqliteBranchOrdersSchema,
 } = require("../lib/persistence/sqlite/operations/branch-orders");
-const {
-  openSqliteLegacyDatabase,
-} = require("../lib/persistence/sqlite/provider");
 
 const LOCATION = "18";
 const OTHER_LOCATION = "19";
@@ -354,78 +351,6 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
-test("v0.91: bestehende Empfänger und Zustellungen erhalten idempotent sichere CC- und PDF-Standardwerte", () => {
-  const legacy = openSqliteLegacyDatabase(":memory:");
-  try {
-    legacy.exec(`
-      CREATE TABLE locations (id TEXT PRIMARY KEY);
-      INSERT INTO locations (id) VALUES ('18');
-      CREATE TABLE branch_order_recipients (
-        id TEXT PRIMARY KEY,
-        location_id TEXT NOT NULL,
-        email TEXT NOT NULL COLLATE NOCASE,
-        reply_to_email TEXT NOT NULL DEFAULT '',
-        subject_template TEXT NOT NULL,
-        body_template TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        created_by TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        updated_by TEXT NOT NULL,
-        UNIQUE(location_id, email)
-      );
-      INSERT INTO branch_order_recipients
-        (id, location_id, email, reply_to_email, subject_template, body_template,
-         created_at, created_by, updated_at, updated_by)
-      VALUES ('legacy-recipient', '18', 'legacy@example.test', 'reply@example.test',
-              'Bestellung', 'Inhalt', '2031-01-01', 'test', '2031-01-01', 'test');
-      CREATE TABLE branch_order_deliveries (
-        id TEXT PRIMARY KEY,
-        order_id TEXT NOT NULL,
-        sender_email TEXT NOT NULL DEFAULT '',
-        recipient_email TEXT NOT NULL,
-        reply_to_email TEXT NOT NULL,
-        subject_snapshot TEXT NOT NULL,
-        body_snapshot TEXT NOT NULL,
-        status TEXT NOT NULL,
-        failure_code TEXT NOT NULL DEFAULT '',
-        attempted_at TEXT,
-        sent_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      INSERT INTO branch_order_deliveries
-        (id, order_id, sender_email, recipient_email, reply_to_email,
-         subject_snapshot, body_snapshot, status, created_at, updated_at)
-      VALUES ('legacy-delivery', 'legacy-order', 'fil18-noreply@grabenplaner.eu',
-              'legacy@example.test', 'reply@example.test', 'Bestellung', 'Inhalt',
-              'sent', '2031-01-01', '2031-01-01');
-    `);
-    ensureSqliteBranchOrdersSchema(legacy);
-    ensureSqliteBranchOrdersSchema(legacy);
-    assert.deepEqual({ ...legacy.prepare(`
-      SELECT cc_email AS ccEmail, primary_delivery_mode AS primaryDeliveryMode,
-             cc_delivery_mode AS ccDeliveryMode
-      FROM branch_order_recipients WHERE id = 'legacy-recipient'
-    `).get() }, {
-      ccEmail: "",
-      primaryDeliveryMode: "message",
-      ccDeliveryMode: "message",
-    });
-    assert.deepEqual({ ...legacy.prepare(`
-      SELECT recipient_role AS recipientRole, delivery_mode AS deliveryMode,
-             attachment_filename AS attachmentFilename, attachment_sha256 AS attachmentSha256
-      FROM branch_order_deliveries WHERE id = 'legacy-delivery'
-    `).get() }, {
-      recipientRole: "primary",
-      deliveryMode: "message",
-      attachmentFilename: "",
-      attachmentSha256: "",
-    });
-    assert.equal(legacy.prepare("PRAGMA quick_check").get().quick_check, "ok");
-  } finally {
-    legacy.close();
-  }
-});
 
 test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", async (t) => {
   let accountId;

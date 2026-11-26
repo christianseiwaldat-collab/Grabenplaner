@@ -37,7 +37,6 @@ test("v0.92.105: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent",
   const readme = read("README.md");
   const securityPolicy = read("SECURITY.md");
   const codespacesDocs = read("CODESPACES.md");
-  const codespacesStart = read(".devcontainer/post-start.sh");
   const devcontainer = JSON.parse(read(".devcontainer/devcontainer.json"));
   const serverDocs = read("SERVERBETRIEB.md");
   const usbNotes = read("USB-HINWEISE.txt");
@@ -64,12 +63,11 @@ test("v0.92.105: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent",
   assert.doesNotMatch(securityPolicy, /Private Vulnerability Reporting/);
   assert.match(securityPolicy, /Legacy/i);
   assert.match(codespacesDocs, /Repository ist öffentlich/i);
-  assert.match(codespacesDocs, /automatische Demo-Start erfordert Eigentümer- oder Schreibzugriff/i);
-  assert.match(codespacesDocs, /eingeladene Collaborators mit Schreibzugriff/);
-  assert.equal(devcontainer.name, "Grabenplaner v0.92.105 Codespaces-Demo");
+  assert.match(codespacesDocs, /synthetischen\s+PostgreSQL-Dienst/);
+  assert.equal(devcontainer.name, "Grabenplaner v0.92.105 Codespaces");
   assert.equal(Object.hasOwn(devcontainer.features, "ghcr.io/devcontainers/features/sshd:1"), false);
-  assert.match(codespacesStart, /EXPECTED_REPOSITORY="christianseiwaldat-collab\/Grabenplaner"/);
-  assert.match(codespacesStart, /permissions\.admin or \.permissions\.push/);
+  assert.equal(Object.hasOwn(devcontainer, "postStartCommand"), false);
+  assert.equal(devcontainer.portsAttributes["3000"].visibility, "private");
   assert.match(read("server.js"), /`dev: \$\{branding\.adminEmail\} · `/);
   assert.match(read("public/assets/webicon.svg"), />GP</);
   assert.match(serverDocs, /Recovery Assurance und System-Center/);

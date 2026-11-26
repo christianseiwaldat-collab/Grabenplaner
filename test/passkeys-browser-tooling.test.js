@@ -59,7 +59,7 @@ test("CI runs the note editor browser cases once with pinned tools and keeps the
   const step = workflow.slice(start, end);
   assert.match(step, /if: matrix\.shard == '1\/3'/);
   assert.match(step, /env:\r?\n          GP_SECURITY_BROWSER_TEST: '1'/);
-  assert.match(step, /node --no-global-search-paths --test --test-concurrency=1/);
+  assert.match(step, /node --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1/);
   assert.match(step, /--test-reporter=tap --test-timeout=120000/);
   assert.match(step, /test\/security-schedule-note-browser\.test\.js/);
   assert.equal((workflow.match(/GP_SECURITY_BROWSER_TEST/g) || []).length, 1);

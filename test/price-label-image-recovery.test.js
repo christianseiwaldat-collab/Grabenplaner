@@ -4,18 +4,16 @@
 // Other PostgreSQL and application assertions below still use current code.
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), crypto = require('node:crypto');
-const { DatabaseSync } = require('node:sqlite'), { EventEmitter } = require('node:events');
+const { EventEmitter } = require('node:events');
 const { createRequire } = require('node:module'), { spawnSync } = require('node:child_process'), vm = require('node:vm');
 const { createAmuStorage, syncEncryptedFilesBackup } = require('../lib/amu-storage');
 const { createIntegrationSecretVault } = require('../lib/integration-secret-vault');
 const { createDataImportProtection } = require('../lib/data-import-protection');
-const recovery = require('../test-support/legacy-baseline').legacyRequire('server-tools/linux/recovery/lib/recovery-verify.js');
 const runtime = require('../lib/persistence/postgresql/operations/runtime');
 const root = path.resolve(__dirname, '..');
 const amuModule = path.join(root, 'lib/amu-storage.js'), integrationModule = path.join(root, 'lib/integration-secret-vault.js');
 const stageHelper = path.join(root, 'server-tools/linux/offsite/lib/offsite-stage.js');
 const backupVerifier = require("../test-support/legacy-baseline").legacyPath("server-tools/linux/lib/verify-backup.js");
-const policy = require('../test-support/legacy-baseline').legacyRequire('server-tools/linux/recovery/lib/recovery-metadata.js').__internalTestOnly.nonRootOwnershipPolicy;
 const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9xkAAAAASUVORK5CYII=', 'base64');
 const digest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const json = (file, value) => fs.writeFileSync(file, JSON.stringify(value) + '\n', { mode: 0o600 });
@@ -55,62 +53,10 @@ async function fixture(t, { corrupt = '' } = {}) {
  fs.writeFileSync(environmentFile, Object.entries(environment).map(([name, value]) => name + '=' + value).join('\n') + '\n', { mode: 0o600 });
  return { directory, sourceDirectory, environment, environmentFile, keyPayload, rows, storageKey: metadata.storageKey };
 }
-function buildFrozenSqliteStage(f) {
- const stage = path.join(f.directory, 'stage'), backup = path.join(stage, 'backup'), contract = path.join(stage, 'recovery');
- fs.mkdirSync(backup, { recursive: true }); fs.mkdirSync(contract);
- const database = path.join(backup, 'snapshot.db'), documents = path.join(backup, 'snapshot.amu'), marker = path.join(backup, 'snapshot.complete.json');
- const db = new DatabaseSync(database);
- try {
-  db.exec("CREATE TABLE schema_migrations(id TEXT PRIMARY KEY,app_version TEXT NOT NULL); INSERT INTO schema_migrations VALUES('base','0.73.0-beta'); CREATE TABLE trade_annotations(id TEXT PRIMARY KEY,scope_id TEXT,kind TEXT,revision INTEGER,payload TEXT); CREATE TABLE data_import_runtime_keys(id TEXT PRIMARY KEY,payload TEXT);");
-  for (const row of f.rows) db.prepare('INSERT INTO trade_annotations VALUES(?,?,?,?,?)').run(row.id, row.scopeId, row.kind, row.revision, row.payload);
-  db.prepare('INSERT INTO data_import_runtime_keys VALUES(?,?)').run('data-import-v1', f.keyPayload);
- } finally { db.close(); }
- const databaseSha256 = digest(database), createdAt = new Date().toISOString();
- const copied = syncEncryptedFilesBackup({ sourceDirectory: f.sourceDirectory, targetDirectory: documents, manifestMetadata: { database: { fileName: 'snapshot.db', sha256: databaseSha256 } } });
- const manifest = path.join(documents, 'manifest.json');
- json(marker, { format: 'grabenplaner-backup-commit', schemaVersion: 1, snapshot: 'snapshot', committedAt: createdAt,
-  database: { fileName: 'snapshot.db', sha256: databaseSha256, bytes: fs.statSync(database).size },
-  protectedDocuments: { directoryName: 'snapshot.amu', files: copied.fileCount, manifestFileName: 'manifest.json', manifestSha256: digest(manifest), manifestBytes: fs.statSync(manifest).size },
-  verification: { status: 'verified', verifiedAt: createdAt } });
- const targetPackage = path.join(contract, 'package.json'), targetRuntime = path.join(contract, 'runtime-schema.json'), example = path.join(contract, 'grabenplaner.env.example');
- json(targetPackage, { version: '0.73.0-beta' }); json(targetRuntime, { format: 'grabenplaner-linux-runtime-contract', schemaVersion: 1, deploymentSchemaVersion: 1 }); fs.writeFileSync(example, 'NODE_ENV=production\n');
- const receipt = path.join(f.directory, 'backup-result.json');
- json(receipt, { ok: true, path: database, amuBackup: documents, commitMarker: marker, sha256: databaseSha256, createdAt });
- const result = spawnSync(process.execPath, [stageHelper, 'create', stage, receipt, example, targetPackage, targetRuntime], { encoding: 'utf8' });
- assert.equal(result.status, 0, result.stderr);
- permissions(stage, true);
- return { stage, database, documents, stageHelper, backupVerifier, amuModule, integrationModule, environment: f.environmentFile,
-  targetPackage, targetRuntime, scratchRoot: f.directory, output: path.join(f.directory, 'verification.json') };
-}
 function fileHashes(directory) {
  return Object.fromEntries(fs.readdirSync(directory, { recursive: true }).filter(name => fs.statSync(path.join(directory, name)).isFile()).sort()
   .map(name => [name, digest(path.join(directory, name))]));
 }
-test('complete frozen SQLite recovery authenticates image references and leaves all backup files unchanged', async t => {
- const f = await fixture(t), options = buildFrozenSqliteStage(f), before = fileHashes(options.stage);
- const result = await recovery.verifyRecovery(options, policy);
- assert.equal(result.ok, true); assert.equal(result.protectedPriceLabelImages, 1);
- assert.equal(JSON.parse(fs.readFileSync(options.output)).protectedPriceLabelImages, 1);
- assert.deepEqual(fileHashes(options.stage), before);
- assert.equal(fs.readdirSync(f.directory).some(name => name.startsWith('.recovery-key-check-')), false);
-});
-test('SQLite recovery rejects self-consistent manifests whose database images are missing, changed or incompletely referenced', async t => {
- for (const corrupt of ['missing', 'content', 'marker']) await t.test(corrupt, async child => {
-  const f = await fixture(child, { corrupt }), options = buildFrozenSqliteStage(f), before = fileHashes(options.stage);
-  await assert.rejects(recovery.verifyRecovery(options, policy));
-  assert.equal(fs.existsSync(options.output), false, 'no successful recovery receipt on reference failure');
-  assert.deepEqual(fileHashes(options.stage), before);
- });
-});
-test('older SQLite and PostgreSQL snapshots without image metadata need neither an image key nor file storage', async () => {
- const db = new DatabaseSync(':memory:');
- try { assert.equal(await recovery.verifyPriceLabelImageFiles(db, {}), 0); } finally { db.close(); }
- let queries = 0;
- assert.equal(await runtime.verifyPriceLabelImageFiles({ query: async sql => { queries++; assert.match(sql, /to_regclass/); return { rows: [{ present: false }] }; } }), 0);
- assert.equal(queries, 1, 'historical snapshots do not query a table that did not exist yet');
- assert.equal(await runtime.verifyPriceLabelImageFiles({ query: async sql => ({ rows: sql.includes('to_regclass') ? [{ present: true }] : [] }) }), 0);
- await assert.rejects(runtime.verifyPriceLabelImageFiles({ query: async () => ({ rows: [] }) }), /PG_PAIR_IMAGE_SCHEMA/);
-});
 test('PostgreSQL recovery reader uses the supplied read-only snapshot, checks keys and propagates the backup deadline', async t => {
  const f = await fixture(t), queries = [], client = { query: async sql => { queries.push(sql);
   if (sql.includes('to_regclass')) return { rows: [{ present: true }] };

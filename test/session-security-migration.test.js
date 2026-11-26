@@ -1,7 +1,6 @@
 
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
-const {openSqliteLegacyDatabase}=require("../lib/persistence/sqlite/provider");
 const {ensureSqliteSessionSecuritySchema,COLUMNS}=require("../lib/persistence/sqlite/operations/session-security-schema");
 const migration=require("../lib/persistence/postgresql/core/session-security");
 const BASE=[
@@ -19,36 +18,6 @@ const BASE=[
  "INSERT INTO mobile_sessions VALUES('mobile',NULL,'',NULL)",
  "INSERT INTO portal_password_reset_tokens VALUES('reset',NULL,NULL)"
 ];
-test("SQLite additive upgrade revokes old credentials once and preserves existing hashes",()=>{
- const db=openSqliteLegacyDatabase(":memory:");
- try{
-  BASE.forEach(sql=>db.exec(sql));
-  assert.equal(ensureSqliteSessionSecuritySchema(db).applied,true);
-  for(const table of ["portal_sessions","portal_organization_sessions","mobile_sessions","portal_password_reset_tokens"])assert.ok(db.prepare("SELECT revoked_at FROM "+table).get().revoked_at);
-  assert.equal(db.prepare("SELECT password_hash FROM portal_users").get().password_hash,"legacy-scrypt-v1-preserved");
-  assert.equal(db.prepare("SELECT password_policy_version FROM portal_users").get().password_policy_version,0);
-  assert.equal(db.prepare("SELECT authenticated_at FROM portal_sessions").get().authenticated_at,null);
-  assert.match(db.prepare("SELECT app_version FROM schema_migrations").get().app_version,/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/);
-  db.exec("INSERT INTO portal_sessions(id,revoked_at,authenticated_at,absolute_expires_at) VALUES('new',NULL,'2026-10-18T12:00:00.000Z','2026-10-19T00:00:00.000Z')");
-  assert.equal(ensureSqliteSessionSecuritySchema(db).applied,false);
-  assert.equal(db.prepare("SELECT revoked_at FROM portal_sessions WHERE id='new'").get().revoked_at,null);
- }finally{db.close();}
-});
-test("SQLite failed upgrade rolls back columns and revocation without a completion marker",()=>{
- const db=openSqliteLegacyDatabase(":memory:");
- try{
-  BASE.forEach(sql=>db.exec(sql));
-  db.exec("CREATE TRIGGER fail_upgrade BEFORE UPDATE ON mobile_sessions BEGIN SELECT RAISE(ABORT,'synthetic upgrade failure'); END");
-  assert.throws(()=>ensureSqliteSessionSecuritySchema(db),/synthetic upgrade failure/);
-  assert.equal(db.prepare("PRAGMA table_info(portal_sessions)").all().some(c=>c.name==="authenticated_at"),false);
-  assert.equal(db.prepare("SELECT revoked_at FROM portal_sessions").get().revoked_at,null);
-  assert.equal(db.prepare("SELECT count(*) n FROM schema_migrations").get().n,0);
-  db.exec("DROP TRIGGER fail_upgrade");
-  assert.equal(ensureSqliteSessionSecuritySchema(db).applied,true);
-  db.exec("ALTER TABLE portal_sessions DROP COLUMN authenticated_at");
-  assert.throws(()=>ensureSqliteSessionSecuritySchema(db),/SCHEMA_DRIFT/);
- }finally{db.close();}
-});
 test("PostgreSQL extension remains additive with a fixed semver ledger and no credential rewrite",()=>{
  assert.equal(migration.COLUMNS.length,6);
  assert.equal(migration.rollbackBoundary.automaticRollback,false);

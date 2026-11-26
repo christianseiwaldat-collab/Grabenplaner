@@ -2,11 +2,7 @@
 // Synthetic rows only. Uses the installed modules directly, without require hooks.
 const assert=require('node:assert/strict');
 const C=require('../lib/data-import-contract'),M=require('../lib/tradefoto-master-profiles');
-const {openSqliteApplicationPersistence}=require('../lib/persistence/sqlite/provider');
-const {SQLITE_APPLICATION_CATALOG}=require('../lib/persistence/sqlite/application-catalog');
-const {IMPORT_ISSUES_CATALOG}=require('../lib/persistence/catalogs/data-import-issues-catalog');
-const {ensureSqliteDataImportRuntimeSchema}=require('../lib/persistence/sqlite/operations/data-import-runtime-schema');
-const {createIntegrationSecretVault}=require('../lib/integration-secret-vault');
+const {withReportFixture}=require('./postgresql-migration/report-fixture');
 const {createDataImportRuntime}=require('../lib/persistence/repositories/data-import-runtime');
 const {readTradeFotoFullSource,definitions}=require('../lib/tradefoto-full-import-source');
 const {DATA_IMPORT_PERMISSIONS:P}=require('../lib/data-import-access');
@@ -20,19 +16,26 @@ function readerFactory(kind,values={},counts={}) {
    getData:({columns,rowOffset=0,rowLimit=Infinity})=>rows.slice(rowOffset,rowOffset+rowLimit).map(row=>Object.fromEntries(columns.map(key=>[key,row[key]??null])))};
  }});
 }
-async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}){
- const app=openSqliteApplicationPersistence({databasePath:':memory:',catalog:[...SQLITE_APPLICATION_CATALOG,...IMPORT_ISSUES_CATALOG]});
- ensureSqliteDataImportRuntimeSchema(app.database);
+const nativeImport={skip:!process.env.GP_CORE_MIGRATOR_URL||!process.env.GP_SALES_MIGRATOR_URL};
+async function withImportFixture(work){
+ return withReportFixture(async ({access,core,client,vault,protection})=>{
+  await core.migrator.query('SET ROLE gp_core_owner');
+  await work({provider:access,core:core.migrator,sales:client,vault,protection});
+ },{warmWorkers:false});
+}
+async function withFixture({kind='trade',values={},counts={},allowApply=true},work){
+ return withImportFixture(async storage=>{
  const state={session:{employeeNumber:'synthetic-1',accountId:'personal-1',isEmployee:true,role:'developer',permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read']}};
- const getSession=async()=>state.session,keyVault=createIntegrationSecretVault({activeKeyId:'synthetic',keys:{synthetic:Buffer.alloc(32,7)}});
+ const getSession=async()=>state.session,keyVault=storage.vault;
  const readSource=options=>readTradeFotoFullSource({...options,send:options.onMessage,readerFactory:readerFactory(kind,values,counts)});
- const options={access:app.provider,vault:keyVault,allowApply,readSource,clock:()=>TIME};
+ const options={access:storage.provider,vault:keyVault,allowApply,readSource,clock:()=>TIME};
  let runtime=createDataImportRuntime(options);
  const upload=(buffer=sourceBuffer())=>runtime.upload(getSession,{buffer,kind});
  const reload=()=>{runtime=createDataImportRuntime(options);return runtime;};
  async function finish(source,action){let n=0;do{source=await runtime.sourceOperation(getSession,source.id,action,{expectedRevision:source.revision});
   if(++n>700)throw new Error('Synthetic source operation did not terminate');}while(source.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));return source;}
- t.after(async()=>{await runtime.stop();await app.provider.close();app.database.close();});
- return {...app,state,getSession,keyVault,options,upload,reload,finish,get runtime(){return runtime;}};
+ try{await work({...storage,state,getSession,keyVault,options,upload,reload,finish,get runtime(){return runtime;}});}
+ finally{await runtime.stop();}
+ });
 }
-module.exports={fixture,sourceBuffer,rawMaster,readerFactory,TIME};
+module.exports={withFixture,withImportFixture,nativeImport,sourceBuffer,rawMaster,readerFactory,TIME};

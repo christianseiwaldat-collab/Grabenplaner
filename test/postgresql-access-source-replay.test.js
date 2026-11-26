@@ -3,11 +3,13 @@ const test = require('node:test'), assert = require('node:assert/strict'), crypt
 const C = require('../lib/data-import-contract'), S = require('../lib/tradefoto-full-import-source');
 const { SOURCE_KINDS } = require('../lib/data-import-source-catalog');
 const { createDataImportProtection } = require('../lib/data-import-protection');
-const { createIntegrationSecretVault } = require('../lib/integration-secret-vault');
+const { withImportFixture, nativeImport } = require('../test-support/data-import-known-af-fixture');
 const { validateImportSourceArchiveProof } = require('../lib/data-import-source-archive');
 const real = require('../lib/persistence/postgresql/operations/access-source-replay');
 const sha = value => crypto.createHash('sha256').update(value).digest('hex'), AT = '2026-11-16T12:00:00.000Z';
 const actor = { scopeId: 'synthetic-replay', ownerId: '00001' };
+const read = async (db, sql, params) => (await db.query(sql, params)).rows;
+const first = async (db, sql, params) => (await read(db, sql, params))[0];
 function isolatedModule(overrides = {}) {
   const file = path.resolve(__dirname, '../lib/persistence/postgresql/operations/access-source-replay.js'), subject = new Module(file, module); subject.filename = file; subject.paths = Module._nodeModulePaths(path.dirname(file));
   const original = subject.require.bind(subject); subject.require = name => name === 'node:os' ? { networkInterfaces: () => ({ lo: [{ internal: true }] }) } : Object.hasOwn(overrides, name) ? overrides[name] : original(name);
@@ -161,16 +163,7 @@ test('a nonempty purged generic cash run cannot infer its lost original exceptio
   } finally { f.protection.destroy(); }
 });
 
-test('real production engine replays generic cash histories without changing the compact Core source registry', async t => {
-  // Synthetic reader boundary only: real normalization, engine, encrypted
-  // repository, history writers, parent dependencies and SQLite storage below.
-  const { openSqliteApplicationPersistence } = require('../lib/persistence/sqlite/provider');
-  const { SQLITE_APPLICATION_CATALOG } = require('../lib/persistence/sqlite/application-catalog');
-  const app = openSqliteApplicationPersistence({ databasePath: ':memory:', catalog: SQLITE_APPLICATION_CATALOG });
-  require('../lib/persistence/sqlite/operations/data-import-runtime-schema').ensureSqliteDataImportRuntimeSchema(app.database);
-  const vault = createIntegrationSecretVault({ activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 9) } });
-  const protection = await require('../lib/data-import-managed-protection').loadManagedDataImportProtection({ access: app.provider, vault, create: true });
-  t.after(async () => { protection.destroy(); await app.provider.close(); app.database.close(); });
+test('PostgreSQL replays generic cash histories without changing the compact Core source registry', nativeImport, () => withImportFixture(async ({provider, sales, vault, protection}) => {
   const f = fixture({ kinds: ['cash'], protection }), source = f.objects[0], date = '2026-11-16T12:00:00.000';
   const values = { KassenJournal: [{ Vorgang: 1, Filiale: 18, Datum: date }], Umsatz_KASSE: [{ Bonnr: 1, Filialid: 18, Kassenid: 1, Bondatum: date }],
     Umsatz_Kasse_Details: [{ RepID: '00000000-0000-0000-0000-000000000001', Bonnr: 1, Filialid: 18, Kassenid: 1, Bondatum: date, EAN: '0000000000042', VKMenge: 1, VK_Preis: 12 }] };
@@ -186,25 +179,17 @@ test('real production engine replays generic cash histories without changing the
         getData: ({ columns, rowOffset = 0, rowLimit = Infinity }) => rows.slice(rowOffset, rowOffset + rowLimit).map(row => Object.fromEntries(columns.map(column => [column, row[column] ?? (def.columns.find(c => c.name === column).type === 'boolean' ? false : null)]))) }; },
   }) }) } });
   const plan = await subject.createReplayPlan({ ...f, archiveProof: f.proof }), before = source.row.payload;
-  const result = await subject.replaySources({ ...f, access: app.provider, vault, plan, isolatedRecovery: true });
+  const result = await subject.replaySources({ ...f, access: provider, vault, plan, isolatedRecovery: true });
   assert.equal(result.verified, true); assert.equal(result.cashPending, true); assert.equal(result.sources[0].genericCashRuns.length, 3);
   assert.ok(result.sources[0].genericCashRuns.every(run => run.status === 'applied' && run.receivedRows === 1 && !generic.some(original => original.id === run.runId)));
-  assert.equal(app.database.prepare('SELECT count(*) n FROM import_history_records').get().n, 3);
-  assert.equal(app.database.prepare('SELECT count(*) n FROM import_history_versions').get().n, 3);
-  assert.ok(app.database.prepare('SELECT attempt_id FROM data_import_runs').all().every(row => row.attempt_id.startsWith('recovery-')));
-  assert.ok(app.database.prepare('SELECT owner_id FROM data_import_runs').all().every(row => row.owner_id === '00009'), 'an archived identical file does not change the original generic run owner');
+  assert.equal((await first(sales, "SELECT count(*)::integer n FROM integration.import_history_records")).n, 3);
+  assert.equal((await first(sales, "SELECT count(*)::integer n FROM integration.import_history_versions")).n, 3);
+  assert.ok((await read(sales, "SELECT attempt_id FROM integration.data_import_runs")).every(row => row.attempt_id.startsWith('recovery-')));
+  assert.ok((await read(sales, "SELECT owner_id FROM integration.data_import_runs")).every(row => row.owner_id === '00009'), 'an archived identical file does not change the original generic run owner');
   assert.equal(source.row.payload, before); assert.ok(f.queries.every(query => !query.sql.startsWith('UPDATE gp.data_import_sources')));
-});
+}));
 
-async function ordinaryTradeReplayFixture(t, differingStock) {
-  const { openSqliteApplicationPersistence } = require('../lib/persistence/sqlite/provider'), { SQLITE_APPLICATION_CATALOG } = require('../lib/persistence/sqlite/application-catalog');
-  const app = openSqliteApplicationPersistence({ databasePath: ':memory:', catalog: SQLITE_APPLICATION_CATALOG });
-  require('../lib/persistence/sqlite/operations/data-import-runtime-schema').ensureSqliteDataImportRuntimeSchema(app.database);
-  app.database.exec('CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,detail TEXT NOT NULL,created_at TEXT NOT NULL); CREATE TABLE locations(id TEXT PRIMARY KEY,active INTEGER NOT NULL); INSERT INTO locations VALUES(\'18\',1)');
-  require('../lib/persistence/sqlite/operations/sales-article-catalog-schema').ensureSqliteSalesArticleCatalogSchema(app.database);
-  const vault = createIntegrationSecretVault({ activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 9) } });
-  const protection = await require('../lib/data-import-managed-protection').loadManagedDataImportProtection({ access: app.provider, vault, create: true });
-  t.after(async () => { protection.destroy(); await app.provider.close(); app.database.close(); });
+async function ordinaryTradeReplayFixture({provider, core, sales, vault, protection}, differingStock) {
   const f = fixture({ kinds: ['trade'], protection }), source = f.objects[0], defs = S.definitions('trade'), M = require('../lib/tradefoto-master-profiles');
   const values = { ADANREDE: Array.from({ length: 4 }, (_, i) => ({ ANREDE: 'A' + (i + 1), ADR_ANREDE: 'Source label ' + (i + 1) })),
     FILIALEN: [{ FilialID: 18, FName: 'Incoming source branch' }],
@@ -216,17 +201,16 @@ async function ordinaryTradeReplayFixture(t, differingStock) {
     run.manifest = { ...run.manifest, expectedRows: count, declaredRows: count }; run.receivedCount = String(count);
     run.id = protection.digest(['run', C.VERSION, actor, run.profileHash, run.manifest, 'default']);
     source.data.tables[i] = { name: def.name, profileHash: def.profile.fingerprint, declaredRows: count, run: { id: run.id, expectedRows: count, receivedRows: count, status: 'applied' } };
-    app.database.prepare('INSERT INTO data_import_runs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(run.id, actor.scopeId, actor.ownerId, 'default', run.profileHash,
-      JSON.stringify(def.profile), JSON.stringify(run.manifest), 'applied', 99, count, AT, AT, '2026-12-16T12:00:00.000Z');
+    await sales.query("INSERT INTO integration.data_import_runs (id,scope_id,owner_id,attempt_id,profile_hash,profile,manifest,status,revision,received_count,created_at,updated_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)", [run.id, actor.scopeId, actor.ownerId, 'default', run.profileHash, JSON.stringify(def.profile), JSON.stringify(run.manifest), 'applied', 99, count, AT, AT, '2026-12-16T12:00:00.000Z']);
   }
   source.row.payload = protection.seal(source.data, ['source', actor.scopeId, actor.ownerId, source.row.id, source.row.revision]);
-  app.database.prepare('INSERT INTO data_import_sources VALUES(?,?,?,?,?,?,?)').run(source.row.id, actor.scopeId, actor.ownerId, source.row.revision, AT, AT, source.row.payload);
+  await core.query("INSERT INTO gp.data_import_sources (id,scope_id,owner_id,revision,created_at,updated_at,payload) VALUES($1,$2,$3,$4,$5,$6,$7)", [source.row.id, actor.scopeId, actor.ownerId, source.row.revision, AT, AT, source.row.payload]);
   f.exceptions.clear(); f.exceptions.set(source.runs[0].id, [{ ordinal: '2' }, { ordinal: '3' }]);
-  const catalog = require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(app.provider);
+  const catalog = require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(provider);
   await catalog.createManual({ actor: actor.ownerId, timestamp: AT, mutationId: crypto.randomUUID(), input: { articleNumber: '000042', description: 'GP manual article', identifiers: [],
     prices: { sales: [{ priceType: 'sales', amount: '99.87', currency: 'EUR', priceBasis: 'gross' }] } } });
   const manual = await catalog.getByArticleNumber('000042'), imageBytes = Buffer.from('synthetic protected image bytes');
-  const images = require('../lib/persistence/repositories/sales-article-images').createSalesArticleImagesRepository(app.provider);
+  const images = require('../lib/persistence/repositories/sales-article-images').createSalesArticleImagesRepository(provider);
   await images.save({ articleNumber: '000042', productId: manual.productId, expectedRevision: null, image: { buffer: imageBytes, mime: 'image/webp', width: 1, height: 1 }, actor: actor.ownerId });
   const article = { sourceArticleKey: '0000000000043', articleNumber: '000043', description: 'Old imported description', active: true, sourceUpdatedAt: null, identifiers: [], prices: [] };
   const domain = require('../lib/sales-article-catalog'), normalized = domain.normalizeSalesArticleImportRow(article), originalSnapshot = { sourceSystem: 'tradefoto.artikel_stamm', sourceProfileVersion: 'original-synthetic-v1',
@@ -236,44 +220,45 @@ async function ordinaryTradeReplayFixture(t, differingStock) {
   const location = defs.find(def => def.name === 'FILIALEN'), rawAnchor = Object.fromEntries(location.columns.map(column => [column.name, column.name === 'FilialID' ? 18 : column.name === 'FName' ? 'GP owned branch label' : column.type === 'boolean' ? false : null]));
   const normalizedAnchor = C.normalizeDataImportRow(location.profile, M.prepareTradeFotoMasterRow(location.name, rawAnchor));
   const anchorId = crypto.randomUUID(), writer = require('../lib/persistence/repositories/import-master-data').createImportMasterWriters({ protection })[location.profile.entity];
-  await app.provider.transaction(tx => writer.create(tx, { id: anchorId, data: normalizedAnchor.data }, { ...actor, sourceInstance: 'tradefoto-trade', sourceTable: location.name,
+  await provider.transaction(tx => writer.create(tx, { id: anchorId, data: normalizedAnchor.data }, { ...actor, sourceInstance: 'tradefoto-trade', sourceTable: location.name,
     sourceSystem: location.profile.sourceSystem, profileHash: location.profile.fingerprint, at: AT }), { isolation: 'serializable' });
-  const mapping = require('../lib/persistence/repositories/import-master-data').createImportMasterService({ access: app.provider, protection, getActor: () => actor, authorize: () => true, sourceInstance: 'tradefoto-trade' });
+  const mapping = require('../lib/persistence/repositories/import-master-data').createImportMasterService({ access: provider, protection, getActor: () => actor, authorize: () => true, sourceInstance: 'tradefoto-trade' });
   const mappingInput = { recordId: anchorId, expectedSourceRevision: 1, targetId: '18', historical: false, reason: 'Synthetic GP decision' }, preview = await mapping.previewBinding(mappingInput);
   await mapping.bind(mappingInput, preview.planHash);
   // A held AF head depends on the retained master identities too. Create its
   // exact source master and original published membership before sparse replay.
   const articleDef = defs.find(def => def.name === 'ARTIKEL_STAMM'), rawArticle = Object.fromEntries(articleDef.columns.map(column => [column.name, values.ARTIKEL_STAMM[0][column.name] ?? (column.type === 'boolean' ? false : null)]));
   const articleMasterData = C.normalizeDataImportRow(articleDef.profile, M.prepareTradeFotoMasterRow(articleDef.name, rawArticle)).data;
-  await app.provider.transaction(tx => require('../lib/persistence/repositories/import-master-data').createImportMasterWriters({ protection })[articleDef.profile.entity].create(tx,
+  await provider.transaction(tx => require('../lib/persistence/repositories/import-master-data').createImportMasterWriters({ protection })[articleDef.profile.entity].create(tx,
     { id: crypto.randomUUID(), data: articleMasterData }, { ...actor, sourceInstance: 'tradefoto-trade', sourceTable: articleDef.name, sourceSystem: articleDef.profile.sourceSystem, profileHash: articleDef.profile.fingerprint, at: AT }), { isolation: 'serializable' });
   const stockDef = defs.find(def => def.name === 'ARTIKEL_FILIALEN'), H = require('../lib/tradefoto-history-profiles'), stockRaw = Object.fromEntries(stockDef.columns.map(column => [column.name, values.ARTIKEL_FILIALEN[0][column.name] ?? (column.type === 'boolean' ? false : null)]));
   const stockData = C.normalizeDataImportRow(stockDef.profile, H.prepareTradeFotoHistoryRow('trade', stockDef.name, stockRaw, { fileSha256: source.entry.fileSha256, rowNumber: 1 })).data;
   const stockRun = source.runs.find(run => run.profileHash === stockDef.profile.fingerprint), stockContext = { ...actor, sourceInstance: 'tradefoto-trade', sourceTable: stockDef.name,
     sourceSystem: stockDef.profile.sourceSystem, profileHash: stockDef.profile.fingerprint, fileSha256: source.entry.fileSha256, snapshotAt: AT, at: AT, runId: stockRun.id, expectedRows: 1 };
   const stockWriter = require('../lib/persistence/repositories/import-history').createImportHistoryWriters({ protection, authorize: () => true, resolveMasterSourceInstance: () => 'tradefoto-trade' })[stockDef.profile.entity];
-  const stockTarget = await app.provider.transaction(tx => stockWriter.create(tx, { id: crypto.randomUUID(), data: stockData }, stockContext), { isolation: 'serializable' });
-  await app.provider.transaction(async tx => {
+  const stockTarget = await provider.transaction(tx => stockWriter.create(tx, { id: crypto.randomUUID(), data: stockData }, stockContext), { isolation: 'serializable' });
+  await provider.transaction(async tx => {
     const snapshots = require('../lib/persistence/repositories/import-history-snapshots').createHistorySnapshots({ protection });
     await snapshots.recordRows(tx, [{ rowNumber: 1, target: stockTarget }], stockContext); await snapshots.finish(tx, stockContext);
   }, { isolation: 'serializable' });
   if (differingStock) {
     const changed = { ...stockData, [stockDef.profile.fields.find(field => field.source === 'FBestand').target]: '999' };
-    await app.provider.transaction(tx => stockWriter.update(tx, { id: stockTarget.id, expectedRevision: stockTarget.revision, data: changed }, stockContext), { isolation: 'serializable' });
+    await provider.transaction(tx => stockWriter.update(tx, { id: stockTarget.id, expectedRevision: stockTarget.revision, data: changed }, stockContext), { isolation: 'serializable' });
   }
-  const stockPublication = app.database.prepare('SELECT run_id AS runId,scope_id AS scopeId,source_instance AS sourceInstance,profile_hash AS profileHash,file_sha256 AS fileSha256,snapshot_at AS snapshotAt,owner_id AS ownerId,expected_rows AS expectedRows,status,payload FROM import_history_snapshots').get();
+  const stockPublication = await first(sales, 'SELECT run_id AS "runId",scope_id AS "scopeId",source_instance AS "sourceInstance",profile_hash AS "profileHash",file_sha256 AS "fileSha256",snapshot_at AS "snapshotAt",owner_id AS "ownerId",expected_rows::integer AS "expectedRows",status,payload FROM integration.import_history_snapshots');
   f.setPublications([stockPublication]);
-  const stockBefore = app.database.prepare('SELECT * FROM import_history_records WHERE id=?').get(stockTarget.id);
-  const ownRows = () => ['import_master_records', 'import_master_segments', 'import_master_bindings', 'import_master_events'].map(table => app.database.prepare('SELECT * FROM ' + table + ' WHERE ' + (table === 'import_master_records' ? 'id' : 'record_id') + '=?').all(anchorId));
-  const before = ownRows(), manualBefore = await catalog.getByArticleNumber('000042'), imageBefore = await images.metadata('000042');
+  const inheritedStock = () => first(sales, 'SELECT * FROM integration.import_history_records WHERE id=$1', [stockTarget.id]);
+  const stockBefore = await inheritedStock();
+  const ownRows = () => Promise.all(['import_master_records', 'import_master_segments', 'import_master_bindings', 'import_master_events'].map(table =>
+    read(sales, 'SELECT * FROM trade.' + table + ' WHERE ' + (table === 'import_master_records' ? 'id' : 'record_id') + '=$1 ORDER BY to_jsonb(' + table + ')::text', [anchorId])));
+  const before = await ownRows(), manualBefore = await catalog.getByArticleNumber('000042'), imageBefore = await images.metadata('000042');
   const oldCore = f.core.query.bind(f.core); f.core.query = async (sql, args) => {
-    if (sql.includes('FROM gp.data_import_sources')) return { rows: app.database.prepare('SELECT id,scope_id AS scopeId,owner_id AS ownerId,revision,created_at AS createdAt,updated_at AS updatedAt,payload FROM data_import_sources' + (args?.length ? ' WHERE id=?' : '')).all(...(args || [])) };
-    if (sql.startsWith('UPDATE gp.data_import_sources')) { const result = app.database.prepare('UPDATE data_import_sources SET revision=?,updated_at=?,payload=? WHERE id=? AND revision=?').run(args[1], args[2], args[3], args[0], args[4]); return { rowCount: result.changes }; }
+    if (sql.includes('FROM gp.data_import_sources') || sql.startsWith('UPDATE gp.data_import_sources')) return core.query(sql, args);
     return oldCore(sql, args);
   };
-  const oldSales = f.sales.query.bind(f.sales); f.sales.query = async (sql, args) => sql.includes('FROM trade.import_master_records')
-    ? { rows: app.database.prepare('SELECT id,scope_id AS scopeId,source_instance AS sourceInstance,source_table AS sourceTable,identity_hash AS identityHash,revision FROM import_master_records ORDER BY id').all() }
-    : sql.includes('FROM integration.import_history_records ORDER BY id') ? { rows: app.database.prepare('SELECT id,scope_id AS scopeId,source_instance AS sourceInstance,source_table AS sourceTable,identity_hash AS identityHash,revision FROM import_history_records ORDER BY id').all() } : oldSales(sql, args);
+  const oldSales = f.sales.query.bind(f.sales); f.sales.query = async (sql, args) =>
+    sql.includes('FROM trade.import_master_records') || sql.includes('FROM integration.import_history_records ORDER BY id')
+      ? sales.query(sql, args) : oldSales(sql, args);
   const reader = options => S.readTradeFotoFullSource({ ...options, readerFactory: () => ({ getTableNames: () => defs.map(def => def.name), getTable(name) {
     const def = defs.find(def => def.name === name), rows = values[name] || [];
     return { rowCount: rows.length, getColumnNames: () => def.columns.map(c => c.name), getColumns: () => def.columns,
@@ -287,22 +272,22 @@ async function ordinaryTradeReplayFixture(t, differingStock) {
   runtimeModule._compile(fs.readFileSync(runtimeFile, 'utf8'), runtimeFile); trustedRuntime = runtimeModule.exports;
   const plan = await subject.createReplayPlan({ ...f, archiveProof: f.proof });
   if (differingStock) {
-    await assert.rejects(subject.replaySources({ ...f, access: app.provider, vault, plan, isolatedRecovery: true }), { code: 'PG_SOURCE_REPLAY_STOCK_PUBLICATION_REQUIRED' });
-    assert.deepEqual(app.database.prepare('SELECT * FROM import_history_records WHERE id=?').get(stockTarget.id), stockBefore);
+    await assert.rejects(subject.replaySources({ ...f, access: provider, vault, plan, isolatedRecovery: true }), { code: 'PG_SOURCE_REPLAY_STOCK_PUBLICATION_REQUIRED' });
+    assert.deepEqual((await first(sales, "SELECT * FROM integration.import_history_records WHERE id=$1", [stockTarget.id])), stockBefore);
     assert.deepEqual(await catalog.getByArticleNumber('000042'), manualBefore); return;
   }
-  const result = await subject.replaySources({ ...f, access: app.provider, vault, plan, isolatedRecovery: true });
+  const result = await subject.replaySources({ ...f, access: provider, vault, plan, isolatedRecovery: true });
   assert.equal(result.verified, true); assert.equal(result.sources[0].catalog.complete, true); assert.equal(result.sources[0].catalog.blocked, 1);
   assert.equal(result.sources[0].exceptionIdentities, 2); assert.equal(result.sources[0].preservedAnchorIdentities, 1);
-  assert.deepEqual(ownRows(), before); assert.deepEqual(await catalog.getByArticleNumber('000042'), manualBefore); assert.deepEqual(await images.metadata('000042'), imageBefore);
+  assert.deepEqual(await ownRows(), before); assert.deepEqual(await catalog.getByArticleNumber('000042'), manualBefore); assert.deepEqual(await images.metadata('000042'), imageBefore);
   const image = await images.content('000042'); assert.deepEqual(image.buffer, imageBytes);
   const recovered = await catalog.getByArticleNumber('000043'); assert.equal(recovered.productId, pureProduct.productId); assert.equal(recovered.description, 'Source article 43'); assert.ok(recovered.prices.some(price => price.amount === '12.000000000000'));
-  assert.ok(app.database.prepare('SELECT source_profile_version FROM sales_article_import_snapshots').all().some(snapshot => snapshot.source_profile_version.startsWith('recovery-v1.')));
-  assert.ok(app.database.prepare("SELECT issue FROM data_import_rows WHERE issue LIKE 'RECOVERY_%'").all().some(row => row.issue === 'RECOVERY_PRESERVED_GP_ANCHOR'));
-  assert.ok(app.database.prepare('SELECT attempt_id FROM data_import_runs').all().some(run => run.attempt_id.startsWith('recovery-')));
+  assert.ok((await read(sales, "SELECT source_profile_version FROM trade.sales_article_import_snapshots")).some(snapshot => snapshot.source_profile_version.startsWith('recovery-v1.')));
+  assert.ok((await read(sales, "SELECT issue FROM integration.data_import_rows WHERE issue LIKE 'RECOVERY_%'")).some(row => row.issue === 'RECOVERY_PRESERVED_GP_ANCHOR'));
+  assert.ok((await read(sales, "SELECT attempt_id FROM integration.data_import_runs")).some(run => run.attempt_id.startsWith('recovery-')));
   assert.equal(result.stockPublications.length, 1); assert.equal(result.stockPublications[0].verified, true); assert.equal(result.stockPublications[0].expectedRows, 1);
-  assert.deepEqual(app.database.prepare('SELECT * FROM import_history_records WHERE id=?').get(stockTarget.id), stockBefore);
-  await assert.rejects(subject.replaySources({ ...f, access: app.provider, vault, plan, isolatedRecovery: true }), { code: 'PG_SOURCE_REPLAY_RESTART_FROM_BUNDLE' });
+  assert.deepEqual((await first(sales, "SELECT * FROM integration.import_history_records WHERE id=$1", [stockTarget.id])), stockBefore);
+  await assert.rejects(subject.replaySources({ ...f, access: provider, vault, plan, isolatedRecovery: true }), { code: 'PG_SOURCE_REPLAY_RESTART_FROM_BUNDLE' });
 }
-test('ordinary Trade replay preserves GP anchors/manual content and rebuilds an unchanged held AF publication', t => ordinaryTradeReplayFixture(t, false));
-test('a differing held AF head cannot falsely complete replay with its latest stock publication missing', t => ordinaryTradeReplayFixture(t, true));
+test('ordinary Trade replay preserves GP anchors/manual content and rebuilds an unchanged held AF publication', nativeImport, () => withImportFixture(pg => ordinaryTradeReplayFixture(pg, false)));
+test('a differing held AF head cannot falsely complete replay with its latest stock publication missing', nativeImport, () => withImportFixture(pg => ordinaryTradeReplayFixture(pg, true)));

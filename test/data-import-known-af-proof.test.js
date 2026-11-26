@@ -12,12 +12,18 @@ function request(buffer=F.sourceBuffer()){return {sourceId:'c'.repeat(64),scopeI
   fileSha256:hash(buffer),bytes:buffer.length,runId:'d'.repeat(64),declaredRows:2,expectedRows:3};}
 function fakeVerifier(extra={}){return V.createKnownAfSourceVerifier({clock:()=>F.TIME,toolchain:policy,
   executor:async({request:r})=>({stdout:Buffer.from(JSON.stringify(result(r))),stderr:Buffer.alloc(0),exitCode:0}),...extra});}
-async function fixture(t,tag=0){const eans=[1,2,3].map(n=>String(n).padStart(13,'0'));
+async function withReviewedSource(tag,work){const eans=[1,2,3].map(n=>String(n).padStart(13,'0'));
   const stocks=eans.map((EAN,n)=>({...Object.fromEntries(H.tableFor('trade','ARTIKEL_FILIALEN').columns.map(c=>[c.name,null])),EAN,FilialID:1,FBestand:n+1}));
-  const f=await F.fixture(t,{values:{ARTIKEL_STAMM:eans.map(EAN=>F.rawMaster('ARTIKEL_STAMM',{EAN,Artikelbezeichnung:'Synthetic item'})),
-    FILIALEN:[F.rawMaster('FILIALEN',{FilialID:'1'})],ARTIKEL_FILIALEN:stocks},counts:{ARTIKEL_FILIALEN:2}});
+  return F.withFixture({values:{ARTIKEL_STAMM:eans.map(EAN=>F.rawMaster('ARTIKEL_STAMM',{EAN,Artikelbezeichnung:'Synthetic item'})),
+    FILIALEN:[F.rawMaster('FILIALEN',{FilialID:'1'})],ARTIKEL_FILIALEN:stocks},counts:{ARTIKEL_FILIALEN:2}},async f=>{
   f.options.acceptedVerifierAssets=[policy];f.reload();const buffer=F.sourceBuffer();buffer[4000]=tag;
-  let source=await f.upload(Buffer.from(buffer));source=await f.finish(source,'review');return {...f,buffer,source,get runtime(){return f.runtime;},reload:()=>f.reload()};}
+  let source=await f.upload(Buffer.from(buffer));source=await f.finish(source,'review');
+  await work({...f,buffer,source,get runtime(){return f.runtime;}});});}
+async function countEvents(f){return (await f.sales.query('SELECT count(*)::integer n FROM integration.data_import_events')).rows[0].n;}
+async function sourceRow(f,id){
+ const row=(await f.core.query('SELECT * FROM gp.data_import_sources WHERE id=$1',[id])).rows[0];
+ return {...row,revision:Number(row.revision)};
+}
 async function attach(f){const r=await f.runtime.verificationRequest(f.getSession,f.source.id);assert(r);const evidence=await fakeVerifier().verify({request:r,buffer:f.buffer});
   const source=await f.runtime.attachIndependentCountProof(f.getSession,f.source.id,{expectedRevision:r.sourceRevision,evidence});return {r,evidence,source};}
 
@@ -61,30 +67,31 @@ test('source AEAD loader rejects tamper/foreign source, unavailable policy and d
  assert.throws(()=>P.loadSourceProofRegistry({...args,sourceRow:{...row,payload:protection.seal(bad,P.sourceContext(row))}}));
  protection.destroy();assert.throws(()=>P.loadSourceProofRegistry(args),code('IMPORT_PROTECTION_UNAVAILABLE'));
 });
-test('SQLite dynamic new-hash proof persists privately, does not approve, survives reload and lost reply',async t=>{
- const f=await fixture(t,17),before=f.database.prepare('SELECT COUNT(*) n FROM data_import_events').get().n;
+test('PostgreSQL new-hash proof persists privately, does not approve, survives reload and lost reply',F.nativeImport,()=>withReviewedSource(17,async f=>{
+ const before=await countEvents(f);
  assert.equal(f.source.independentCountVerification.required,true);const {r,evidence,source}=await attach(f);
  assert.equal(source.independentCountVerification.verified,true);assert.equal(Object.hasOwn(source,'independentCountProof'),false);
- assert.equal(f.database.prepare('SELECT COUNT(*) n FROM data_import_events').get().n,before);
+ assert.equal(await countEvents(f),before);
  const stock=source.tables.find(t=>t.name===P.KNOWN.sourceTable);assert(stock.run.gates.includes('SOURCE_ROW_COUNT_MISMATCH'));assert.equal(stock.run.sourceToleranceReceipts.length,0);assert.equal(stock.run.canApply,false);
  f.reload();assert.equal(await f.runtime.verificationRequest(f.getSession,source.id),null);
  const reopened=await f.runtime.attachIndependentCountProof(f.getSession,source.id,{expectedRevision:r.sourceRevision,evidence});assert.equal(reopened.revision,source.revision);
  assert.equal(reopened.tables.find(t=>t.name===P.KNOWN.sourceTable).run.availableSourceTolerances[0].fingerprint,stock.run.availableSourceTolerances[0].fingerprint);
  await assert.rejects(f.runtime.attachIndependentCountProof(f.getSession,source.id,{expectedRevision:source.revision,evidence:copy(evidence)}),code('IMPORT_SOURCE_PROOF_UNTRUSTED'));
-});
-test('SQLite separate owner receipt, shared retention and paired-key restore preserve exact proof semantics',async t=>{
- const f=await fixture(t,18),installed=(await attach(f)).source,table=installed.tables.find(t=>t.name===P.KNOWN.sourceTable);
- const original=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(table.run.id).manifest;
+}));
+test('PostgreSQL separate owner receipt, shared retention and paired-key restore preserve exact proof semantics',F.nativeImport,()=>withReviewedSource(18,async f=>{
+ const installed=(await attach(f)).source,table=installed.tables.find(t=>t.name===P.KNOWN.sourceTable);
+ const readManifest=async()=> (await f.sales.query('SELECT manifest FROM integration.data_import_runs WHERE id=$1',[table.run.id])).rows[0].manifest;
+ const original=await readManifest();
  const accepted=await f.runtime.sourceOperation(f.getSession,installed.id,'approve-counts',{expectedRevision:installed.revision});
  const stock=accepted.tables.find(t=>t.name===P.KNOWN.sourceTable);assert.equal(stock.run.id,table.run.id);assert.equal(stock.run.gates.length,0);assert.equal(stock.run.sourceToleranceReceipts.length,1);
- assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(table.run.id).manifest,original);
+ assert.deepEqual(await readManifest(),original);
  const applied=await f.finish(accepted,'apply');assert.equal(applied.status,'applied');
  const R=require('../lib/persistence/postgresql/operations/import-retention'),protection=await require('../lib/data-import-managed-protection').loadManagedDataImportProtection({access:f.provider,vault:f.keyVault,clock:()=>F.TIME});
- let row=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(applied.id);
+ let row=await sourceRow(f,applied.id);
  const data=protection.open(row.payload,['source',row.scope_id,row.owner_id,row.id,row.revision]);
- const runs=new Map(f.database.prepare('SELECT * FROM data_import_runs').all().map(run=>[run.id,run]));
- for(const event of f.database.prepare('SELECT * FROM data_import_events WHERE action LIKE ?').all(T.SOURCE_TOLERANCE_EVENT_PREFIX+'%')){
-  (runs.get(event.run_id).sourceToleranceEvents??=[]).push({runId:event.run_id,actorId:event.actor_id,revision:event.revision,action:event.action,at:event.at});}
+ const runs=new Map((await f.sales.query('SELECT id,scope_id,owner_id,profile_hash,manifest,status,revision::integer,received_count::integer FROM integration.data_import_runs')).rows.map(run=>[run.id,run]));
+ for(const event of (await f.sales.query('SELECT * FROM integration.data_import_events WHERE action LIKE $1',[T.SOURCE_TOLERANCE_EVENT_PREFIX+'%'])).rows){
+  (runs.get(event.run_id).sourceToleranceEvents??=[]).push({runId:event.run_id,actorId:event.actor_id,revision:Number(event.revision),action:event.action,at:event.at});}
  assert.equal(R.completeSuccessor({row,data},runs,{protection,acceptedVerifierAssets:[policy]}),false,'catalog completion remains required');
  // Isolate retention from the separately qualified catalog: this fixture supplies its completed predicate.
  data.catalog={complete:true};row={...row,revision:row.revision+1};row.payload=protection.seal(data,['source',row.scope_id,row.owner_id,row.id,row.revision]);
@@ -102,36 +109,36 @@ test('SQLite separate owner receipt, shared retention and paired-key restore pre
  const purgedRow={id:row.id,scopeId:row.scope_id,ownerId:row.owner_id,revision:row.revision+1};purgedRow.payload=restored.seal(provenance,P.sourceContext(purgedRow));
  assert.equal(P.loadSourceProofRegistry({protection:restored,sourceRow:purgedRow,acceptedVerifierAssets:[policy]}).available,true,'small proof survives provenance-only source shape');
  restored.destroy();
-});
-test('SQLite stale source revision, foreign capability, expiry and absent policy fail closed',async t=>{
- const f=await fixture(t,19),r=await f.runtime.verificationRequest(f.getSession,f.source.id),evidence=await fakeVerifier().verify({request:r,buffer:f.buffer});
+}));
+test('PostgreSQL stale source revision, foreign capability, expiry and absent policy fail closed',F.nativeImport,()=>withReviewedSource(19,async f=>{
+ const r=await f.runtime.verificationRequest(f.getSession,f.source.id),evidence=await fakeVerifier().verify({request:r,buffer:f.buffer});
  const protection=await require('../lib/data-import-managed-protection').loadManagedDataImportProtection({access:f.provider,vault:f.keyVault,clock:()=>F.TIME});
- const row=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(f.source.id);
+ const row=await sourceRow(f,f.source.id);
  const data=protection.open(row.payload,['source',row.scope_id,row.owner_id,row.id,row.revision]);data.error='SYNTHETIC_CONCURRENT_SOURCE_UPDATE';
  const payload=protection.seal(data,['source',row.scope_id,row.owner_id,row.id,row.revision+1]);
- f.database.prepare('UPDATE data_import_sources SET revision=revision+1,payload=? WHERE id=? AND revision=?').run(payload,row.id,row.revision);protection.destroy();
+ await f.core.query('UPDATE gp.data_import_sources SET revision=revision+1,payload=$1 WHERE id=$2 AND revision=$3',[payload,row.id,row.revision]);protection.destroy();
  await assert.rejects(f.runtime.attachIndependentCountProof(f.getSession,f.source.id,{expectedRevision:r.sourceRevision,evidence}),code('IMPORT_REVISION_CONFLICT'));
  const fresh=await f.runtime.verificationRequest(f.getSession,f.source.id),foreign=await fakeVerifier().verify({request:{...fresh,ownerId:'foreign'},buffer:f.buffer});
  await assert.rejects(f.runtime.attachIndependentCountProof(f.getSession,f.source.id,{expectedRevision:fresh.sourceRevision,evidence:foreign}),code('IMPORT_SOURCE_PROOF_INVALID'));
  f.options.acceptedVerifierAssets=[];f.reload();const next=await f.runtime.verificationRequest(f.getSession,f.source.id),ev=await fakeVerifier().verify({request:next,buffer:f.buffer});
  await assert.rejects(f.runtime.attachIndependentCountProof(f.getSession,f.source.id,{expectedRevision:next.sourceRevision,evidence:ev}),code('IMPORT_SOURCE_VERIFIER_UNAVAILABLE'));
  f.options.clock=()=>new Date(Date.parse(F.TIME)+31*24*60*60*1000).toISOString();f.reload();await assert.rejects(f.runtime.verificationRequest(f.getSession,f.source.id),code('IMPORT_RUN_EXPIRED'));
-});
-test('static exact proof remains the original trusted object/fingerprint and suppresses dynamic verification',async t=>{
- const f=await fixture(t,20),profile=H.profileFor('trade',P.KNOWN.sourceTable);
+}));
+test('static exact proof remains the original trusted object/fingerprint and suppresses dynamic verification',F.nativeImport,()=>withReviewedSource(20,async f=>{
+ const profile=H.profileFor('trade',P.KNOWN.sourceTable);
  const proof=T.defineDataImportSourceTolerance({id:'synthetic-static-af',recordedAt:F.TIME,approvalReference:'explicit-owner-receipt-required',reason:'Synthetic exact static proof',evidenceReference:'synthetic-test-only',
   sourceSystem:profile.sourceSystem,sourceInstance:'tradefoto-trade',sourceTable:profile.sourceTable,profileHash:profile.fingerprint,schemaSha256:profile.schemaSha256,fileSha256:hash(f.buffer),declaredRows:2,expectedRows:3,requiresExplicitApproval:true});
  const fp=proof.fingerprint;f.options.sourceTolerances=[proof];f.reload();assert.equal(await f.runtime.verificationRequest(f.getSession,f.source.id),null);
  const source=await f.runtime.sourceOperation(f.getSession,f.source.id,'read'),stock=source.tables.find(t=>t.name===P.KNOWN.sourceTable);
  assert.equal(stock.run.availableSourceTolerances.length,1);assert.equal(stock.run.availableSourceTolerances[0],proof);assert.equal(proof.fingerprint,fp);
-});
+}));
 
 
-test('real Runtime, encrypted JobStore and controlled helper transport persist new-hash evidence before unlink without owner approval',async t=>{
+test('real Runtime, encrypted JobStore and controlled helper transport persist new-hash evidence before unlink without owner approval',F.nativeImport,async t=>{
  const os=require('node:os'),{createDataImportLifecycle}=require('../lib/data-import-lifecycle');
  const eans=[1,2,3].map(n=>String(n).padStart(13,'0'));
  const rows=eans.map((EAN,n)=>({...Object.fromEntries(H.tableFor('trade',P.KNOWN.sourceTable).columns.map(c=>[c.name,null])),EAN,FilialID:1,FBestand:n+1}));
- const f=await F.fixture(t,{values:{ARTIKEL_STAMM:eans.map(EAN=>F.rawMaster('ARTIKEL_STAMM',{EAN})),FILIALEN:[F.rawMaster('FILIALEN',{FilialID:'1'})],[P.KNOWN.sourceTable]:rows},counts:{[P.KNOWN.sourceTable]:2}});
+ await F.withFixture({values:{ARTIKEL_STAMM:eans.map(EAN=>F.rawMaster('ARTIKEL_STAMM',{EAN})),FILIALEN:[F.rawMaster('FILIALEN',{FilialID:'1'})],[P.KNOWN.sourceTable]:rows},counts:{[P.KNOWN.sourceTable]:2}},async f=>{
  const lifecycle=createDataImportLifecycle();f.options.acceptedVerifierAssets=[policy];f.options.lifecycle=lifecycle;f.reload();
  const bytes=F.sourceBuffer();bytes[4000]=31;const sourceSha=hash(bytes);
  const tempRoot=fs.realpathSync(os.tmpdir()),directory=fs.mkdtempSync(path.join(tempRoot,'known-af-jobs-'));
@@ -141,8 +148,8 @@ test('real Runtime, encrypted JobStore and controlled helper transport persist n
   const buffer=await originalStore.decrypt(blob,signal);decrypted.push(buffer);return buffer;},async remove(name){
   if(name.endsWith('.source')){rawRemoved++;assert.equal(verifiedCalls,1);const view=await f.runtime.sourceOperation(f.getSession,sourceId,'read');
    assert.equal(view.independentCountVerification.verified,true,'durable Source proof and readback must precede unlink');
-   assert.equal(f.database.prepare('SELECT COUNT(*) n FROM data_import_events WHERE action LIKE ?').get(T.SOURCE_TOLERANCE_EVENT_PREFIX+'%').n,0);
-   assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_history_records').get().n,0);}
+   assert.equal((await f.sales.query('SELECT count(*)::int n FROM integration.data_import_events WHERE action LIKE $1',[T.SOURCE_TOLERANCE_EVENT_PREFIX+'%'])).rows[0].n,0);
+   assert.equal((await f.sales.query('SELECT count(*)::int n FROM integration.import_history_records')).rows[0].n,0);}
   return originalStore.remove(name);}};
  const transport=fakeVerifier();
  const countVerifier={async verify(input){verifiedCalls++;assert.equal(decrypted.length,2);assert.equal(input.buffer,decrypted[1]);assert.equal(input.request.fileSha256,sourceSha);
@@ -154,8 +161,9 @@ test('real Runtime, encrypted JobStore and controlled helper transport persist n
  for(let n=0;n<5;n++){await jobs.tick();source=await f.runtime.sourceOperation(f.getSession,sourceId,'read');if(['ready','needs_review'].includes(source.status))break;}
  assert.deepEqual(errors,[]);assert.equal(source.status,'needs_review');assert.equal(verifiedCalls,1);assert.equal(decrypted.length,2);assert.equal(rawRemoved,1);
  assert(decrypted.every(buffer=>buffer.every(byte=>byte===0)));assert.equal(source.independentCountVerification.verified,true);assert.equal(Object.hasOwn(source,'independentCountProof'),false);
- assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_history_records').get().n,0);
+ assert.equal((await f.sales.query('SELECT count(*)::int n FROM integration.import_history_records')).rows[0].n,0);
  const stock=source.tables.find(table=>table.name===P.KNOWN.sourceTable);assert.equal(stock.run.sourceToleranceReceipts.length,0);assert(stock.run.gates.includes('SOURCE_ROW_COUNT_MISMATCH'));
  source=await f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision});assert.equal(source.tables.find(table=>table.name===P.KNOWN.sourceTable).run.gates.length,0);
  bytes.fill(0);
+ });
 });

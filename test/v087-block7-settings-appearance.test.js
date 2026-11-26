@@ -56,5 +56,3 @@ test("v0.87 Block 7: Grundeinstellungen verwenden Accordions und eine globale nu
   assert.match(styles, /\.portal-active input\[type="checkbox"\] \{ width:18px; min-width:18px; height:18px; min-height:18px/);
   assert.match(styles, /\.portal-user-controls \{ display:grid; grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
-
-test("immutable historical legacy font/settings migration", { timeout: 210000 }, () => require("../test-support/historical-server-tests").runHistoricalServerTest("test/v087-block7-settings-appearance.test.js"));

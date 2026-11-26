@@ -155,16 +155,6 @@ test("historical transfer explicitly preserves the extension as NULL and rejects
   assert.match(historicalSql, /source==='legacy-null'\?'NULL AS '\+q\(c\.name\)/);
 });
 
-test("historical transfer rejects a new SQLite school column rather than omitting stored school data", () => {
-  const { createSqliteSource } = require("../test-support/postgresql-migration/sqlite-source");
-  const { verifySqlite } = require("../lib/persistence/postgresql/transfer/history");
-  const db = createSqliteSource();
-  try {
-    verifySqlite(db);
-    db.exec("ALTER TABLE week_options ADD COLUMN school_details_json TEXT");
-    assert.throws(() => verifySqlite(db), /MIGRATION_SOURCE_SCHEMA_DRIFT/);
-  } finally { db.close(); }
-});
 
 test("transfer/replay content verification includes school JSON and refuses changed values", async () => {
   const { verifyTable } = require("../lib/persistence/postgresql/transfer/history");

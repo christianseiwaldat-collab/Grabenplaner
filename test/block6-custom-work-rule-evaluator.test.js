@@ -15,9 +15,6 @@ const {
   ensureSqliteWorkRuleStoreSchema,
 } = require("../lib/persistence/sqlite/operations/work-rule-store-schema");
 const {
-  openSqliteApplicationPersistence,
-} = require("../lib/persistence/sqlite/provider");
-const {
   SQLITE_WORK_RULE_STORE_CATALOG,
 } = require("../lib/persistence/sqlite/work-rule-store-catalog");
 const {
@@ -276,47 +273,4 @@ test("Block 6: Basis-, Custom- und U18-Profil werden additiv aufgelöst", () => 
     resolved.map((entry) => entry.id),
     ["adult-base", "youth-base", "custom-narrow"],
   );
-});
-
-test("Block 6: eine bestehende Assignment-ID wird nicht per UPSERT überschrieben", async () => {
-  const application = openSqliteApplicationPersistence({
-    databasePath: ":memory:",
-    catalog: SQLITE_WORK_RULE_STORE_CATALOG,
-  });
-  const { database, provider } = application;
-  ensureSqliteWorkRuleStoreSchema(database);
-  const repository = createWorkRuleStoreRepository(provider);
-  try {
-    await seedBuiltinWorkRuleProfiles(
-      repository,
-      BUILTIN_WORK_RULE_PROFILES,
-      SOURCE_CATALOG,
-      { actor: "test-system" },
-    );
-    const assignmentId = "builtin:at-retail-adult-monitor:installation";
-    const original = database.prepare(`
-      SELECT id, profile_version_id, valid_from, created_by
-      FROM work_rule_assignments
-      WHERE id = ?
-    `).get(assignmentId);
-    await assert.rejects(
-      saveWorkRuleAssignment(repository, {
-        id: assignmentId,
-        profileVersionId: "custom:SAMSTAG@release-2",
-        scopeType: "location",
-        scopeKey: "18",
-        validFrom: "2026-07-01",
-      }, "252"),
-      /bestehende Regelprofil-Zuordnung/i,
-    );
-    const stored = database.prepare(`
-      SELECT id, profile_version_id, valid_from, created_by
-      FROM work_rule_assignments
-      WHERE id = ?
-    `).get(assignmentId);
-    assert.deepEqual(stored, original);
-  } finally {
-    await provider.close();
-    database.close();
-  }
 });

@@ -27,5 +27,6 @@ beschreibt die getrennte Offline-Wiederherstellung früherer SQLite-Sicherungen.
 Node.js und pnpm gemäß `package.json`: `pnpm install --frozen-lockfile`. Der Serverstart setzt die geschützte PostgreSQL-Konfiguration voraus.
 Die vollständige Linux-Anwendungsprüfung richtet mit `test-support/postgresql-migration/ci-stock-import-delete.js --full`
 ein ausschließlich synthetisches PostgreSQL-Paar im gebundenen CI-Dienst ein; die HTTP-Fixtures verwenden dabei den Testadapter `test-support/postgresql-api/preload.js`.
+`pnpm test` und die reguläre Anwendungs-CI starten Node.js mit deaktiviertem SQLite. Die Datenbanktests für den aktuellen GP verwenden PostgreSQL. Die früheren SQLite-Prüfungen sind im Git-Stand `f0f635c8f03cf2174cb32facc3df7cf1ddd52e4c` nachvollziehbar.
 Für Entwicklung und Demo ausschließlich synthetische Daten verwenden.
 Grabenplaner ist source-available; Nutzung gemäß [LICENSE.md](LICENSE.md).

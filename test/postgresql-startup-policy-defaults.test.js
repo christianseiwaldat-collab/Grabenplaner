@@ -6,18 +6,6 @@ const { createPostgresqlStartupOperations } = require("../lib/persistence/postgr
 const columns = "singleton_id,enabled,revision,updated_at";
 const expected = Object.freeze({ singleton_id: 1, enabled: 0, revision: 1 });
 
-test("PostgreSQL birthday policy defaults preserve the exact disabled historical singleton", () => {
-  const { legacyRequire } = require("../test-support/legacy-baseline");
-  const database = legacyRequire("lib/persistence/sqlite/provider").openSqliteLegacyDatabase(":memory:");
-  try {
-    legacyRequire("lib/persistence/sqlite/operations/portal-birthday-presentation-schema")
-      .ensureSqlitePortalBirthdayPresentationSchema(database);
-    const rows = database.prepare("SELECT " + columns + " FROM portal_birthday_presentation_policy").all();
-    assert.equal(rows.length, 1);
-    assert.deepEqual({ singleton_id: rows[0].singleton_id, enabled: rows[0].enabled, revision: rows[0].revision }, expected);
-    assert.ok(Number.isFinite(Date.parse(rows[0].updated_at)));
-  } finally { database.close(); }
-});
 
 test("real PostgreSQL startup initializes the policy once, preserves existing choices and rejects invalid state", {
   skip: !process.env.GP_CORE_MIGRATOR_URL,

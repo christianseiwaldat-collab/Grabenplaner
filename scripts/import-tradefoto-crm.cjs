@@ -3,9 +3,7 @@
 // Explicit, resumable maintenance import of ONE already uploaded KUNDEN run.
 // Uses the installed domain writers, encrypted source bindings and CRM audit.
 // Does not enable the generic HTTP import or touch other source tables.
-const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { createRequire } = require('node:module');
 const POLICY = 'tradefoto-crm-kund-nr-preserve-invalid-v1';
@@ -201,47 +199,8 @@ function createTools(appRequire = createRequire(path.join(__dirname, '..', 'pack
   return { project, plan, apply, verify };
 }
 
-async function main() {
-  const options = {};
-  for (let n = 2; n < process.argv.length; n += 2) {
-    assert(/^--[a-z][a-z0-9-]*$/.test(process.argv[n]) && process.argv[n + 1], 'CRM_ARGUMENT_INVALID');
-    const key = process.argv[n].slice(2); assert(!Object.hasOwn(options, key)); options[key] = process.argv[n + 1];
-  }
-  assert(Object.keys(options).every(key => ['app-root', 'database', 'source-id', 'source-sha256', 'owner', 'mode', 'confirm-plan', 'report'].includes(key)));
-  assert(['plan', 'apply', 'verify'].includes(options.mode));
-  const appRoot = path.resolve(options['app-root'] || path.join(__dirname, '..'));
-  const appRequire = createRequire(path.join(appRoot, 'package.json'));
-  assert(options.database && fs.statSync(options.database).isFile(), 'CRM_DATABASE_REQUIRED');
-  const { openSqliteLegacyDatabase, createSqlitePersistenceProvider } = appRequire('./lib/persistence/sqlite/provider');
-  const database = openSqliteLegacyDatabase(options.database);
-  const access = createSqlitePersistenceProvider({ database, catalog: appRequire('./lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG,
-    initializeConnection: false });
-  // Existing database connection settings only; do not run app startup/migrations.
-  database.exec('PRAGMA foreign_keys = ON'); database.exec('PRAGMA busy_timeout = 5000');
-  const keyId = process.env.GRABENPLANER_INTEGRATION_KEY_ID;
-  const keys = JSON.parse(process.env.GRABENPLANER_INTEGRATION_KEYS || '{}');
-  if (process.env.GRABENPLANER_INTEGRATION_KEY) keys[keyId] = process.env.GRABENPLANER_INTEGRATION_KEY;
-  const vault = appRequire('./lib/integration-secret-vault').createIntegrationSecretVault({ activeKeyId: keyId, keys });
-  let protection;
-  const startedAt = new Date().toISOString(), progress = event => process.stdout.write(JSON.stringify({ at: new Date().toISOString(), ...event }) + '\n');
-  try {
-    protection = await appRequire('./lib/data-import-managed-protection').loadManagedDataImportProtection({ access, vault, create: false });
-    assert(protection, 'CRM_EXISTING_IMPORT_KEY_REQUIRED');
-    const tools = createTools(appRequire);
-    const prepared = await tools.plan({ access, protection, sourceId: options['source-id'], expectedSourceSha256: options['source-sha256'], ownerId: options.owner }, progress);
-    const report = { startedAt, mode: options.mode, installedVersion: appRequire('./package.json').version,
-      scriptSha256: crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'), ...prepared.summary };
-    progress({ phase: 'plan-complete', ...report });
-    if (options.mode === 'apply') report.applied = await tools.apply(prepared, options['confirm-plan'], progress);
-    if (options.mode !== 'plan') report.verification = await tools.verify(prepared, progress);
-    report.finishedAt = new Date().toISOString();
-    if (options.report) fs.writeFileSync(options.report, JSON.stringify(report, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
-    progress({ phase: 'complete', ...report });
-  } finally { protection?.destroy(); await access.close(); database.close(); }
-}
 module.exports = { createTools, POLICY };
-if (require.main === module) main().catch(error => {
-  // Never print source values, assertion operands, environment or secret bytes.
-  console.error(JSON.stringify({ phase: 'failed', code: error.code || error.name, message: /^CRM_[A-Z_]+(?::[A-Za-z]+)?$/.test(error.message) ? error.message : 'CRM_IMPORT_FAILED' }));
+if (require.main === module) {
+  console.error(JSON.stringify({ phase: 'failed', code: 'CRM_LEGACY_SQLITE_CLI_RETIRED' }));
   process.exitCode = 1;
-});
+}

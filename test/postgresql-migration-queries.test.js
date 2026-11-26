@@ -11,7 +11,6 @@ const reviewedExtensions=[
   'ascii-nocase-catalog-v1.json',
   'onboarding-receipt-projection-catalog-v1.json','payroll-handoff-department-catalog-v1.json',
 ].flatMap(name=>require('../lib/persistence/postgresql/contracts/'+name).entries);
-const coreTables=new Set(require('../test-support/postgresql-migration-doc-fixtures/block-1-inventory.json').tables.filter(t=>t.database==='core').map(t=>t.name));
 const sha=value=>createHash('sha256').update(value).digest('hex');
 
 test('Core parity expectations retain every baseline/reviewed SQL pin and admit exactly the two derived receipt contracts',()=>{
@@ -44,7 +43,7 @@ test('Core parity expectations retain every baseline/reviewed SQL pin and admit 
   }
   assert.equal(otherStatements,1123);
 });
-test('Live entire Core read catalog executes with bound synthetic inputs and compares SQLite results',{skip:!process.env.GP_PG_MIGRATION_LIVE},async()=>withCoreFixture(async f=>{
+test('Live PostgreSQL Core read catalog executes with bound synthetic inputs',{skip:!process.env.GP_PG_MIGRATION_LIVE},async()=>withCoreFixture(async f=>{
   const catalog=createCoreCatalog(),reads=catalog.entries.filter(e=>e.statement.operation!=='execute');
   const failures=[],passed=[];let cursor=0;
   async function run(){
@@ -53,25 +52,22 @@ test('Live entire Core read catalog executes with bound synthetic inputs and com
       const reviewed=reviewedExtensions.findLast(e=>e.statementId===id&&!e.added);
       assert.equal(reviewed?.sqlSha256||contract.sqlSha256,catalog.provenance.find(e=>e.statementId===id).sqlSha256);
       const input=parameters(entry,contract.parameterTypes);
-      const values=await Promise.allSettled([f.sqliteProvider[entry.statement.operation](entry.statement,input),f.postgres[entry.statement.operation](entry.statement,input)]);
       try {
-        if(values[0].status==='rejected'||values[1].status==='rejected'){
-          assert.fail('Synthetic read probe must execute on both providers: '+values.map(v=>v.status==='fulfilled'?'result':v.reason.code).join('/'));
-        }else{
-          if(id==='work-rule-governance.schema-tables'){
-            values[0].value=values[0].value.filter(row=>coreTables.has(row.data.name));
-            assert.equal(values[1].value.length,191,'Core catalog hides Sales and private migration control tables');
-          }
-          assert.deepEqual(values[1].value,values[0].value);
-          passed.push({id,outcome:'matching-result',rows:Array.isArray(values[0].value)?values[0].value.length:values[0].value===null?0:1});
+        const value=await f.postgres[entry.statement.operation](entry.statement,input);
+        if(entry.statement.operation==='queryAll') assert.ok(Array.isArray(value));
+        else assert.ok(value===null||typeof value==='object');
+        if(id==='work-rule-governance.schema-tables'){
+          assert.equal(value.length,191,'Core catalog hides Sales and private migration control tables');
         }
-      }catch(error){failures.push({id,message:error.message.slice(0,1400),outcomes:values.map(v=>v.status==='fulfilled'?'result':v.reason.code)});}
+        passed.push({id,rows:Array.isArray(value)?value.length:value===null?0:1});
+      }catch(error){failures.push({id,message:error.message.slice(0,1400),code:error.code});}
     }
   }
   await Promise.all([run(),run(),run()]);
   const report={scope:'core-development-read-probe',productActivation:false,total:reads.length,passed,failures};
   // A fresh shard must not depend on another fixture creating this report directory.
   fs.mkdirSync('tmp',{recursive:true,mode:0o700});
-  fs.writeFileSync('tmp/postgresql-read-parity.json',JSON.stringify(report,null,2)+'\n');
+  fs.writeFileSync('tmp/postgresql-core-read-probe.json',JSON.stringify(report,null,2)+'\n');
   assert.deepEqual(failures,[]);
-},{compareWithSqlite:true}));
+  assert.equal(passed.length,reads.length);
+}));

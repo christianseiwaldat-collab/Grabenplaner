@@ -9,11 +9,9 @@ const {
   writeWeekOptionWithReservationCheck,
 } = require("../lib/staffing-reservations");
 const { createApplicationRepositories } = require("../lib/persistence/application-repositories");
-const { SQLITE_APPLICATION_CATALOG } = require("../lib/persistence/sqlite/application-catalog");
-const { STAFFING_RESERVATION_CONFLICT } = require("../lib/persistence/catalogs/staff-assignment-request-catalog");
-const { ensureSqliteApplicationSchema } = require("../lib/persistence/sqlite/operations/application-schema");
-const { runSqliteHistoricalCompatibilityMigrations } = require("../lib/persistence/sqlite/operations/historical-compatibility-migrations");
-const { createSqlitePersistenceProvider, openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
+const { withCoreFixture } = require("../test-support/postgresql-migration/core-fixture");
+
+const nativeCore = { skip: !process.env.GP_CORE_MIGRATOR_URL };
 
 const DAY = "2031-04-08";
 const NEXT = "2031-04-09";
@@ -25,23 +23,17 @@ const input = {
   startTime: "13:00", endTime: "15:00",
 };
 
-function fixture(t) {
-  const database = openSqliteLegacyDatabase(":memory:");
-  ensureSqliteApplicationSchema(database);
-  runSqliteHistoricalCompatibilityMigrations(database);
-  for (const [id, active] of [["05", 1], ["11", 1], ["13", 0], ["18", 1], ["99", 1]]) {
-    database.prepare("INSERT INTO locations (id, name, active) VALUES (?, ?, ?)").run(id, id, active);
-  }
-  database.prepare("INSERT INTO departments (id, location_id, name, active) VALUES (917, '11', 'Zielabteilung', 1)").run();
+async function fixture({ migrator: database, postgres: provider, postgresRepositories: repositories }) {
+  await database.query("SET ROLE gp_core_owner");
+  await database.query(`
+    INSERT INTO gp.locations (id, name, active) VALUES ('05','05',1), ('11','11',1), ('13','13',0), ('18','18',1), ('99','99',1)
+    ON CONFLICT (id) DO UPDATE SET active=excluded.active;
+    INSERT INTO gp.departments (id, location_id, name, active) VALUES (917, '11', 'Zielabteilung', 1);
+  `);
   for (const [number, branch] of [["Emma", "18"], ["252", "18"], ["275", "05"], ["201", "11"]]) {
-    database.prepare("INSERT INTO employees (personnel_number, full_name, nickname, home_location_id, active) VALUES (?, ?, ?, ?, 1)")
-      .run(number, number, number, branch);
+    await database.query("INSERT INTO gp.employees (personnel_number, full_name, nickname, home_location_id, active) VALUES ($1, $1, $1, $2, 1)", [number, branch]);
   }
-  const provider = createSqlitePersistenceProvider({
-    database, catalog: [...SQLITE_APPLICATION_CATALOG, STAFFING_RESERVATION_CONFLICT],
-  });
-  t.after(async () => { await provider.close(); database.close(); });
-  const repositories = createApplicationRepositories(provider);
+  await database.query("RESET ROLE");
   const actor = {
     employeeNumber: "Emma", sessionKind: "employee", permissions: [PERMISSION], grantedPermissions: [PERMISSION],
     explicitScopes: ["05", "11", "13", "18"].map(locationId => ({ locationId, departmentId: null })),
@@ -71,8 +63,8 @@ function option(optionType, dateFrom = DAY, dateTo = dateFrom, employeeNumber = 
 
 const held = { status: 409, code: "STAFFING_RESERVATION_ABSENCE_HOLD" };
 
-test("Emma needs a live individual grant, two whole-branch scopes and an active topology", async t => {
-  const { service, context, actor } = fixture(t);
+test("Emma needs a live individual grant, two whole-branch scopes and an active topology", nativeCore, () => withCoreFixture(async pg => {
+  const { service, context, actor } = await fixture(pg);
   assert.deepEqual((await service.capabilities({})).locationIds, ["05", "11", "18"]);
   context.actor = { ...actor, employeeNumber: "275" };
   await assert.rejects(service.create({}, input), { status: 403, code: "STAFFING_RESERVATION_ACTOR_DENIED" });
@@ -88,10 +80,10 @@ test("Emma needs a live individual grant, two whole-branch scopes and an active 
   assert.throws(() => assertReservationReviewer(actor, "Emma"), { status: 403 });
   assert.throws(() => assertReservationReviewer({ ...actor, employeeNumber: "Kalle" }, "Emma"), { status: 403 });
   assert.doesNotThrow(() => assertReservationReviewer({ ...actor, employeeNumber: "252" }, "Emma"));
-});
+}));
 
-test("one hourly reservation holds the source calendar day, preserving pre-existing entries and pending submissions", async t => {
-  const { service, repositories, database } = fixture(t);
+test("one hourly reservation holds the source calendar day, preserving pre-existing entries and pending submissions", nativeCore, () => withCoreFixture(async pg => {
+  const { service, repositories, database } = await fixture(pg);
   const existing = option("vacation");
   const planning = repositories.planningSettings;
   const [old] = (await writeWeekOptionWithReservationCheck(planning, existing)).rows;
@@ -103,7 +95,7 @@ test("one hourly reservation holds the source calendar day, preserving pre-exist
   assert.equal(reservation.active, true);
   assert.equal(reservation.requestedHeadcount, 1);
   assert.equal((await repositories.staffAssignmentRequests.getLatestRevision(reservation.id)).confirmedEmployeeNumber, null);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM employee_location_lendings").get().count, 0);
+  assert.equal((await database.query("SELECT count(*)::integer AS count FROM gp.employee_location_lendings")).rows[0].count, 0);
   assert.deepEqual(await service.read({}, reservation.id), reservation);
   assert.deepEqual(await service.create({}, input), { created: false, reservation });
   await assert.rejects(service.create({}, { ...input, startTime: "12:00" }), { code: "STAFFING_RESERVATION_KEY_CONFLICT" });
@@ -128,10 +120,10 @@ test("one hourly reservation holds the source calendar day, preserving pre-exist
   assert.ok(["pending", "pending_local"].includes(pending.status));
   assert.equal(absenceRequestSubmissionAllowed({ ...held, allowed: false, trafficLight: "red" }), true);
   assert.equal(absenceRequestSubmissionAllowed({ code: "VACATION_REQUEST_BLOCKED", allowed: false, trafficLight: "red" }), false);
-});
+}));
 
-test("overlapping reservations, atomic writes and revision-safe release leave one consistent approval state", async t => {
-  const { service, repositories, provider, context } = fixture(t);
+test("overlapping reservations, atomic writes and revision-safe release leave one consistent approval state", nativeCore, () => withCoreFixture(async pg => {
+  const { service, repositories, provider, context } = await fixture(pg);
   context.failAudit = true;
   await assert.rejects(service.create({}, input), /simulierter Fehler/);
   assert.deepEqual(await repositories.staffAssignmentRequests.listRequests(), []);
@@ -157,8 +149,8 @@ test("overlapping reservations, atomic writes and revision-safe release leave on
     await writeWeekOptionWithReservationCheck(bound.planningSettings, option("vacation", BEFORE));
     await writeWeekOptionWithReservationCheck(bound.planningSettings, date);
   }), held);
-  assert.equal(await repositories.planningSettings.getWeekOptionById({ id: 1 }), null);
+  assert.deepEqual(await repositories.planningSettings.listWeekOptionsForEmployeeDate({ employeeNumber: "252", date: BEFORE }), []);
   await service.release({}, second.id, { expectedRevision: second.revisionNumber });
   assert.equal(await findStaffingReservationConflict(repositories.staffAssignmentRequests, date), null);
   assert.equal((await writeWeekOptionWithReservationCheck(repositories.planningSettings, date)).rowsAffected, 1);
-});
+}));

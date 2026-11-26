@@ -6,7 +6,7 @@ test('Native publication optimization migrates and rolls back atomically without
   const m=require('../lib/persistence/postgresql/sales/import-history-publication-performance');
   const fingerprint=()=>require('../lib/persistence/postgresql/core/fingerprint').schemaFingerprint(pg.client,require('../lib/persistence/postgresql/sales/layout').SCHEMAS);
   const base=(await pg.client.query('SELECT target_sha256 FROM gp.import_history_attestations_migration_history')).rows[0].target_sha256;
-  const f=await require('../test-support/article-stock-snapshots-fixture').snapshotFixture(t,{access:pg.access,protection:pg.protection,scopeId:'synthetic-migration',ownerId:'00001'});
+  const f=await require('../test-support/article-stock-snapshots-fixture').snapshotFixture({access:pg.access,protection:pg.protection,scopeId:'synthetic-migration',ownerId:'00001'});
   await f.ingest('ARTIKEL_STAMM',[{EAN:'102004',Artikelbezeichnung:'Synthetic article'}],{master:true});
   const run=await f.ingest('ARTIKEL_FILIALEN',[{EAN:'102004',FilialID:18,FBestand:3}]);
   const proofs=async()=>(await pg.client.query('SELECT * FROM integration.import_history_snapshot_attestations ORDER BY run_id')).rows;

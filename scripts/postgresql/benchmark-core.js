@@ -1,13 +1,15 @@
 'use strict';
 const { performance } = require('node:perf_hooks');
-const { createSqliteSource, seedCoreFixture } = require('../../test-support/postgresql-migration/sqlite-source');
-const { SQLITE_APPLICATION_CATALOG } = require('../../lib/persistence/sqlite/application-catalog');
-const { createSqlitePersistenceProvider } = require('../../lib/persistence/sqlite/provider');
+const { withCoreFixture } = require('../../test-support/postgresql-migration/core-fixture');
+const { createCoreCatalog } = require('../../lib/persistence/postgresql/core/catalog');
+const { assertSyntheticEndpoint } = require('../../test-support/postgresql-migration/ci-endpoint');
 async function main() {
-  const db = createSqliteSource();
-  try {
-    seedCoreFixture(db);
-    const access = createSqlitePersistenceProvider({database:db,catalog:SQLITE_APPLICATION_CATALOG});
+  for (const name of ['GP_CORE_MIGRATOR_URL','GP_CORE_APP_URL']) {
+    assertSyntheticEndpoint(process.env[name], 'core', ['25475']);
+  }
+  const catalog = createCoreCatalog().entries;
+  await withCoreFixture(async fixture => {
+    const access = fixture.postgres;
     const cases = [
       ['organization-personnel.location.list',{includeInactive:false}],
       ['organization-personnel.department.list',{includeInactive:false}],
@@ -16,7 +18,7 @@ async function main() {
     ];
     const results=[];
     for (const [id, parameters] of cases) {
-      const entry=SQLITE_APPLICATION_CATALOG.find(e=>e.statement.id===id),samples=[];
+      const entry=catalog.find(e=>e.statement.id===id),samples=[];
       for(let i=0;i<105;i++) {
         const start=performance.now();
         await access[entry.statement.operation](entry.statement,parameters);
@@ -25,8 +27,8 @@ async function main() {
       samples.sort((a,b)=>a-b);
       results.push({id,p50Ms:+samples[49].toFixed(3),p95Ms:+samples[94].toFixed(3),samples:samples.length});
     }
-    console.log(JSON.stringify({fixture:'synthetic; full current SQLite schema; 200 employees; in-memory',
-      coverage:'repository reads only; no HTTP, network, live load or report concurrency claim',node:process.version,results},null,2));
-  } finally {db.close();}
+    console.log(JSON.stringify({fixture:'synthetic PostgreSQL Core database; three employee accounts',
+      coverage:'repository reads in an isolated development database',node:process.version,results},null,2));
+  });
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

@@ -4,7 +4,7 @@ const {loadSalesArticleDetailData}=require('../lib/sales-article-detail-source')
 test('Native article detail under one second with a production-sized synthetic history',
  {skip:!process.env.GP_CORE_MIGRATOR_URL||process.env.GP_ARTICLE_VOLUME_CHECK!=='1',timeout:1200000},async t=>{
  await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async pg=>{
-  const f=await require('../test-support/article-stock-snapshots-fixture').snapshotFixture(t,{access:pg.access,protection:pg.protection,scopeId:'synthetic-migration',ownerId:'00001'});
+  const f=await require('../test-support/article-stock-snapshots-fixture').snapshotFixture({access:pg.access,protection:pg.protection,scopeId:'synthetic-migration',ownerId:'00001'});
   const {article}=await require('../test-support/sales-article-workspace-fixture').seedWorkspace({access:pg.access,source:f});
   const volume=await require('../test-support/article-detail-volume-fixture').addArticleVolume(pg,f);
   const times=[];
