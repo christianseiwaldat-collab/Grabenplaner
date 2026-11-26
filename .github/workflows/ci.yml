@@ -9,9 +9,6 @@ on:
 permissions:
   contents: read
 
-env:
-  NODE_OPTIONS: --no-experimental-sqlite
-
 jobs:
   postgresql-provider-node-minimum:
     runs-on: ubuntu-latest
@@ -40,10 +37,10 @@ jobs:
             > "$RUNNER_TEMP/gp-legacy-dependencies-receipt.json"
           node -e 'const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));assert.equal(r.root,path.join(process.env.RUNNER_TEMP,"gp-legacy-dependencies"));assert.match(r.manifestSha256,/^[a-f0-9]{64}$/);fs.appendFileSync(process.env.GITHUB_ENV,"GP_LEGACY_DEPENDENCIES_ROOT="+r.root+"\nGP_LEGACY_DEPENDENCIES_MANIFEST_SHA256="+r.manifestSha256+"\n");' "$RUNNER_TEMP/gp-legacy-dependencies-receipt.json"
       - name: Verify deployment contracts before the longer application qualification
-        run: node --test --test-concurrency=1 test/deploy-*.test.js
+        run: node --no-experimental-sqlite --test --test-concurrency=1 test/deploy-*.test.js
       - name: PostgreSQL configuration, runtime boundary and recovery on minimum Node
         run: >-
-          node --test --test-concurrency=1
+          node --no-experimental-sqlite --test --test-concurrency=1
           test/v087-persistence-provider-contract.test.js
           test/postgresql-only-runtime.test.js
           test/postgresql-only-catalog-boundary.test.js
@@ -80,15 +77,15 @@ jobs:
           test/passkeys-schema-activation-cli.test.js
           test/passkeys-activation-shell.test.js
       - name: Verify application and root maintenance lock transitions
-        run: sudo "$(command -v node)" --test --test-name-pattern='root maintenance' test/database-lock.test.js
+        run: sudo "$(command -v node)" --no-experimental-sqlite --test --test-name-pattern='root maintenance' test/database-lock.test.js
       - name: Verify original package binding and the root build-account boundary
-        run: sudo "$(command -v node)" --test test/linux-build-tree-seal.test.js
+        run: sudo "$(command -v node)" --no-experimental-sqlite --test test/linux-build-tree-seal.test.js
       - name: Verify migration backups preserve existing points under the actual kernel lease
-        run: sudo "$(command -v node)" --test test/postgresql-backup-preserve-shell.test.js
+        run: sudo "$(command -v node)" --no-experimental-sqlite --test test/postgresql-backup-preserve-shell.test.js
       - name: Verify bounded Offsite confirmation and interrupted refresh on minimum Node
         run: >-
           sudo /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
-          "$(command -v node)" --no-global-search-paths --test --test-concurrency=1
+          "$(command -v node)" --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1
           test/offsite-upload-confirmation.test.js test/offsite-upload-hardening-transition.test.js test/private-workspace-preflight.test.js
 
   postgresql-provider-development-contract:
@@ -179,7 +176,7 @@ jobs:
         env:
           GP_SECURITY_BROWSER_TEST: '1'
         run: >-
-          node --no-global-search-paths --test --test-concurrency=1
+          node --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1
           --test-reporter=tap --test-timeout=120000
           test/security-schedule-note-browser.test.js
       - name: Native mobile Emma contact and employee navigation regressions
@@ -187,7 +184,7 @@ jobs:
         env:
           GP_WINDOW_BROWSER_TEST: '1'
         run: >-
-          node --no-global-search-paths --test --test-concurrency=1
+          node --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1
           --test-reporter=tap --test-timeout=120000
           test/emma-contact-browser.test.js
           test/mobile-portal-footer-browser.test.js
@@ -196,12 +193,12 @@ jobs:
         env:
           GP_STOCK_PANEL_BROWSER_TEST: '1'
         run: >-
-          node --no-global-search-paths --test --test-concurrency=1
+          node --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1
           --test-reporter=tap --test-timeout=120000
           test/sales-article-stock-panel-browser.test.js
       - name: PostgreSQL Blocks 5 and 6 development contract
         run: >-
-          node --test --test-concurrency=1
+          node --no-experimental-sqlite --test --test-concurrency=1
           test/v087-database-block5-postgresql-provider.test.js
           test/v087-database-block5-postgresql-pool-policy.test.js
           test/v087-database-block5-postgresql-dialect-compiler.test.js
@@ -258,13 +255,13 @@ jobs:
         name: Linux server scripts syntax
         run: find server-tools/linux -type f \( -name '*.sh' -o -name '*.sh.in' \) -print0 | xargs -0 -n1 bash -n
       - name: Native root deployment preflight dependency links
-        run: sudo /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$(command -v node)" --no-global-search-paths --test --test-concurrency=1 test/preflight-root-dependency-links.test.js
+        run: sudo /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$(command -v node)" --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1 test/preflight-root-dependency-links.test.js
       - name: Native root runtime transition dependencies
-        run: sudo /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$(command -v node)" --no-global-search-paths --test --test-concurrency=1 test/runtime-v6-root-dependency-topology.test.js
+        run: sudo /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$(command -v node)" --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1 test/runtime-v6-root-dependency-topology.test.js
       - name: Native root bounded Offsite confirmation and interrupted refresh
         run: >-
           sudo /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
-          "$(command -v node)" --no-global-search-paths --test --test-concurrency=1
+          "$(command -v node)" --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1
           test/offsite-upload-confirmation.test.js test/offsite-upload-hardening-transition.test.js test/private-workspace-preflight.test.js
       - name: Reboot module maintenance rollback (isolated temporary files)
         run: sudo python3 test/reboot-module-maintenance.test.py
