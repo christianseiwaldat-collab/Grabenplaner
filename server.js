@@ -22879,7 +22879,15 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     .filter((employee) => String(employee.home_location_id) === String(context.locationId))
     .map((employee) => employee.personnel_number));
   const shifts = await Promise.all(
-    shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings, { saturdayCutover, planning: true }) })),
+    shiftRows.map(async (shift) => {
+      let revision = null;
+      try {
+        revision = planningShiftPrecondition.planningShiftRevision(shift);
+      } catch (error) {
+        if (error.code !== "SHIFT_REVISION_UNAVAILABLE") throw error;
+      }
+      return { ...shift, ...await shiftMetrics(shift, settings, { saturdayCutover, planning: true }), revision };
+    }),
   );
   const externalShiftRows = employeeWeekShiftRows.filter((shift) => (
     visibleEmployeeNumbers.has(shift.employee_number)
@@ -62425,6 +62433,10 @@ app.put("/api/shifts/:id", async (request, response) => {
     existingId: id,
     existingShift: existing,
   }, request.portalSession);
+  // Time and date edits carry the existing free text. Preserve it byte-for-byte
+  // when the client has not changed it, including text from older imports.
+  if (guardedUpdate && typeof existing.area === "string" && request.body.area === existing.area) shift.area = existing.area;
+  if (guardedUpdate && typeof existing.note === "string" && request.body.note === existing.note) shift.note = existing.note;
   const context = await resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
