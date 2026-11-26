@@ -8,7 +8,7 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
 
-test("PostgreSQL application catalogs and schema plans load while SQLite modules are forbidden", () => {
+test("PostgreSQL catalogs, schema plans and database fixtures load while SQLite modules are forbidden", () => {
   const result = spawnSync(process.execPath, ["-e", `
     const Module = require('node:module');
     const load = Module._load;
@@ -28,6 +28,9 @@ test("PostgreSQL application catalogs and schema plans load while SQLite modules
       './lib/persistence/postgresql/core/session-security',
       './lib/persistence/postgresql/core/personnel-learning-runs',
       './lib/persistence/postgresql/core/xoffi-snapshots',
+      './test-support/postgresql-migration/core-fixture',
+      './test-support/postgresql-migration/sales-fixture',
+      './test-support/postgresql-migration/report-fixture',
     ]) require(target);
   `], { cwd: root, encoding: "utf8", timeout: 60_000 });
   assert.ifError(result.error);

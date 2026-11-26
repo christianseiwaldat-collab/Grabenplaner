@@ -74,4 +74,4 @@ test('Live entire Core read catalog executes with bound synthetic inputs and com
   fs.mkdirSync('tmp',{recursive:true,mode:0o700});
   fs.writeFileSync('tmp/postgresql-read-parity.json',JSON.stringify(report,null,2)+'\n');
   assert.deepEqual(failures,[]);
-}));
+},{compareWithSqlite:true}));

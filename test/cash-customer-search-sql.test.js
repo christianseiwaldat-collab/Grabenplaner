@@ -3,8 +3,6 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const { CASH_PUBLICATION_STATEMENTS: S } = require('../lib/persistence/statements/cash-publications');
 const { CASH_LOCATION_READS: R } = require('../lib/persistence/statements/cash-location-reads');
 const { CASH_SNAPSHOT_STATEMENTS: D, CASH_SNAPSHOT_TABLES: TABLES } = require('../lib/persistence/statements/cash-snapshots');
-const { SQLITE_CASH_PUBLICATIONS_CATALOG } = require('../lib/persistence/sqlite/cash-publications-catalog');
-const { CATALOG: LOCATION_CATALOG } = require('../lib/persistence/sqlite/cash-location-reads-catalog');
 const NAME = 'Umsatz_Kasse_Details', publicationId = 'a'.repeat(64), otherPublication = 'b'.repeat(64);
 const key = number => Buffer.alloc(32, number);
 const head = TABLES.find(table => table.name === 'Umsatz_KASSE');
@@ -78,21 +76,6 @@ async function check(access) {
   assert.deepEqual(await rows(customer, { afterDate: '2026-08-01', afterRow: 20 }), [12, 11]);
   assert.deepEqual(await rows(customer, { datasetSlot: 2 }), [99], 'candidate receipt heads are isolated by dataset');
 }
-
-test('customer cash SQL preserves explicit assignments, bridge precedence and all authorization filters in SQLite', async t => {
-  const { openSqliteApplicationPersistence } = require('../lib/persistence/sqlite/provider');
-  const app = openSqliteApplicationPersistence({ databasePath: ':memory:', catalog: [...require('../lib/persistence/sqlite/cash-snapshots-catalog').SQLITE_CASH_SNAPSHOTS_CATALOG,
-    ...SQLITE_CASH_PUBLICATIONS_CATALOG, ...LOCATION_CATALOG] });
-  const database = app.database, access = app.provider;
-  require('../lib/persistence/sqlite/operations/cash-snapshots-schema').ensureSqliteCashSnapshotsSchema(database);
-  require('../lib/persistence/sqlite/operations/cash-publications-schema').ensureSqliteCashPublicationsSchema(database);
-  t.after(async () => { await access.close(); database.close(); });
-  await seed(access); await check(access);
-  const entry = SQLITE_CASH_PUBLICATIONS_CATALOG.find(entry => entry.statement === customer);
-  const params = Object.fromEntries(Object.entries(defaults).map(([name, value]) => ['$' + name, typeof value === 'boolean' ? Number(value) : value]));
-  const plan = database.prepare('EXPLAIN QUERY PLAN ' + entry.sql).all(params).map(row => row.detail).join('\n');
-  assert.match(plan, /cash_snapshot_1_customer_key[^\n]*customer_key=/);
-});
 
 test('customer cash reads qualify independently of pinned PostgreSQL contracts and stay wholly in Sales', () => {
   const { createSalesCatalog } = require('../lib/persistence/postgresql/sales/catalog');

@@ -1,7 +1,7 @@
 'use strict';
-const { openSqliteLegacyDatabase } = require('../../lib/persistence/sqlite/provider');
 const source = require('./source-schema-v09237.json');
 function createSqliteSource() {
+  const { openSqliteLegacyDatabase } = require('../../lib/persistence/sqlite/provider');
   const database = openSqliteLegacyDatabase(':memory:');
   try {
     for (const type of ['table','index','view','trigger']) {

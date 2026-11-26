@@ -24,15 +24,6 @@ const {
 const {
   SYSTEM_CENTER_METRICS_STATEMENTS,
 } = require("../lib/persistence/statements/system-center-metrics");
-const {
-  SQLITE_SYSTEM_CENTER_METRICS_CATALOG,
-} = require("../lib/persistence/sqlite/system-center-metrics-catalog");
-const {
-  ensureSqliteSystemCenterMetricsSchema,
-} = require("../lib/persistence/sqlite/operations/system-center-metrics-schema");
-const {
-  openSqliteApplicationPersistence,
-} = require("../lib/persistence/sqlite/provider");
 
 const DATABASE_URL = String(process.env.TEST_POSTGRESQL_URL || "").trim();
 const FIXTURE_ROWS = Object.freeze([
@@ -151,55 +142,6 @@ function schemaName() {
 function appendSettledFailures(errors, results) {
   for (const result of results) {
     if (result.status === "rejected") errors.push(result.reason);
-  }
-}
-
-async function closeSqliteApplication(application) {
-  const errors = [];
-  try {
-    await application.provider.close();
-  } catch (error) {
-    errors.push(error);
-  }
-  try {
-    application.database.close();
-  } catch (error) {
-    errors.push(error);
-  }
-  if (errors.length > 0) {
-    throw new AggregateError(errors, "SQLite-System-Center-Fixture-Cleanup fehlgeschlagen.");
-  }
-}
-
-function seedSqlite(database) {
-  const insert = database.prepare(`
-    INSERT INTO system_center_trust_metrics (
-      interval_key,
-      recorded_at,
-      trust_score,
-      coverage,
-      trust_state,
-      database_bytes,
-      storage_free_bytes,
-      automation_state,
-      previous_hash,
-      sample_hash
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  for (const [index, row] of FIXTURE_ROWS.entries()) {
-    insert.run(
-      row.intervalKey,
-      row.recordedAt,
-      90 + index,
-      100,
-      "healthy",
-      4_294_967_296 + index,
-      8_589_934_592 - index,
-      "healthy",
-      null,
-      row.sampleHash,
-    );
   }
 }
 
@@ -351,11 +293,11 @@ test("v0.87 DB Block 5: System-Center-Pins verwerfen Vertragsdrift bei identisch
 });
 
 if (!DATABASE_URL) {
-  test("v0.87 DB Block 5: System-Center-Intervallschlüsselparität benötigt TEST_POSTGRESQL_URL", {
-    skip: "TEST_POSTGRESQL_URL ist nicht gesetzt; die reale Dual-Provider-Fixture bleibt lokal aus.",
+  test("v0.87 DB Block 5: Nativer Datenbanktest benötigt TEST_POSTGRESQL_URL", {
+    skip: "TEST_POSTGRESQL_URL ist nicht gesetzt.",
   }, () => {});
 } else {
-  test("v0.87 DB Block 5: älteste Intervallschlüssel sind auf SQLite und PostgreSQL gleich", async () => {
+  test("PostgreSQL liefert die ältesten System-Center-Intervallschlüssel in stabiler Reihenfolge", async () => {
     const schema = schemaName();
     const quotedSchema = `"${schema}"`;
     const relation = `${quotedSchema}."system_center_trust_metrics"`;
@@ -377,7 +319,6 @@ if (!DATABASE_URL) {
     const adminPool = new Pool(configuration);
     let postgresqlProvider;
     let applicationPool;
-    let sqliteApplication;
     try {
       await adminPool.query(`CREATE SCHEMA ${quotedSchema}`);
       await adminPool.query(`
@@ -411,20 +352,8 @@ if (!DATABASE_URL) {
         postgresqlProvider,
       );
 
-      sqliteApplication = openSqliteApplicationPersistence({
-        databasePath: ":memory:",
-        catalog: SQLITE_SYSTEM_CENTER_METRICS_CATALOG,
-      });
-      ensureSqliteSystemCenterMetricsSchema(sqliteApplication.database);
-      seedSqlite(sqliteApplication.database);
-      const sqliteRepository = createSystemCenterMetricsRepository(
-        sqliteApplication.provider,
-      );
-
-      const sqliteResult = await sqliteRepository.oldestIntervalKeys(2);
       const postgresqlResult =
         await postgresqlRepository.oldestIntervalKeys(2);
-      assert.deepEqual(postgresqlResult, sqliteResult);
       assert.deepEqual(postgresqlResult, [
         { intervalKey: "A" },
         { intervalKey: "a" },
@@ -435,9 +364,6 @@ if (!DATABASE_URL) {
         postgresqlProvider?.close(),
         !postgresqlProvider && applicationPool
           ? applicationPool.end()
-          : null,
-        sqliteApplication
-          ? closeSqliteApplication(sqliteApplication)
           : null,
       ].filter(Boolean)));
       try {
