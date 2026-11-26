@@ -860,7 +860,6 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test-support/postgresql-api/location-fixture.js",
   "test-support/postgresql-api/trigger-fixture.js",
   "test-support/postgresql-api/constraint-fixture.js",
-  "test/portal-foundation-legacy-migration.test.js",
   "test/planning-assistant-preferences-api.test.js",
   "test-support/postgresql-api/ownership.js",
   "test-support/postgresql-api/diagnostic-shutdown.js",

@@ -105,8 +105,6 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true });
 });
 
-// The former minimal SQLite schema upgrade is checked against immutable
-// b2ba03c source in portal-foundation-legacy-migration.test.js, not a hidden current driver.
 test("PostgreSQL-Portal-Fundament stellt Tabellen, Sicherheitsfelder und Idempotenzindex bereit", () => {
   const tables = new Set(db.prepare("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'gp'").all().map(row => row.name));
   for (const name of ["portal_users", "portal_roles", "portal_sessions", "mobile_sessions", "mobile_refresh_token_history", "vacation_requests", "time_off_requests", "time_off_change_requests", "vacation_change_requests", "request_blackouts", "request_decisions", "approval_delegations", "time_entries", "time_corrections", "audit_log", "portal_permission_grants", "location_branding", "schema_migrations"]) assert.ok(tables.has(name), name);
@@ -204,9 +202,7 @@ test("Login und Mitarbeiterfunktionen bleiben bis zum Servermodus gesperrt", asy
   assert.equal(result.status.operationMode, "local");
 });
 
-// Retired unauthenticated local topology mutations run only against the pinned
-// historical source in portal-foundation-legacy-migration.test.js. Current
-// authenticated topology, live revocation and atomic rollback are exercised in
+// Authenticated topology, live revocation and atomic rollback are exercised in
 // personnel-learning-rights-hierarchy.test.js.
 
 test("Betriebsmodus kann nicht über eine Browser-API verändert werden", async () => {

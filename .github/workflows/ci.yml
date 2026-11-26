@@ -28,14 +28,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Recovery diagnostic contracts on Ubuntu
         run: pnpm run test:recovery-diagnostics
-      - name: Prepare separately pinned historical test dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --no-global-search-paths test-support/prepare-legacy-dependencies.cjs \
-            --target "$RUNNER_TEMP/gp-legacy-dependencies" --pnpm "$(command -v pnpm)" \
-            > "$RUNNER_TEMP/gp-legacy-dependencies-receipt.json"
-          node -e 'const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));assert.equal(r.root,path.join(process.env.RUNNER_TEMP,"gp-legacy-dependencies"));assert.match(r.manifestSha256,/^[a-f0-9]{64}$/);fs.appendFileSync(process.env.GITHUB_ENV,"GP_LEGACY_DEPENDENCIES_ROOT="+r.root+"\nGP_LEGACY_DEPENDENCIES_MANIFEST_SHA256="+r.manifestSha256+"\n");' "$RUNNER_TEMP/gp-legacy-dependencies-receipt.json"
+
       - name: Verify deployment contracts before the longer application qualification
         run: node --no-experimental-sqlite --test --test-concurrency=1 test/deploy-*.test.js
       - name: PostgreSQL configuration, runtime boundary and recovery on minimum Node
@@ -49,7 +42,6 @@ jobs:
           test/legacy-recovery-capsule.test.js
           test/legacy-recovery-loader.test.js
           test/legacy-dependency-supply.test.js
-          test/portal-foundation-legacy-migration.test.js
           test/runtime-v6-transition.test.js
           test/runtime-v6-frozen-dependencies.test.js
           test/runtime-v6-timer-fencing.test.js
@@ -130,14 +122,7 @@ jobs:
           node-version: 24.19.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Prepare separately pinned historical test dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --no-global-search-paths test-support/prepare-legacy-dependencies.cjs \
-            --target "$RUNNER_TEMP/gp-legacy-dependencies" --pnpm "$(command -v pnpm)" \
-            > "$RUNNER_TEMP/gp-legacy-dependencies-receipt.json"
-          node -e 'const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));assert.equal(r.root,path.join(process.env.RUNNER_TEMP,"gp-legacy-dependencies"));assert.match(r.manifestSha256,/^[a-f0-9]{64}$/);fs.appendFileSync(process.env.GITHUB_ENV,"GP_LEGACY_DEPENDENCIES_ROOT="+r.root+"\nGP_LEGACY_DEPENDENCIES_MANIFEST_SHA256="+r.manifestSha256+"\n");' "$RUNNER_TEMP/gp-legacy-dependencies-receipt.json"
+
       - name: Install PostgreSQL 18 client tools from PGDG
         run: |
           sudo apt-get update

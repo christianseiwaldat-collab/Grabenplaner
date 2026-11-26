@@ -7,7 +7,6 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const policy = require("../server-tools/linux/lib/deploy-policy");
-const { legacyRequire } = require("../test-support/legacy-baseline");
 const deferred = require("../server-tools/linux/lib/deferred-backups");
 const { inspectBackupMetadata } = require("../server-tools/linux/lib/backup-metadata");
 const { sha256File } = require("../lib/file-integrity");

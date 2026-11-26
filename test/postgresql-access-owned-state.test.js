@@ -109,6 +109,7 @@ async function fixture(t, { bulk = 1, authenticated = false, strictRunKeys = fal
     CREATE TABLE gp.trade_source_references(id TEXT PRIMARY KEY);
     CREATE TABLE gp.import_master_holds(record_id TEXT,consumer_id TEXT);
     CREATE TABLE gp.article_reference_snapshots(product_id TEXT,revision INTEGER);
+    SET search_path=pg_catalog,gp;
   `);
   const protection = createDataImportProtection({ encryptionKey: Buffer.alloc(32, 6), indexKey: Buffer.alloc(32, 17), keyId: 'owned-state' });
   t.after(async () => { protection.destroy(); await fs.rm(directory, { recursive: true, force: true }); });
@@ -469,10 +470,15 @@ test('run empty shortcut requires validated enforced non-deferrable NOT NULL FKs
 test('nullable and orphan run rows remain conservative when the FK shortcut cannot be proven', cluster.options, async t =>{
  const f=await onlyCompletedRuns(t,{strictRunKeys:false});
  await f.salesDb.query('ALTER TABLE integration.data_import_rows DISABLE TRIGGER ALL');
- for(const [runId,rowNumber]of[[null,2],['missing-own-run',3]])await insert(f.salesDb,'data_import_rows',{run_id:runId,row_number:rowNumber,identity_hash:sha('own'+rowNumber),payload:'own unresolved '+rowNumber,state:'conflict'});
+ await insert(f.salesDb,'data_import_rows',{run_id:'missing-own-run',row_number:3,identity_hash:sha('orphan'),payload:'own unresolved row',state:'conflict'});
  await f.salesDb.query('ALTER TABLE integration.data_import_rows ENABLE TRIGGER ALL');
  const plan=await exportState({...f,basis:P.FRESH_BASIS});
- assert.equal(plan.tables.find(table=>table.table==='data_import_rows').rows,2,'neither nullable nor unresolved own row is classified as reconstructible');
+ assert.equal(plan.tables.find(table=>table.table==='data_import_rows').rows,1,'the unresolved own row is retained');
+ const sealed=path.join(f.directory,P.FILE);
+ await fs.unlink(sealed);
+ await insert(f.salesDb,'data_import_rows',{run_id:null,row_number:2,identity_hash:sha('null-key'),payload:'no replay key',state:'conflict'});
+ await assert.rejects(exportState({...f,basis:P.FRESH_BASIS}),{code:'PG_ACCESS_OWNED_KEY'});
+ await assert.rejects(fs.access(sealed),{code:'ENOENT'});
 });
 
 async function addAuthenticatedPending(f,{status='ready',attempt='pending-source-only',state='create',change=false}={}){
