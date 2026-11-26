@@ -30,6 +30,9 @@ test('optional manager reads wait for a shift write to settle, while an explicit
   await x.f.loadManagerVacationRequests({background:true});assert.equal(x.calls.length,0);
   const opened=x.f.loadManagerVacationRequests();assert.equal(x.calls.length,4);x.complete();await opened;
   vm.runInContext('shiftMutation=null; managerRequestsLastRefresh=0',x.f);
+  x.state.timelineShiftSave={};
+  await x.f.loadManagerVacationRequests({background:true});assert.equal(x.calls.length,4);
+  x.state.timelineShiftSave=null;
   const resumed=x.f.loadManagerVacationRequests({background:true});assert.equal(x.calls.length,8);x.complete(4);await resumed;
 });
 
@@ -37,10 +40,12 @@ test('the actual system information timer yields to writes, navigation and inact
   const timer=source.match(/setInterval\(\(\) => \{\n[^]*?\n\}, 120000\);/);
   assert.ok(timer,'system information interval');
   let callback,reads=0,locked=false;
-  const context={document:{hidden:false,body:{classList:{contains:()=>locked}}},shiftMutation:null,planningPeriodController:null,
+  const context={document:{hidden:false,body:{classList:{contains:()=>locked}}},state:{},shiftMutation:null,planningPeriodController:null,
     loadSystemInfo:()=>reads++,setInterval(fn,delay){assert.equal(delay,120000);callback=fn;}};
   vm.runInNewContext(timer[0],context);
   context.shiftMutation={};callback();assert.equal(reads,0);
+  context.shiftMutation=null;context.state.timelineShiftSave={};callback();assert.equal(reads,0);
+  context.state.timelineShiftSave=null;
   context.shiftMutation=null;context.planningPeriodController={};callback();assert.equal(reads,0);
   context.planningPeriodController=null;context.document.hidden=true;callback();assert.equal(reads,0);
   context.document.hidden=false;locked=true;callback();assert.equal(reads,0);

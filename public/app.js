@@ -6638,7 +6638,10 @@ function scheduleHasSundayEntries() {
 }
 
 function renderTimeline() {
+  const timelineDrag = state.timelineShiftDrag;
+  timelineDrag?.cancel();
   const employees = state.data.employees;
+  const canDrag = Boolean(timelineDrag && canDragTimelineShifts());
   const settings = state.data.settings;
   const timedOptionStarts = state.data.weekOptions.filter((option) => !optionIsAllDay(option) && option.start_time).map((option) => timeToMinutes(option.start_time));
   const timedOptionEnds = state.data.weekOptions.filter((option) => !optionIsAllDay(option) && option.end_time).map((option) => timeToMinutes(option.end_time));
@@ -6753,7 +6756,11 @@ function renderTimeline() {
             const dutyColor = window.GPScheduleDuty.scheduleDutyColor(duty.code, settings.schedule_duty_colors);
             const dutyContrast = window.GPScheduleDuty.scheduleDutyTextColor(dutyColor);
             const title = `${scheduleEmployeeAccessibleLabel(employee)} · ${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)} · ${duty.label}${shift.area ? ` · ${shift.area}` : ""}`;
-            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${safeCssColor(employee.color)};--employee-contrast:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(title)}" aria-label="${escapeHtmlAttribute(title)}"><span class="shift-duty-badge" style="--duty-color:${dutyColor};--duty-contrast:${dutyContrast}" aria-hidden="true">${escapeHtml(duty.code)}</span></button>`;
+            const draggable = canDrag && Boolean(shift.revision);
+            const handles = draggable
+              ? '<span class="shift-drag-handle" data-shift-edge="start" aria-hidden="true"></span><span class="shift-drag-handle" data-shift-edge="end" aria-hidden="true"></span>'
+              : "";
+            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" ${draggable ? "data-shift-draggable" : ""} style="top:${top}%;height:${height}%;--employee-color:${safeCssColor(employee.color)};--employee-contrast:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(title)}" aria-label="${escapeHtmlAttribute(title)}"><span class="shift-duty-badge" style="--duty-color:${dutyColor};--duty-contrast:${dutyContrast}" aria-hidden="true">${escapeHtml(duty.code)}</span>${handles}</button>`;
           }).join("");
           const unavailableLabel = locked
             ? "gesperrt"
@@ -6765,11 +6772,12 @@ function renderTimeline() {
                   ? "Filialeinsatz"
                 : "frei";
           const laneLabel = `${scheduleEmployeeAccessibleLabel(employee)} · ${date}${unavailableText ? ` · ${unavailableText}` : ""}`;
-          return `<div class="employee-lane ${specialCase || fullDayOutgoingAssignment ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtmlAttribute(laneLabel)}" aria-label="${escapeHtmlAttribute(laneLabel)}">${bars}${optionBlocks}${assignmentBlocks}${softPendingBlock}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
+          const dropReason = unavailableText ? `data-shift-drop-reason="${escapeHtmlAttribute(unavailableText)}"` : "";
+          return `<div class="employee-lane ${specialCase || fullDayOutgoingAssignment ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" data-timeline-employee="${escapeHtmlAttribute(employee.personnel_number)}" ${dropReason} ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtmlAttribute(laneLabel)}" aria-label="${escapeHtmlAttribute(laneLabel)}">${bars}${optionBlocks}${assignmentBlocks}${softPendingBlock}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
         }).join("")
       : '<div class="employee-lane"></div>';
 
-    return `<section class="day-column ${dayIndex === 6 ? "sunday" : ""}" style="grid-column:${dayIndex + 2};--employee-count:${Math.max(1, dayEmployees.length)}">
+    return `<section class="day-column ${dayIndex === 6 ? "sunday" : ""}" data-timeline-date="${date}" style="grid-column:${dayIndex + 2};--employee-count:${Math.max(1, dayEmployees.length)}">
       <div class="day-title">${weekday} ${formatDate(date, { day: "2-digit", month: "2-digit" })}${holiday ? ` · ${escapeHtml(holiday.name)}` : ""}</div>
       <div class="employee-strips">${headers}</div>
       <div class="day-body ${hours ? "" : "closed-day"}" style="--open-start:${openStart}%;--open-end:${openEnd}%">${lunchBand}<div class="lane-grid">${lanes}</div>${teamMeetingBands}</div>
@@ -6780,6 +6788,11 @@ function renderTimeline() {
   elements.timeline.style.setProperty("--day-min-width", `${Math.max(124, employeeCount * 32)}px`);
   elements.timeline.style.setProperty("--day-count", dayCount);
   elements.timeline.style.setProperty("--hour-step", `${100 / (range / 60)}%`);
+  if (timelineDrag) {
+    elements.timeline.dataset.startMinute = start;
+    elements.timeline.dataset.endMinute = end;
+    document.getElementById("timelineDragHint")?.classList.toggle("hidden", !canDrag);
+  }
   elements.timeline.innerHTML = `<div class="time-header">Zeit</div>${dayColumns}<div class="time-axis">${timeLabels.join("")}</div>`;
 }
 
@@ -30521,7 +30534,8 @@ let managerRequestsInFlight = null;
 let managerRequestsLastRefresh = 0;
 async function loadManagerVacationRequests({ background = false } = {}) {
   if (!elements.managerVacationRequestList) return;
-  if (background && (document.hidden || shiftMutation || planningPeriodController || Date.now() - managerRequestsLastRefresh < 10000)) return;
+  if (background && (document.hidden || shiftMutation || state.timelineShiftSave || planningPeriodController
+    || Date.now() - managerRequestsLastRefresh < 10000)) return;
   const session = state.portalSession;
   if (managerRequestsInFlight?.session === session) return managerRequestsInFlight.pending;
   const pending = refreshManagerVacationRequests(session);
@@ -40684,7 +40698,7 @@ async function openShiftModalForPlanningDate(employeeNumber, date, shift = null)
 
 function openShiftModal(employeeNumber, date, shift = null, planningCandidates = null) {
   if (guardScheduleEditing()) return;
-  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
+  if (state.timelineShiftSave || (shiftMutation && shiftMutationCurrent(shiftMutation))) return;
   finishShiftMutation(shiftMutation);
   shiftEditorGeneration++;
   const planningHours = window.GPScheduleDuty.manualPlanningHours();
@@ -41578,6 +41592,56 @@ function finishShiftMutation(mutation) {
   for (const { control, disabled } of mutation.controls) control.disabled = disabled;
   elements.shiftForm.removeAttribute("aria-busy");
   shiftMutation = null;
+}
+
+function canDragTimelineShifts() {
+  return !isWeekLocked() && (!state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("schedule:write"));
+}
+
+function readTimelineShift(id) {
+  if (!canDragTimelineShifts() || state.timelineShiftSave || shiftMutation || elements.shiftModal.open
+    || state.data?.weekStart !== state.weekStart) return null;
+  const plan = state.data.context;
+  if (String(plan?.locationId) !== String(state.locationId)
+    || String(plan?.departmentId || "") !== String(state.departmentId || "")) return null;
+  const shift = state.data.shifts.find(item => String(item.id) === id);
+  if (!shift?.revision) return null;
+  const hours = window.GPScheduleDuty.manualPlanningHours();
+  const context = captureGpContext(canDragTimelineShifts,
+    () => JSON.stringify([state.currentView, state.weekStart, state.locationId, state.departmentId]));
+  return {
+    shift, context, date: shift.shift_date, employeeNumber: shift.employee_number,
+    startMinute: timeToMinutes(shift.start_time), endMinute: timeToMinutes(shift.end_time),
+    minMinute: timeToMinutes(hours.start), maxMinute: timeToMinutes(hours.end),
+  };
+}
+
+async function saveTimelineShift({ shift, context }, change) {
+  if (state.timelineShiftSave || shiftMutation || elements.shiftModal.open || !gpContextCurrent(context)) return;
+  state.timelineShiftSave = context;
+  elements.timeline.setAttribute("aria-busy", "true");
+  const body = {
+    ...change, employeeNumber: shift.employee_number, locationId: shift.location_id,
+    area: shift.area, note: shift.note, expectedRevision: shift.revision,
+  };
+  try {
+    try {
+      await api(`/api/shifts/${shift.id}`, { method: "PUT", body: JSON.stringify(body) });
+    } catch (error) {
+      if (gpContextCurrent(context)) {
+        showToast(error.message, true);
+        if (error.code === "SHIFT_REVISION_CONFLICT") await loadPlanningPeriod();
+      }
+      return;
+    }
+    if (!gpContextCurrent(context)) return;
+    showToast("Dienst wurde aktualisiert.");
+    await loadPlanningPeriod("schedule", { errorPrefix: "Dienst gespeichert. Die Ansicht konnte nicht aktualisiert werden: " });
+  } finally {
+    state.timelineShiftSave = null;
+    elements.timeline.removeAttribute("aria-busy");
+  }
 }
 
 async function saveShift(event) {
@@ -46693,7 +46757,14 @@ elements.positionList?.addEventListener("click", (event) => {
   if (deleteButton) openPositionDeleteDialog(deleteButton.dataset.deletePosition, deleteButton);
 });
 
+state.timelineShiftDrag = window.GPScheduleTimelineDrag?.bind(elements.timeline, {
+  readShift: readTimelineShift,
+  save: saveTimelineShift,
+  reportInvalid: reason => showToast(reason, true),
+});
+
 elements.timeline.addEventListener("click", (event) => {
+  if (state.timelineShiftSave) return;
   const optionBlock = event.target.closest(".option-block");
   if (optionBlock) {
     showToast(optionBlock.dataset.optionTitle || "Dieser Zeitraum ist bereits belegt.", true);
@@ -46703,7 +46774,7 @@ elements.timeline.addEventListener("click", (event) => {
   if (shiftButton) {
     event.stopPropagation();
     const shift = state.data.shifts.find((item) => item.id === Number(shiftButton.dataset.shiftId));
-    openShiftModalForPlanningDate(shift.employee_number, shift.shift_date, shift);
+    if (shift) openShiftModalForPlanningDate(shift.employee_number, shift.shift_date, shift);
     return;
   }
   const lane = event.target.closest("[data-employee-number][data-date]");
@@ -46783,7 +46854,8 @@ window.GrabenplanerSessionLifecycle?.listen(() => {
 });
 bootstrapApplication();
 setInterval(() => {
-  if (!document.hidden && !shiftMutation && !planningPeriodController && !document.body.classList.contains("portal-locked")) loadSystemInfo();
+  if (!document.hidden && !shiftMutation && !state.timelineShiftSave && !planningPeriodController
+    && !document.body.classList.contains("portal-locked")) loadSystemInfo();
 }, 120000);
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests({ background: true });

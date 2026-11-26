@@ -1438,6 +1438,16 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
    between both offsets when its label is also absolutely positioned. */
 .shift-bar { position: absolute; left: 3px; right: 3px; width: calc(100% - 6px); z-index: 2; min-height: 14px; padding: 0; overflow: visible; border: 1px solid rgba(23,35,49,.45); color: var(--employee-contrast,white); background: var(--employee-color); cursor: pointer; }
 .shift-bar:hover { filter: brightness(.94) saturate(1.08); }
+.shift-bar[data-shift-draggable] { cursor: grab; touch-action: none; user-select: none; }
+.shift-drag-handle { position: absolute; inset-inline: 0; height: min(9px, 33%); z-index: 1; cursor: ns-resize; }
+.shift-drag-handle[data-shift-edge="start"] { top: 0; }
+.shift-drag-handle[data-shift-edge="end"] { bottom: 0; }
+.shift-drag-handle::after { content: ""; position: absolute; inset-inline: 24%; height: 2px; border-radius: 1px; background: currentColor; opacity: .75; }
+.shift-drag-handle[data-shift-edge="start"]::after { top: 0; }
+.shift-drag-handle[data-shift-edge="end"]::after { bottom: 0; }
+.timeline-is-dragging .shift-bar[data-shift-draggable] { cursor: grabbing; }
+.shift-bar.shift-drag-source { opacity: .3; }
+.shift-bar.shift-drag-preview { display: grid; place-content: start center; z-index: 8; padding: 4px 2px; font-size: 8px; font-weight: 800; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px #17233166; }
 .shift-bar .shift-duty-badge { position:absolute; top:1px; left:50%; transform:translateX(-50%); display:inline-flex; align-items:center; justify-content:center; min-width:16px; padding:1px 2px; border:1px solid var(--duty-contrast,#172331); border-radius:3px; color:var(--duty-contrast,#172331); background:var(--duty-color,#fff); font-size:8px; font-weight:900; line-height:1; text-align:center; white-space:nowrap; pointer-events:none; }
 .employee-strip:focus-visible { outline:2px solid var(--ink); outline-offset:-2px; }
 .time-axis { position: absolute; top: 79px; left: 0; z-index: 3; width: 42px; height: 405px; background: #fafaf7; }
