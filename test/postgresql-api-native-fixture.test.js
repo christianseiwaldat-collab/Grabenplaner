@@ -13,7 +13,7 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
   Object.assign(process.env, { DB_PATH: path.join(temporary, "fixture.postgresql"), GRABENPLANER_DATA_DIR: path.join(temporary, "runtime"), GRABENPLANER_SEED_DEMO: "0" });
   const { Client } = require("pg");
   const { verifyEnvironment } = require("../lib/persistence/postgresql/core/environment");
-  const { databaseForCurrentTest, closeCurrentTestFixture } = require("../test-support/postgresql-api/preload");
+  const { databaseForCurrentTest, closeCurrentTestFixture, openApplicationForCurrentTest } = require("../test-support/postgresql-api/preload");
   const core = new Client({ connectionString: process.env.GP_CORE_MIGRATOR_URL });
   const sales = new Client({ connectionString: process.env.GP_SALES_MIGRATOR_URL });
   const digest = value => crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -205,7 +205,7 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
     const reader = databaseForCurrentTest(undefined, { readOnly: true });
     assert.throws(() => reader.prepare("INSERT INTO settings(key,value) VALUES('synthetic-readonly-forbidden','value') RETURNING key").all(), /read-only transaction/);
     assert.equal(database.prepare("SELECT key FROM settings WHERE key='synthetic-readonly-forbidden'").get(), undefined);
-    const application = require("../lib/persistence/sqlite/provider").openSqliteApplicationPersistence({ databasePath: process.env.DB_PATH });
+    const application = openApplicationForCurrentTest();
     assert.equal(application.provider.getCapabilities().providerId, "postgresql");
     let announceRead;
     const readStarted = new Promise(resolve => { announceRead = resolve; });

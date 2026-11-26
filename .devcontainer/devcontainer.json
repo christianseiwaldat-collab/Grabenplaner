@@ -1,5 +1,5 @@
 {
-  "name": "Grabenplaner v0.92.101 Codespaces-Demo",
+  "name": "Grabenplaner v0.92.101 Codespaces",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
@@ -8,13 +8,12 @@
     }
   },
   "postCreateCommand": "pnpm install --frozen-lockfile",
-  "postStartCommand": "bash .devcontainer/post-start.sh",
   "forwardPorts": [
     3000
   ],
   "portsAttributes": {
     "3000": {
-      "label": "Grabenplaner (Demo/Test)",
+      "label": "Grabenplaner (Entwicklung)",
       "onAutoForward": "notify",
       "protocol": "http",
       "visibility": "private"

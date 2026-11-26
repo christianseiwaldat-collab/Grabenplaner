@@ -16,7 +16,7 @@ test('Native PostgreSQL branch orders: narrow authenticated batches, demand bran
     await source.ingest('BESTELLDETAILS',[...details,...Array.from({length:100},(_,i)=>({
       BestellId:String(20000+i),BestellNr:106,EAN:'005479',BMenge:'1',gMenge:'1',Verteiler:false,
     }))],{snapshotAt:'2026-09-23T09:00:00.000Z'});
-    const session={employeeNumber:'00001',permissions:require('../test-support/trade-insights-sqlite').rights,scopes:[]};
+    const session={employeeNumber:'00001',permissions:require('../test-support/trade-insights-fixture').rights,scopes:[]};
     const load=(section='all')=>require('../lib/sales-article-detail-source').loadSalesArticleDetailData({access:f.access,vault:f.vault,scopeId,article,projection:{read:true},session,section});
     const timings=[];
     for(let i=0;i<4;i++) {

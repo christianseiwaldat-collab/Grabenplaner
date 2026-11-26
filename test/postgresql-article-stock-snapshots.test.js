@@ -4,7 +4,7 @@ const {snapshotFixture}=require('../test-support/article-stock-snapshots-fixture
 const enabled=!!process.env.GP_CORE_MIGRATOR_URL;
 test('native stock imports batch membership, reuse unchanged versions and keep snapshot/undo/reader isolation',{skip:!enabled},async t=>{
  await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async pg=>{
-  const f=await snapshotFixture(t,{access:pg.access,protection:pg.protection,scopeId:'synthetic-migration',ownerId:'00001'});
+  const f=await snapshotFixture({access:pg.access,protection:pg.protection,scopeId:'synthetic-migration',ownerId:'00001'});
   const values=Array.from({length:205},(_,i)=>({EAN:String(42+i).padStart(13,'0'),FilialID:18,FBestand:String(i+1)}));
   await f.ingest('ARTIKEL_STAMM',values.map(v=>({EAN:v.EAN,Artikelbezeichnung:'Synthetic '+v.EAN})),{master:true});
   await f.ingest('FILIALEN',[{FilialID:'18'}],{master:true});

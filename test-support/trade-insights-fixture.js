@@ -29,4 +29,10 @@ async function insightFixture({access,protection,scopeId='grabenplaner-main',own
  await ingest('BESTELLKORB',[{KorbID:'1',KEAN:'000042',Filiale:Number(branches[0]),UmlagerungvonFil:Number(branches[1]),KDatum:'2026-08-03T09:00:00.000',KArtikelbezeichnung:'Synthetic transfer',KMenge:'2',Status:'Umlagerung',erledigt:true}]);
  return {ingest,masters,engine};
 }
-module.exports={insightFixture,TIME};
+const rights = [
+  ...Object.values(require('../lib/sales-analytics-access').SALES_ANALYTICS_PERMISSIONS),
+  ...Object.values(require('../lib/sales-history-access').SALES_HISTORY_PERMISSIONS),
+  ...Object.values(require('../lib/crm-access').CRM_PERMISSIONS),
+  ...Object.values(require('../lib/tradefoto-bestell/access').BESTELL_PERMISSIONS),
+];
+module.exports={insightFixture,TIME,rights};

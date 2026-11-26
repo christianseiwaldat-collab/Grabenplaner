@@ -421,32 +421,3 @@ test('upload admission arriving during spool startup prevents the pending tick f
  const running=f.queue.tick(),releaseUpload=f.queue.beginUpload();release();await running;
  assert.equal(f.state.calls,0);releaseUpload();await f.queue.tick();assert.equal(f.state.calls,1);
 });
-
-test('real encrypted import repository resumes committed rows and finishes review in the background',async t=>{
- const f=await fixture(t);
- const {openSqliteApplicationPersistence}=require('../lib/persistence/sqlite/provider');
- const {SQLITE_APPLICATION_CATALOG}=require('../lib/persistence/sqlite/application-catalog');
- const {ensureSqliteDataImportRuntimeSchema}=require('../lib/persistence/sqlite/operations/data-import-runtime-schema');
- const {createDataImportRuntime}=require('../lib/persistence/repositories/data-import-runtime');
- const {definitions,readTradeFotoFullSource}=require('../lib/tradefoto-full-import-source');
- const app=openSqliteApplicationPersistence({databasePath:':memory:',catalog:SQLITE_APPLICATION_CATALOG});ensureSqliteDataImportRuntimeSchema(app.database);
- const vault=createIntegrationSecretVault({activeKeyId:'test',keys:{test:Buffer.alloc(32,9)}});
- const defs=definitions('trade'),starts=[];let failure=true;
- const readSource=args=>readTradeFotoFullSource({...args,readerFactory:()=>({getTableNames:()=>defs.map(d=>d.name),getTable:name=>{
-  const def=defs.find(d=>d.name===name),rows=name==='FILIALEN'?Array.from({length:401},(_,i)=>({FilialID:String(i+1)})):[];
-  return {rowCount:rows.length,getColumnNames:()=>def.columns.map(c=>c.name),getColumns:()=>def.columns,
-   getData:({columns,rowOffset=0,rowLimit=Infinity})=>rows.slice(rowOffset,rowOffset+rowLimit).map(row=>Object.fromEntries(columns.map(c=>[c,row[c]??null])))};
- }}),send:async message=>{if(message.type==='rows')starts.push(message.startRow);const ack=await args.onMessage(message);
-  if(message.type==='rows'&&failure){failure=false;throw new C.DataImportError('IMPORT_SOURCE_READ_TIMEOUT',409);}return ack;}});
- const runtime=createDataImportRuntime({access:app.provider,vault,readSource}),jobs=createDataImportJobs({directory:path.join(path.dirname(f.directory),'real'),vault,runtime,
-  lifecycle:createDataImportLifecycle(),resolvePrincipal:f.getSession,now:()=>f.state.now});
- t.after(async()=>{await jobs.stop();await runtime.stop();await app.provider.close();app.database.close();});
- const source=await jobs.enqueue(f.getSession,{buffer:sourceBuffer(),kind:'trade'});await jobs.tick();
- assert.equal((await runtime.sourceOperation(f.getSession,source.id,'read')).tables.find(t=>t.name==='FILIALEN').run.receivedRows,200);
- f.state.now+=30001;await jobs.tick();
- const result=await runtime.sourceOperation(f.getSession,source.id,'read');assert.ok(['ready','needs_review'].includes(result.status));
- assert.equal(result.complete,true);assert.deepEqual(starts,[1,201,401]);
- assert.equal(app.database.prepare('SELECT COUNT(*) n FROM data_import_rows').get().n,401);
- assert.equal(app.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,0);
- assert.equal((await jobs.overlay(result)).background,undefined);
-});

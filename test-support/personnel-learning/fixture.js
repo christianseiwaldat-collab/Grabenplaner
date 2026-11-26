@@ -23,7 +23,6 @@ const {
   normalizePersonnelLearningSkillInput,
 } = require("../../lib/personnel-learning-skills");
 const {
-  ensureSqliteApplicationSchema,
 } = require("../../lib/persistence/sqlite/operations/application-schema");
 const {
   PERSONNEL_LEARNING_ASSIGNMENT_INDEX_NAMES,
@@ -46,10 +45,6 @@ const {
   moduleReceiptSha256,
   moduleVersionReceiptSha256,
 } = require("../../lib/persistence/sqlite/operations/personnel-learning-schema");
-const {
-  runSqliteStartupSchemaMigrations,
-} = require("../../lib/persistence/sqlite/operations/startup-schema-migrations");
-const { openSqliteLegacyDatabase } = require("../../lib/persistence/sqlite/provider");
 const { canonicalSha256 } = require("../../lib/work-rules/receipt");
 
 const LOCATION_A = "assignment-foundation-a";
@@ -396,16 +391,6 @@ function insertAssignmentRevision(database, revision) {
   );
 }
 
-function populatedDatabase(database) {
-  ensureSqliteApplicationSchema(database);
-  insertOrganization(database);
-  insertPublishedModule(database, "assignment-skill", skillInput());
-  insertPublishedModule(database, "assignment-process", processInput());
-  const competency = insertTrainerCompetency(database, "assignment-skill");
-  const assignment = insertAssignment(database, "assignment-process", competency);
-  return { competency, assignment };
-}
-
 function insertProgressRevision(database, assignment, {
   revisionNumber = 1,
   completed = true,
@@ -464,4 +449,4 @@ function insertProgressRevision(database, assignment, {
 }
 
 
-module.exports = { insertOrganization, insertPublishedModule, insertPublishedModuleVersion, insertTrainerCompetency, insertAssignment, insertAssignmentRevision, populatedDatabase, insertProgressRevision, skillInput, processInput };
+module.exports = { insertOrganization, insertPublishedModule, insertPublishedModuleVersion, insertTrainerCompetency, insertAssignment, insertAssignmentRevision, insertProgressRevision, skillInput, processInput };

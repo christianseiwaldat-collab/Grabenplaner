@@ -7,7 +7,7 @@ const {createHistorySnapshots}=require('../lib/persistence/repositories/import-h
 test('Native publication proofs invalidate on data changes and cannot be forged by application or reader',
  {skip:!process.env.GP_CORE_MIGRATOR_URL},async t=>{
  await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async pg=>{
-  const f=await snapshotFixture(t,{access:pg.access,protection:pg.protection,scopeId:'synthetic-migration',ownerId:'00001'});
+  const f=await snapshotFixture({access:pg.access,protection:pg.protection,scopeId:'synthetic-migration',ownerId:'00001'});
   await f.ingest('ARTIKEL_STAMM',[{EAN:'102004',Artikelbezeichnung:'Synthetic article'}],{master:true});
   const run=await f.ingest('ARTIKEL_FILIALEN',[{EAN:'102004',FilialID:18,FBestand:3},{EAN:'102004',FilialID:19,FBestand:2}]);
   const snapshots=createHistorySnapshots({protection:pg.protection});

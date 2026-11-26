@@ -35,7 +35,8 @@ async function main(){
  }
  if((!local&&(process.env.CI!=='true'||process.env.GITHUB_ACTIONS!=='true'))||connection.hostname!=='127.0.0.1'||connection.port!=='5432'||connection.pathname!=='/grabenplaner_test'||connection.username!=='postgres')throw new Error('CI synthetic database required');
  const client=new Client({connectionString:connection.href});await client.connect();
- const env={...process.env,GP_PG_MIGRATION_LIVE:'1',GP_MIGRATION_ADMIN_URL:connection.href,
+ const env={...process.env,NODE_OPTIONS:`${process.env.NODE_OPTIONS||''} --no-experimental-sqlite`.trim(),
+  GP_PG_MIGRATION_LIVE:'1',GP_MIGRATION_ADMIN_URL:connection.href,
   GP_CI_POSTGRESQL_FIXTURE:local?'owned-local-service-v1':'github-actions-service-v1'};
  // The expensive native FIDO phase has an explicit finite test list. Never
  // propagate its opt-in to the ordinary, unchanged application discovery run.

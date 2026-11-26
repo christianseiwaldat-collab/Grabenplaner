@@ -392,16 +392,15 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // The additive session schema and exact historical-transfer policy use their
   // already bounded database handles; neither receives a driver-import grant.
   assert.ok(report.summary.productionDirectFiles < 109, "PostgreSQL-only removes legacy active SQLite coupling");
-  // Five archive/child operating adapters and one read-only recovery-key
-  // verifier and isolated full-source measurement extend the existing indirect
-  // inventory; no raw business access or productive import activation.
+  // Archive/child operating adapters and the read-only recovery-key verifier
+  // extend the indirect inventory without a grant for business data access.
   // The workspace lease reuses the existing lock adapter; Offsite staging
   // reads only the configured database path, not business records.
   // The named deploy preflight only reads the installed provider and paths.
   // The release inventory reads only component version metadata and package bytes.
   // The exact SAST/secret review JSON files contain quoted SQL terminology, not executable persistence.
   // The exact read-only SAST context helper adds one metadata-only file, without a driver grant.
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 23);
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 22);
   const sastMetadata = report.findings.filter(entry => entry.file === "scripts/security/sast-dispositions.json");
   assert.ok(sastMetadata.length > 0);
   assert.ok(sastMetadata.every(entry => entry.owner === "security-review-evidence"));
@@ -697,6 +696,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   "lib/work-rules/custom-rules.js",
   "lib/work-rules/governance.js",
   "lib/work-rules/store.js",
+  "scripts/import-tradefoto-crm.cjs",
   "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
   "server-tools/linux/install-grabenplaner-server.sh",
   "server-tools/linux/lib/backup-snapshot.js",
@@ -710,16 +710,17 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   "server-tools/linux/recovery/lib/recovery-verify.js",
   "server-tools/linux/test-grabenplaner-server.sh"
 ]);
-  // These two exact retired operating cases now delegate to the immutable
-  // historical server child; their current wrappers no longer import drivers.
+  // These fixture files retain engine-independent cases after SQLite tests are retired.
   assert.deepEqual(report.resolvedTestFiles, [
+    "test/backup-cli.test.js",
+    "test/block6-custom-work-rule-evaluator.test.js",
     "test/database-lock.test.js",
-    "test/v082-immutable-trigger-migration.test.js",
+    "test/developer-role.test.js",
+    "test/v078-linux-assurance-automation.test.js",
+    "test/v078-system-center-metrics.test.js",
     "test/v0853-offsite-system-center.test.js",
     "test/v0862-local-backup-compat.test.js",
-    "test/v087-block5-loan-photo-migration.test.js",
     "test/v087-block7-settings-appearance.test.js",
-    "test/v087-block8-cost-center-migration.test.js",
   ]);
   assert.deepEqual(report.missingIndirectFiles, []);
   assert.deepEqual(report.missingPhase3Files, []);

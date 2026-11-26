@@ -3,26 +3,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
 const crypto = require("node:crypto");
-const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 const { functionSource } = require("../test-support/learning-workspace-ui");
 const context = vm.createContext({});
 vm.runInContext(functionSource("jsonObject", "../lib/persistence/catalogs/custom-process-management-catalog.js"), context);
 
-for (const count of [63, 64, 126, 127, 190]) {
-  test(`bounded onboarding JSON preserves ${count} fields, explicit nulls and nested values`, () => {
-    const database = openSqliteLegacyDatabase(":memory:");
-    try {
-      const fields = {}, expected = {};
-      for (let n = 0; n < count; n++) {
-        const kind = n % 4, key = `field_${n}`;
-        fields[key] = ["NULL", String(n), "'synthetic text'", "json('[1,null,\"value\"]')"][kind];
-        expected[key] = [null, n, "synthetic text", [1, null, "value"]][kind];
-      }
-      const actual = database.prepare("SELECT " + context.jsonObject(fields)).get();
-      assert.deepEqual(JSON.parse(actual.data), expected);
-    } finally { database.close(); }
-  });
-}
 
 test("onboarding compatibility retains exact PostgreSQL SQL and rejects unreviewed source or binding changes", () => {
   const catalog = require("../lib/persistence/postgresql/core/catalog");

@@ -6,7 +6,6 @@ const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
-const { openSqliteLegacyDatabase: DatabaseSync } = require("../lib/persistence/sqlite/provider");
 const policy = require("../server-tools/linux/lib/deploy-policy");
 const { legacyRequire } = require("../test-support/legacy-baseline");
 const deferred = require("../server-tools/linux/lib/deferred-backups");
@@ -89,17 +88,6 @@ test("actual package contracts distinguish interface updates from schema, depend
   fs.writeFileSync(path.join(candidate, "server.js"), "tampered server");
   assert.throws(() => policy.applicationContract(candidate), /DEPLOY_CONTRACT_CHANGED/);
 });
-test("legacy baseline: source binding survives ordinary data writes but changes when a migration changes the schema", t => {
-  const historicalPolicy = legacyRequire("server-tools/linux/lib/deploy-policy.js");
-  const file = path.join(temporary(t), "live.db"), db = new DatabaseSync(file);
-  db.exec("CREATE TABLE schema_migrations(id TEXT PRIMARY KEY); CREATE TABLE sales(amount INTEGER); INSERT INTO schema_migrations VALUES('base')");
-  const before = historicalPolicy.databaseIdentity(file);
-  db.exec("INSERT INTO sales VALUES(100)");
-  assert.deepEqual(historicalPolicy.databaseIdentity(file), before);
-  db.exec("ALTER TABLE sales ADD COLUMN note TEXT");
-  assert.notEqual(historicalPolicy.databaseIdentity(file).schemaSha256, before.schemaSha256);
-  db.close();
-});
 
 test("current deploy policy rejects historical SQLite identities without changing backup bytes", t => {
   const file = path.join(temporary(t), "retained.db"), bytes = Buffer.from("SQLite format 3\0retained backup");
@@ -109,56 +97,6 @@ test("current deploy policy rejects historical SQLite identities without changin
   assert.equal(policy.sameDatabaseIdentity({ schemaVersion: 1, providerId: "sqlite" }, { providerId: "sqlite" }), false);
 });
 
-function pair(directory, day = 11) {
-  const snapshot = `dienstplan-2026-09-${day}T02-00-00-000Z-abc123def456`;
-  const database = path.join(directory, `${snapshot}.db`), documents = path.join(directory, `${snapshot}.amu`), marker = path.join(directory, `${snapshot}.complete.json`);
-  fs.mkdirSync(documents, { recursive: true });
-  const db = new DatabaseSync(database); db.exec("CREATE TABLE synthetic(id INTEGER)"); db.close();
-  const manifest = JSON.stringify({ database: { fileName: path.basename(database), sha256: sha256File(database) }, files: [] });
-  fs.writeFileSync(path.join(documents, "manifest.json"), manifest);
-  const committedAt = `2026-09-${day}T02:00:00.000Z`;
-  const value = { format: "grabenplaner-backup-commit", schemaVersion: 1, snapshot, committedAt,
-    database: { fileName: path.basename(database), sha256: sha256File(database), bytes: fs.statSync(database).size },
-    protectedDocuments: { directoryName: path.basename(documents), files: 0, manifestFileName: "manifest.json", manifestSha256: hash(manifest), manifestBytes: Buffer.byteLength(manifest) },
-    verification: { status: "verified", verifiedAt: committedAt } };
-  fs.writeFileSync(marker, JSON.stringify(value));
-  return { snapshot, database, documents, marker };
-}
-test("periodic backup probe reports metadata scope and rejects a mismatched coupled pair", t => {
-  const directory = temporary(t), value = pair(directory), options = { now: Date.parse("2026-09-11T04:00:00Z") };
-  assert.equal(inspectBackupMetadata(value.database, value.documents, value.marker, options).verification, "metadata-only");
-  const original = fs.readFileSync(value.marker);
-  const changed = JSON.parse(original); changed.database.bytes++;
-  fs.writeFileSync(value.marker, JSON.stringify(changed));
-  assert.throws(() => inspectBackupMetadata(value.database, value.documents, value.marker, options), /BACKUP_METADATA_MISMATCH/);
-  fs.writeFileSync(value.marker, original);
-  fs.writeFileSync(path.join(value.documents, "manifest.json"), "{}");
-  assert.throws(() => inspectBackupMetadata(value.database, value.documents, value.marker, options), /BACKUP_METADATA_MISMATCH/);
-});
-test("deferred archive resumes after interruption and preserves unknown old raw backups", t => {
-  const dataRoot = temporary(t), backupDirectory = path.join(dataRoot, "backups"), options = { requireRoot: false };
-  const old = pair(backupDirectory, 10), first = pair(backupDirectory, 11), second = pair(backupDirectory, 12);
-  deferred.register({ dataRoot, backupDirectory, snapshot: first.snapshot }, options);
-  deferred.register({ dataRoot, backupDirectory, snapshot: second.snapshot }, options);
-  assert.equal(deferred.register({ dataRoot, backupDirectory, snapshot: first.snapshot }, options).pending, 2);
-  const processed = [];
-  assert.throws(() => deferred.drain({ dataRoot, backupDirectory, user: "fixture", archiveEnabled: true }, { ...options,
-    archive(snapshot) { if (snapshot === second.snapshot) throw new Error("interrupted"); processed.push(snapshot); } }), /interrupted/);
-  assert.deepEqual(processed, [first.snapshot]);
-  assert.equal(deferred.pendingRecords(dataRoot, backupDirectory, options).length, 1);
-  const result = deferred.drain({ dataRoot, backupDirectory, user: "fixture", archiveEnabled: true }, { ...options, archive: snapshot => processed.push(snapshot) });
-  assert.equal(result.pending, 0); assert.deepEqual(processed, [first.snapshot, second.snapshot]);
-  for (const item of [old, first, second]) assert.ok(fs.existsSync(item.database));
-});
-test("changed deferred receipts fail before archiving or deleting any point", t => {
-  const dataRoot = temporary(t), backupDirectory = path.join(dataRoot, "backups"), options = { requireRoot: false };
-  const item = pair(backupDirectory);
-  deferred.register({ dataRoot, backupDirectory, snapshot: item.snapshot }, options);
-  fs.appendFileSync(item.marker, " ");
-  let called = false;
-  assert.throws(() => deferred.drain({ dataRoot, backupDirectory, user: "fixture", archiveEnabled: true }, { ...options, archive: () => { called = true; } }), /DEFERRED_MARKER_CHANGED/);
-  assert.equal(called, false); assert.ok(fs.existsSync(item.database));
-});
 test("changed Linux scripts remain valid Bash and short/nightly probes use separate labels", { skip: !fs.existsSync(bash) }, () => {
   for (const relative of ["lib/common.sh", "update-grabenplaner-server.sh", "backup-grabenplaner.sh", "test-grabenplaner-server.sh",
     "offsite/lib/offsite-common.sh", "offsite/grabenplaner-offsite-prepare.sh", "offsite/grabenplaner-offsite-assurance.sh", "offsite/install-grabenplaner-offsite.sh"]) {

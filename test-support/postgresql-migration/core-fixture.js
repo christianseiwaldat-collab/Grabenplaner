@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {Client}=require('pg');
-const {seedCoreFixture}=require('./sqlite-source');
+const {seedCoreFixture}=require('./core-seed');
 const {openCoreDevelopmentApplication}=require('../../lib/persistence/postgresql/core/application');
 const {verifyEnvironment,PROFILE}=require('../../lib/persistence/postgresql/core/environment');
 const inventory=require('../postgresql-migration-doc-fixtures/block-1-inventory.json');
@@ -25,9 +25,9 @@ const baseSql=`
  INSERT INTO shifts(employee_number,location_id,department_id,shift_date,start_time,end_time,area,note) VALUES('00002','18',1,'2026-09-07','08:00','16:30','Verkauf','synthetisch');
  ${historicalTimes}
 `;
-async function withCoreFixture(work,{compareWithSqlite=false}={}){
+async function withCoreFixture(work){
   const migrator=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await migrator.connect();
-  let sqlite,sqliteProvider,application,owned=false;const tableNames=[...baseTableNames];
+  let application,owned=false;const tableNames=[...baseTableNames];
   try {
     await verifyEnvironment(migrator,{purpose:'migrator'});
     await require('../../lib/persistence/postgresql/core/session-security').migrate(migrator);
@@ -41,25 +41,10 @@ async function withCoreFixture(work,{compareWithSqlite=false}={}){
     await migrator.query(operations.join(';')+';'+baseSql);
     await migrator.query("SELECT setval(pg_get_serial_sequence('gp.departments','id'),1,true)");
     await migrator.query('COMMIT');owned=true;
-    let comparison = {};
-    if(compareWithSqlite){
-      const {createSqliteSource}=require('./sqlite-source');
-      const {createSqlitePersistenceProvider}=require('../../lib/persistence/sqlite/provider');
-      const {sourceEntries}=require('../../lib/persistence/postgresql/core/catalog');
-      const {coreRepositories}=require('../../lib/persistence/postgresql/core/application');
-      sqlite=createSqliteSource();
-      // The historical comparison uses the same additive column as PostgreSQL.
-      sqlite.exec('ALTER TABLE week_options ADD COLUMN school_details_json TEXT');
-      require('../../lib/persistence/sqlite/operations/session-security-schema').ensureSqliteSessionSecuritySchema(sqlite);
-      seedCoreFixture(sqlite,3);sqlite.exec(baseSql);
-      const additional=require('../../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG.filter(entry=>entry.statement.id.includes('.security.'));
-      sqliteProvider=createSqlitePersistenceProvider({database:sqlite,catalog:[...sourceEntries(),...additional],closeDatabase:false});
-      comparison={sqlite,sqliteProvider,sqliteRepositories:coreRepositories(sqliteProvider)};
-    }
     application=await openCoreDevelopmentApplication({profile:PROFILE,databaseUrl:process.env.GP_CORE_APP_URL,tlsMode:'disable-local-only'});
-    await work({postgres:application.provider,postgresRepositories:application.repositories,application,migrator,...comparison});
+    await work({postgres:application.provider,postgresRepositories:application.repositories,application,migrator});
   }finally{
-    await application?.close();await sqliteProvider?.close();sqlite?.close();
+    await application?.close();
     await migrator.query('ROLLBACK');await migrator.query('RESET ROLE');
     if(owned){
       await verifyEnvironment(migrator,{purpose:'migrator'});

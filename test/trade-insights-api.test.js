@@ -1,5 +1,6 @@
 'use strict';
 const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { openApplicationForCurrentTest } = require("../test-support/postgresql-api/preload");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const assert=require('node:assert/strict'),test=require('node:test'),crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-trade-insights-api-')),key=Buffer.alloc(32,53);
@@ -11,7 +12,7 @@ test.before(async()=>{
  db.exec("INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES('insights-user','Synthetic Developer','Synthetic','#287a67',38.5,'93',1); INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password) VALUES('insights-user','test-only','developer',1,0)");
  const token=crypto.randomBytes(32).toString('hex'),csrf=sessionCsrf(token);db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,'insights-user',?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(),crypto.createHash('sha256').update(token).digest('hex'));
  auth={cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,csrf};
- storeApp=require('../lib/persistence/sqlite/provider').openSqliteApplicationPersistence({databasePath:process.env.DB_PATH,catalog:require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG});access=storeApp.provider;
+ storeApp=openApplicationForCurrentTest();access=storeApp.provider;
  const vault=require('../lib/integration-secret-vault').createIntegrationSecretVault({activeKeyId:'insights-test',keys:{'insights-test':key}});protection=await require('../lib/data-import-managed-protection').loadManagedDataImportProtection({access,vault,create:true});
  source=await require('../test-support/trade-insights-fixture').insightFixture({access,protection,ownerId:'insights-user',branches:['93','94']});
  await source.ingest('Reparatur',[{ReparaturNr:1,FilialId:'93',KUND_NR:42,AName:'Synthetic camera',erledigt:true}]);

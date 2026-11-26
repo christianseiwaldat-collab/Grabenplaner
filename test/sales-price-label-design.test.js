@@ -103,23 +103,3 @@ test('Shared tax text preserves the PDF contract for trailing zeros and invalid 
     [0,'inkl. 0 % MwSt.'],['100.000000','inkl. 100 % MwSt.']]) assert.equal(Design.taxText(input),expected);
   for (const input of [undefined,null,-1,101,NaN,Infinity,'101','20,0','20.0000001',' 20','1e1']) assert.equal(Design.taxText(input),'MwSt. prüfen');
 });
-
-test('Protected named and personal default templates preserve independent sparse text geometry across reload and update', async t => {
-  const {fixture} = require('../test-support/trade-insights-sqlite');
-  const Store = require('../lib/sales-price-label-template-store'), persistence = await fixture(t);
-  const context = await Store.resolveTemplateSessionContext({employeeNumber:'42',accountId:'user-42',sessionKind:'employee',
-    isEmployee:true,fullName:'Synthetic Design',localSystem:true,mustChangePassword:false}, {listBranchAccounts:async () => []});
-  const store = Store.createSalesPriceLabelTemplateStore({access:persistence.app.provider,vault:persistence.vault});
-  const options = {footer:'Beratung',textBoxes:{price:box({fontId:'fira-mono',fontSizePt:18,yMm:20,heightMm:12}),footer:box({yMm:44})}};
-  const input = {title:'Synthetic Design',options,filenameOptions:{},visibility:'private',recipients:[]};
-  const saved = await store.create(context,input), loaded = await store.get(context,saved.id);
-  assert.deepEqual(loaded.options.textBoxes,options.textBoxes);
-  assert.deepEqual(Object.keys(loaded.options.textBoxes).sort(),['footer','price']);
-  await store.setDefault(context,{options,filenameOptions:{}});
-  const reloaded = Store.createSalesPriceLabelTemplateStore({access:persistence.app.provider,vault:persistence.vault});
-  assert.deepEqual((await reloaded.getDefault(context)).options.textBoxes,options.textBoxes);
-  const changed = {...options,textBoxes:{...options.textBoxes,price:{...options.textBoxes.price,xMm:12,fontSizePt:17.5}}};
-  const updated = await reloaded.update(context,saved.id,{...input,version:1,options:changed});
-  assert.equal(updated.version,2); assert.deepEqual((await store.get(context,saved.id)).options.textBoxes,changed.textBoxes);
-  assert.deepEqual(options.textBoxes.price,box({fontId:'fira-mono',fontSizePt:18,yMm:20,heightMm:12}));
-});

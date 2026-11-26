@@ -631,7 +631,7 @@ test("CRM, article and statistics registration grants no additional provider cap
     assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), [], file);
   }
   for (const file of [...modules, ...modules.map(file => file.replace(/\.js$/, "-other.js")),
-    "test/cash-customer-search-sql.test.js", "test/import-master-customer-reference.test.js",
+    "test/cash-customer-search-sql.test.js",
     "test/postgresql-article-search-optimization.test.js"]) {
     for (const [source, kind] of [
       ["const driver = require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
@@ -742,7 +742,7 @@ test("School migration inventory permits only the named CLI driver and keeps dom
     assert.equal(architectureBoundaryViolationsForText(file, "const driver = require('pg');")
       .some(entry => entry.kind === "postgresql-driver-import"), file !== migrationCli, file);
   }
-  for (const file of ["test/youth-profile-integration.test.js", "test/vocational-school-mutation-guard.test.js"]) {
+  for (const file of ["test/youth-profile-integration.test.js"]) {
     assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.filter(entry => entry === file).length, 1, file);
   }
 });
@@ -828,7 +828,6 @@ test("Article tools classify exact persistence modules without granting drivers 
     "test/sales-article-local-notes.test.js",
     "test/sales-article-catalog-local-route.test.js",
     "test/sales-article-sales.test.js",
-    "test/sales-price-label-template-store.test.js",
     "test/sales-price-labels-server-access.test.js",
     "test/trade-movements.test.js",
   ]) assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.filter(entry => entry === file).length, 1, file);
@@ -912,9 +911,7 @@ test("Encrypted window and price-label workspace registration grants no drivers,
     "lib/branch-window-preferences-routes.js",
   ];
   const fixtures = [
-    "test/sales-price-label-draft-store.test.js",
     "test/sales-price-label-project.test.js",
-    "test/branch-window-preferences-store.test.js",
     "test/branch-window-preferences-api.test.js",
   ];
   for (const file of modules) {

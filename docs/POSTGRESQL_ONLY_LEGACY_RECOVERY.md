@@ -127,13 +127,11 @@ Umschaltung des aktuellen GP auf den alten Bestand.
 
 ## Prüfgrenzen und wiederkehrender Nachweis
 
-`test/legacy-recovery-capsule.test.js` führt unter Linux eine synthetische
-Wiederherstellung einschließlich verschlüsseltem Datensatz aus. Negativfälle
-prüfen manipulierte Quelle, falschen Manifest-/Runtime-Hash, falsche Schlüssel,
-Links, verschachtelte Quell-/Kapselziele und bestehende beziehungsweise PostgreSQL-Ziele. Die unveränderte
-Quellsicherung wird erneut gehasht. `test/postgresql-only-recovery.test.js`
-prüft die Ablehnung alter SQLite-Stages durch die aktuellen Recovery-CLIs und
-das Laden der gemeinsamen PostgreSQL-Prüfungen ohne SQLite-Treiber.
+Die synthetische SQLite-Wiederherstellung mit verschlüsseltem Datensatz ist im
+Git-Stand `f0f635c8f03cf2174cb32facc3df7cf1ddd52e4c` unter
+`test/legacy-recovery-capsule.test.js` archiviert. Im aktuellen GP prüft
+`test/postgresql-only-recovery.test.js`, dass die Recovery-CLIs historische
+SQLite-Stages vor einem Datenbankzugriff oder Schreibvorgang abweisen.
 
 Diese Tests ersetzen nicht den dokumentierten Wiederherstellungsnachweis einer
 konkreten produktiven Altsicherung. Für jede weiter aufzubewahrende historische

@@ -5,7 +5,7 @@ const {withFixture,NOW,OLD_HASH,NEW_HASH}=require("../test-support/security-audi
 const {runLoginTransaction}=require("../lib/portal-login-security");
 const {createApplicationRepositories}=require("../lib/persistence/application-repositories");
 const start=NOW.toISOString(),absolute="2026-10-18T13:00:00.000Z",idle="2026-10-18T12:30:00.000Z";
-for(const kind of ["sqlite","postgresql"])test(kind+": session limits and credential transitions",{skip:kind==="postgresql"&&!process.env.GP_CORE_MIGRATOR_URL,timeout:150000},async t=>withFixture(kind,async f=>{
+test("PostgreSQL: session limits and credential transitions",{skip:!process.env.GP_CORE_MIGRATOR_URL,timeout:150000},async t=>withFixture(async f=>{
  const transaction=work=>runLoginTransaction(f.provider,createApplicationRepositories,work);
  const insert=(repo,org,id="session",options={})=>repo[org?"insertOrganizationSession":"insertEmployeeSession"]({
   id,employeeNumber:"00001",accountId:"audit-org",tokenHash:id,authenticatedAt:start,absoluteExpiresAt:absolute,expiresAt:idle,...options});

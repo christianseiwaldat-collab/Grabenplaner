@@ -7,7 +7,6 @@ const { prepareSalesArticleImage, fetchSalesArticleImage, MAX_INPUT_BYTES } = re
 const { registerSalesArticleImageRoutes } = require('../lib/sales-article-image-routes');
 const { createSalesArticleImagesRepository } = require('../lib/persistence/repositories/sales-article-images');
 const { createSalesArticleCatalogRepository } = require('../lib/persistence/repositories/sales-article-catalog');
-const { openSqliteApplicationPersistence } = require('../lib/persistence/sqlite/provider');
 const { ensureSqliteSalesArticleCatalogSchema } = require('../lib/persistence/sqlite/operations/sales-article-catalog-schema');
 const { SQLITE_SALES_ARTICLE_CATALOG } = require('../lib/persistence/sqlite/sales-article-catalog-catalog');
 const { SQLITE_SALES_ARTICLE_IMAGES_CATALOG } = require('../lib/persistence/sqlite/sales-article-images-catalog');
@@ -31,25 +30,6 @@ test('Hinterlegte Produktlinks bleiben klickbar, ohne Medienabruf oder ausführb
   }
   assert.equal(projectSalesArticleSourceField('ABild', 'Bild', 'https://example.org/image.png').href, undefined);
 });
-async function fixture() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gp-article-images-'));
-  const catalogEntries = [...SQLITE_SALES_ARTICLE_CATALOG, ...SQLITE_SALES_ARTICLE_IMAGES_CATALOG];
-  const opened = openSqliteApplicationPersistence({ databasePath: path.join(dir, 'test.db'), catalog: catalogEntries });
-  const { database, provider } = opened;
-  database.exec('CREATE TABLE audit_log(id INTEGER PRIMARY KEY,actor TEXT,action TEXT,entity_type TEXT,entity_id TEXT,detail TEXT,created_at TEXT)');
-  ensureSqliteSalesArticleCatalogSchema(database);
-  const catalog = createSalesArticleCatalogRepository(provider), images = createSalesArticleImagesRepository(provider);
-  async function importVersion(number) {
-    const articles = ['001234', '1234'].map(articleNumber => ({ sourceArticleKey: 'ean-' + articleNumber, articleNumber,
-      description: 'Testkamera ' + number, active: number !== 3, sourceUpdatedAt: null, identifiers: [], prices: [] }));
-    return catalog.importSnapshot({ snapshot: { sourceSystem: 'tradefoto.artikel_stamm', sourceProfileVersion: 'images-test-v1',
-      sourceSchemaSha256: 'a'.repeat(64), sourceFileSha256: String(number).repeat(64), contentSha256: salesArticleImportContentSha256(articles),
-      snapshotAt: `2026-09-09T10:0${number}:00.000Z`, articles }, actor: 'tester', timestamp: new Date().toISOString() });
-  }
-  await importVersion(1);
-  return { ...opened, dir, catalogEntries, catalog, images, importVersion,
-    async close() { await provider.close(); database.close(); fs.rmSync(dir, { recursive: true, force: true }); } };
-}
 function fakeNetwork(replies) {
   const calls = [];
   return { calls, requestFactory(options, callback) {
@@ -116,66 +96,4 @@ test('Webbilder sperren interne Ziele, DNS-Mischungen, Weiterleitungsumgehungen 
   }
   await assert.rejects(fetchSalesArticleImage('https://images.example.com/a', { dnsResolver: () => new Promise(() => {}), timeoutMs: 10 }), { code: 'ARTICLE_IMAGE_TIMEOUT' });
   await assert.rejects(fetchSalesArticleImage('https://images.example.com/a', { ...fakeNetwork([{ hang: true }]), dnsResolver: publicDns, timeoutMs: 10 }), { code: 'ARTICLE_IMAGE_TIMEOUT' });
-});
-
-test('Eigenes Bild überlebt Trade-Update, Archivierung, Schema-Wiederanlauf und echte Datenbankkopie', async () => {
-  const f = await fixture();
-  try {
-    const article = await f.catalog.getByArticleNumber('001234'), image = await prepareSalesArticleImage(await raster());
-    const saved = await f.images.save({ articleNumber: '001234', productId: article.productId, expectedRevision: null, image, actor: 'tester' });
-    assert.equal(saved.present, true); assert.equal((await f.images.metadata('1234')).present, false);
-    const revision = article.currentRevision;
-    assert.equal((await f.catalog.getByArticleNumber('001234')).currentRevision, revision, 'Image changes do not modify imported article revisions');
-    await f.importVersion(2);
-    const current = await f.catalog.getByArticleNumber('001234');
-    await f.catalog.archiveManual({ input: { articleNumber: '001234', expectedRevision: current.currentRevision }, actor: 'tester', timestamp: new Date().toISOString(), mutationId: crypto.randomUUID() });
-    await f.importVersion(3); ensureSqliteSalesArticleCatalogSchema(f.database);
-    assert.equal((await f.catalog.getByArticleNumber('001234')).description, 'Testkamera 2');
-    assert.equal((await f.catalog.getByArticleNumber('001234')).active, false);
-    assert.deepEqual(await f.images.metadata('001234'), saved);
-    assert.deepEqual((await f.images.content('001234')).buffer, image.buffer);
-    const copyPath = path.join(f.dir, 'restored.db'); f.database.prepare('VACUUM INTO ?').run(copyPath);
-    const copy = openSqliteApplicationPersistence({ databasePath: copyPath, catalog: f.catalogEntries });
-    try { assert.deepEqual((await createSalesArticleImagesRepository(copy.provider).content('001234')).buffer, image.buffer); }
-    finally { await copy.provider.close(); copy.database.close(); }
-    const before = f.database.prepare('SELECT count(*) AS n FROM audit_log').get().n;
-    await assert.rejects(f.images.save({ articleNumber: '001234', productId: article.productId, expectedRevision: null, image, actor: 'tester' }), { code: 'ARTICLE_IMAGE_CONFLICT' });
-    assert.equal(f.database.prepare('SELECT count(*) AS n FROM audit_log').get().n, before);
-    const removed = await f.images.save({ articleNumber: '001234', productId: article.productId, expectedRevision: saved.revision, image: null, actor: 'tester' });
-    assert.equal(removed.present, false); assert.notEqual(removed.revision, saved.revision);
-    await assert.rejects(f.images.save({ articleNumber: '001234', productId: article.productId, expectedRevision: saved.revision, image, actor: 'tester' }), { code: 'ARTICLE_IMAGE_CONFLICT' });
-    await f.images.save({ articleNumber: '001234', productId: article.productId, expectedRevision: removed.revision, image, actor: 'tester' });
-    f.database.prepare("UPDATE sales_article_own_images SET sha256=? WHERE article_number='001234'").run('0'.repeat(64));
-    await assert.rejects(f.images.content('001234'), { code: 'ARTICLE_IMAGE_INTEGRITY' });
-  } finally { await f.close(); }
-});
-
-test('Bild-API schützt Lesen/Schreiben, CSRF, Änderungen während Downloads und hält Inhalte aus Metadaten fern', async () => {
-  const f = await fixture(), app = express(), input = await raster(); let allowed = true, downloadCalls = 0, changeDuringDownload = false;
-  app.use(express.json({ limit: '1mb' }));
-  registerSalesArticleImageRoutes(app, { catalog: f.catalog, images: f.images,
-    sessionFor(req, write) { if (!req.get('X-Reader') || write && req.get('X-Writer') !== 'yes') throw Object.assign(Error('Forbidden'), { status: 403 }); return { employeeNumber: 'tester' }; },
-    assertCsrf(req) { if (req.get('X-CSRF-Token') !== 'test') throw Object.assign(Error('CSRF'), { status: 403 }); },
-    async assertFresh() { if (!allowed) throw Object.assign(Error('Revoked'), { status: 403 }); },
-    privateHeaders(res) { res.set('Cache-Control', 'private, no-store'); },
-    async fetchImage() { downloadCalls += 1; if (changeDuringDownload) allowed = false; return input; },
-  });
-  app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.message, code: error.code }));
-  const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
-  const endpoint = `http://127.0.0.1:${server.address().port}/api/sales/articles/image`, headers = { 'X-Reader': 'yes', 'X-Writer': 'yes', 'X-CSRF-Token': 'test' };
-  const put = (revision = 'none', extra = {}) => fetch(endpoint + '?articleNumber=001234', { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/octet-stream', 'X-Article-Image-Revision': revision, ...extra }, body: input });
-  try {
-    assert.equal((await fetch(endpoint + '?articleNumber=001234')).status, 403);
-    assert.equal((await put('none', { 'X-Writer': 'no' })).status, 403);
-    assert.equal((await put('none', { 'X-CSRF-Token': '' })).status, 403);
-    const savedResponse = await put(), saved = await savedResponse.json(); assert.equal(savedResponse.status, 200, JSON.stringify(saved));
-    const binary = await fetch(endpoint + '?articleNumber=001234', { headers }); assert.equal(binary.status, 200); assert.equal(binary.headers.get('content-type'), 'image/webp');
-    assert.match(binary.headers.get('cache-control'), /no-store/); assert.equal(binary.headers.get('x-content-type-options'), 'nosniff');
-    assert.ok((await binary.arrayBuffer()).byteLength > 0); assert.equal(saved.image.content, undefined); assert.equal(saved.image.buffer, undefined);
-    assert.equal((await put()).status, 409);
-    const post = () => fetch(endpoint + '/from-url', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ articleNumber: '001234', expectedRevision: saved.image.revision, url: 'https://images.example.com/product.png' }) });
-    changeDuringDownload = true; assert.equal((await post()).status, 403);
-    assert.equal((await f.images.metadata('001234')).revision, saved.image.revision);
-    allowed = true; changeDuringDownload = false; const fromUrl = await post(); assert.equal(fromUrl.status, 200, await fromUrl.text()); assert.equal(downloadCalls, 2);
-  } finally { await new Promise(resolve => server.close(resolve)); await f.close(); }
 });

@@ -12,10 +12,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test --test-concurrency=1",
-    "test:recovery-diagnostics": "node --test --test-concurrency=1 test/recovery-timeout-observer.test.js test/recovery-candidate-proof.test.js",
-    "codespaces": "node scripts/codespaces-runner.js",
-    "developer:set": "node scripts/set-developer.js"
+    "test": "node --no-experimental-sqlite --test --test-concurrency=1",
+    "test:recovery-diagnostics": "node --no-experimental-sqlite --test --test-concurrency=1 test/recovery-timeout-observer.test.js test/recovery-candidate-proof.test.js"
   },
   "engines": {
     "node": ">=22.13.0"

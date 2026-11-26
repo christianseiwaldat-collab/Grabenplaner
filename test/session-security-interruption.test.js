@@ -3,8 +3,6 @@
 const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const { spawn } = require("node:child_process"), { randomBytes } = require("node:crypto");
-const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
-const sqliteMigration = require("../lib/persistence/sqlite/operations/session-security-schema");
 const postgresMigration = require("../lib/persistence/postgresql/core/session-security");
 const BASE = [
   "CREATE TABLE portal_users(employee_number TEXT PRIMARY KEY,password_hash TEXT NOT NULL)",
@@ -23,29 +21,17 @@ function stoppedInTransaction() {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
 }
 
-if (process.env.GP_P2_CRASH_CHILD) {
+if (process.env.GP_P2_CRASH_CHILD === "postgresql") {
   (async () => {
-    if (process.env.GP_P2_CRASH_CHILD === "sqlite") {
-      const database = openSqliteLegacyDatabase(process.env.GP_P2_CRASH_DB);
-      const wrapper = {
-        prepare: sql => database.prepare(sql),
-        exec(sql) {
-          database.exec(sql);
-          if (sql === sqliteMigration.REVOKE_SQL[0]) stoppedInTransaction();
-        },
-      };
-      sqliteMigration.ensureSqliteSessionSecuritySchema(wrapper);
-    } else {
-      const { Client } = require("pg"), schema = process.env.GP_P2_CRASH_SCHEMA;
-      assert.match(schema, /^session_crash_[a-f0-9]{16}$/);
-      const client = new Client({ connectionString: process.env.GP_CORE_MIGRATOR_URL });
-      await client.connect();
-      await client.query("BEGIN; SET LOCAL ROLE gp_core_owner");
-      for (const sql of postgresMigration.statements.slice(0, 7)) {
-        await client.query(sql.replace(/\bgp\./g, schema + "."));
-      }
-      stoppedInTransaction();
+    const { Client } = require("pg"), schema = process.env.GP_P2_CRASH_SCHEMA;
+    assert.match(schema, /^session_crash_[a-f0-9]{16}$/);
+    const client = new Client({ connectionString: process.env.GP_CORE_MIGRATOR_URL });
+    await client.connect();
+    await client.query("BEGIN; SET LOCAL ROLE gp_core_owner");
+    for (const sql of postgresMigration.statements.slice(0, 7)) {
+      await client.query(sql.replace(/\bgp\./g, schema + "."));
     }
+    stoppedInTransaction();
     throw Error("Crash barrier was not reached");
   })().catch(error => { console.error(error); process.exitCode = 1; });
 } else {
@@ -76,40 +62,6 @@ if (process.env.GP_P2_CRASH_CHILD) {
     assert.equal(child.kill("SIGKILL"), true);
     await exited;
   }
-
-  test("SQLite: killed migration recovers its journal; verified pre-upgrade backup retains old schema and hashes", { timeout: 45000 }, async t => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "gp-p2-sqlite-crash-"));
-    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-    const filename = path.join(directory, "source.sqlite"), backup = path.join(directory, "pre-upgrade.sqlite");
-    let database = openSqliteLegacyDatabase(filename);
-    BASE.forEach(sql => database.exec(sql));
-    database.close();
-    fs.copyFileSync(filename, backup);
-    const verifiedBackup = fs.readFileSync(backup);
-    await terminateAfterUncommittedWrite(t, { GP_P2_CRASH_CHILD: "sqlite", GP_P2_CRASH_DB: filename });
-    database = openSqliteLegacyDatabase(filename);
-    try {
-      assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
-      assert.equal(database.prepare("PRAGMA table_info(portal_sessions)").all().some(c => c.name === "authenticated_at"), false);
-      assert.equal(database.prepare("SELECT revoked_at FROM portal_sessions").get().revoked_at, null);
-      assert.equal(database.prepare("SELECT count(*) n FROM schema_migrations").get().n, 0);
-      assert.equal(sqliteMigration.ensureSqliteSessionSecuritySchema(database).applied, true);
-      assert.ok(database.prepare("SELECT revoked_at FROM portal_sessions").get().revoked_at);
-      assert.equal(database.prepare("SELECT password_hash FROM portal_users").get().password_hash, "unchanged-synthetic-legacy-hash");
-    } finally { database.close(); }
-    // A rollback restores the verified old database; it does not drop new columns in place.
-    assert.deepEqual(fs.readFileSync(backup), verifiedBackup);
-    const restored = path.join(directory, "restored.sqlite");
-    fs.copyFileSync(backup, restored);
-    database = openSqliteLegacyDatabase(restored);
-    try {
-      assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
-      assert.equal(database.prepare("PRAGMA table_info(portal_sessions)").all().some(c => c.name === "authenticated_at"), false);
-      assert.equal(database.prepare("SELECT revoked_at FROM portal_sessions").get().revoked_at, null);
-      assert.equal(database.prepare("SELECT password_hash FROM portal_users").get().password_hash, "unchanged-synthetic-legacy-hash");
-      assert.equal(sqliteMigration.ensureSqliteSessionSecuritySchema(database).applied, true);
-    } finally { database.close(); }
-  });
 
   test("PostgreSQL: killed migration connection rolls back DDL and revocations; retry is consistent", {
     skip: !process.env.GP_CORE_MIGRATOR_URL, timeout: 45000,

@@ -3,7 +3,6 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const { createPostgresqlBranchOrderOperations } = require('../lib/persistence/postgresql/application-operations/branch-orders');
 const { createSqliteBranchOrderOperations } = require('../lib/persistence/sqlite/operations/branch-orders');
 const { configurationVersion, validateExpectedVersion } = require('../lib/branch-order-configuration-version');
-const { createSqliteSource, seedCoreFixture } = require('../test-support/postgresql-migration/sqlite-source');
 
 // Exercise the asynchronous production module even in ordinary test runs.
 // Use real SQL constraints and rollback, and defer each query result.
@@ -78,72 +77,6 @@ test('configuration tokens ignore object key order and include all values, IDs a
   assert.equal(validateExpectedVersion(undefined), undefined);
 });
 
-test('SQLite branch configuration rejects stale and malformed versions without losing the new configuration', async () => {
-  const database = createSqliteSource();
-  try { seedCoreFixture(database, 3); await exerciseCompareAndSwap(createSqliteBranchOrderOperations(database)); }
-  finally { database.close(); }
-});
-
-test('asynchronous branch configuration rejects stale versions inside the write transaction', async () => {
-  const database = createSqliteSource();
-  try { seedCoreFixture(database, 3); await exerciseCompareAndSwap(createPostgresqlBranchOrderOperations(asynchronousSqlite(database))); }
-  finally { database.close(); }
-});
-
-test('asynchronous configuration compares after locking and returns its own transactional snapshot', async () => {
-  const database = createSqliteSource();
-  try {
-    seedCoreFixture(database, 3);
-    const access = asynchronousSqlite(database), operations = createPostgresqlBranchOrderOperations(access);
-    const initial = await operations.settingsSnapshot('18'), competing = structuredClone(initial);
-    competing.groups[0].hint = 'Zwischen Öffnen und Transaktionsbeginn geändert';
-    let injectBefore = true, inside = false;
-    const reads = [];
-    const guarded = createPostgresqlBranchOrderOperations({
-      prepare(sql) {
-        const statement = access.prepare(sql);
-        return Object.fromEntries(['get', 'all', 'run'].map(method => [method, async (...args) => {
-          if (inside) reads.push({ sql, method });
-          return statement[method](...args);
-        }]));
-      },
-      async transaction(work) {
-        if (injectBefore) { injectBefore = false; await operations.replaceConfiguration('18', competing, 'competing-writer'); }
-        return access.transaction(async () => { inside = true; try { return await work(); } finally { inside = false; } });
-      },
-    });
-    await assert.rejects(guarded.replaceConfiguration('18', initial, 'stale-writer', {
-      expectedVersion: configurationVersion(initial),
-    }), { code: 'BRANCH_ORDER_CONFIGURATION_CONFLICT', status: 409 });
-    assert.match(reads[0].sql, /WHERE location_id = \? FOR UPDATE/u);
-    assert.ok(reads.some(read => read.method === 'all' && /FROM branch_order_recipients/u.test(read.sql)));
-    assert.equal(reads.filter(read => read.method === 'run').length, 0, 'Version conflict precedes all business writes');
-    assert.equal((await operations.settingsSnapshot('18')).groups[0].hint, competing.groups[0].hint);
-
-    // A later writer may commit before the async caller resumes. The first reply
-    // must still carry the first writer's snapshot/token, never the later one.
-    let injectAfter = true;
-    const returnOwnSnapshot = createPostgresqlBranchOrderOperations({ prepare: sql => access.prepare(sql),
-      async transaction(work) {
-        const result = await access.transaction(work);
-        if (injectAfter) {
-          injectAfter = false;
-          const later = structuredClone(result); later.groups[0].hint = 'Späterer Schreiber';
-          await operations.replaceConfiguration('18', later, 'later-writer');
-        }
-        return result;
-      },
-    });
-    const now = await operations.settingsSnapshot('18'); now.groups[0].hint = 'Eigener gespeicherter Stand';
-    const returned = await returnOwnSnapshot.replaceConfiguration('18', now, 'first-writer', {
-      expectedVersion: configurationVersion(await operations.settingsSnapshot('18')),
-    });
-    assert.equal(returned.groups[0].hint, now.groups[0].hint);
-    assert.equal((await operations.settingsSnapshot('18')).groups[0].hint, 'Späterer Schreiber');
-    assert.notEqual(configurationVersion(returned), configurationVersion(await operations.settingsSnapshot('18')));
-  } finally { database.close(); }
-});
-
 async function exerciseSettings(access) {
   const operations = createPostgresqlBranchOrderOperations(access);
   const before = await operations.settingsSnapshot('18'), draft = structuredClone(before);
@@ -198,11 +131,6 @@ async function exerciseSettings(access) {
   assert.deepEqual(await operations.history('18', 10), history);
 }
 
-test('asynchronous branch settings save new positions, retain IDs/history and roll back failures', async () => {
-  const database = createSqliteSource();
-  try { seedCoreFixture(database, 3); await exerciseSettings(asynchronousSqlite(database)); }
-  finally { database.close(); }
-});
 
 test('native PostgreSQL branch configuration round trip and rollback', { skip: process.env.GP_PG_MIGRATION_LIVE !== '1' }, async () => {
   const { withCoreFixture } = require('../test-support/postgresql-migration/core-fixture');

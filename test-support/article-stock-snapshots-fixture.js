@@ -5,27 +5,11 @@ const {createDataImportRepository}=require('../lib/persistence/repositories/data
 const {createImportMasterWriters}=require('../lib/persistence/repositories/import-master-data');
 const {createImportHistoryWriters,createImportHistoryService}=require('../lib/persistence/repositories/import-history');
 const TIME='2026-10-15T10:00:00.000Z';
-async function snapshotFixture(t,options={}){
- let app,access=options.access,protection=options.protection;
- if(!access){
-  app=require('../lib/persistence/sqlite/provider').openSqliteApplicationPersistence({databasePath:':memory:',catalog:[
-   ...require('../lib/persistence/sqlite/data-import-catalog').SQLITE_DATA_IMPORT_CATALOG,
-   ...require('../lib/persistence/sqlite/import-master-catalog').SQLITE_IMPORT_MASTER_CATALOG,
-   ...require('../lib/persistence/sqlite/import-history-catalog').SQLITE_IMPORT_HISTORY_CATALOG,
-   ...require('../lib/persistence/sqlite/trade-insights-catalog').TRADE_INSIGHTS_CATALOG,
-  ]});access=app.provider;
-  app.database.exec('CREATE TABLE employees(personnel_number TEXT PRIMARY KEY,active INTEGER NOT NULL); CREATE TABLE locations(id TEXT PRIMARY KEY,active INTEGER NOT NULL);');
-  require('../lib/persistence/sqlite/operations/data-import-schema').ensureSqliteDataImportSchema(app.database);
-  require('../lib/persistence/sqlite/operations/import-master-schema').ensureSqliteImportMasterSchema(app.database);
-  require('../lib/persistence/sqlite/operations/import-history-schema').ensureSqliteImportHistorySchema(app.database);
-  protection=require('../lib/data-import-protection').createDataImportProtection({encryptionKey:Buffer.alloc(32,4),indexKey:Buffer.alloc(32,6),keyId:'synthetic-stock'});
-  t.after(async()=>{protection.destroy();await access.close();app.database.close();});
- }
- const scopeId=options.scopeId||'stock-snapshot-scope',ownerId=options.ownerId||'synthetic-owner';
+async function snapshotFixture({access,protection,scopeId,ownerId,batchSize=200}){
  const state={denied:false};let clockTick=0;
  const composition={protection,getActor:()=>({scopeId,ownerId}),authorize:()=>!state.denied,clock:()=>new Date(Date.parse(TIME)+clockTick).toISOString()};
  const writers={...createImportMasterWriters({protection}),...createImportHistoryWriters({...composition,resolveMasterSourceInstance:()=> 'tradefoto-trade'})};
- const engineOptions={...composition,repository:createDataImportRepository(access),profiles:[...M.TRADEFOTO_MASTER_PROFILES,...H.TRADEFOTO_HISTORY_READABLE_PROFILES],writers,operationBatchSize:options.batchSize||200};
+ const engineOptions={...composition,repository:createDataImportRepository(access),profiles:[...M.TRADEFOTO_MASTER_PROFILES,...H.TRADEFOTO_HISTORY_READABLE_PROFILES],writers,operationBatchSize:batchSize};
  const engine=createDataImportEngine(engineOptions),history=createImportHistoryService({...composition,access});let sequence=0;
  async function ready(table,values,{legacy=false,master=false,instance='tradefoto-trade',fileSha256=C.fingerprint(['synthetic-stock',++sequence]),snapshotAt=TIME}={}){
   clockTick+=1000;
@@ -42,6 +26,6 @@ async function snapshotFixture(t,options={}){
  async function ingest(table,values,opts){return apply(await ready(table,values,opts));}
  async function undo(input){let run=await engine.checkpoint(input.id);do{run=await engine.undo(run.id,run.revision);}while(run.status==='reverting');return run;}
  const list=(run,instance='tradefoto-trade')=>history.list({source:'trade',table:'ARTIKEL_FILIALEN',sourceInstance:instance,snapshot:run.id,limit:100});
- return {app,access,protection,scopeId,ownerId,state,engine,engineOptions,history,ready,apply,ingest,undo,list};
+ return {access,protection,scopeId,ownerId,state,engine,engineOptions,history,ready,apply,ingest,undo,list};
 }
 module.exports={snapshotFixture,TIME};
