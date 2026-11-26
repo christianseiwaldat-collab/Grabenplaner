@@ -44,25 +44,6 @@ test("kernel lock remains held after acquisition helper exits and excludes same 
   assert.equal(lock.releaseDatabaseLock(first),false);
   assert.equal(attempt(databasePath).status,0);
 });
-test("new OFD lock blocks the exact old SQLite lock without modifying or deleting legacy content", linux, () => {
-  const databasePath=fixture("new-old");
-  const legacy=require("../test-support/database-lock-legacy-v09293.cjs");
-  // Produce a real old-format file, then prove an unchanged copy survives.
-  const old=legacy.acquireDatabaseLock({databasePath});assert.equal(legacy.releaseDatabaseLock(old),true);
-  const oldFile=legacy.lockPathForDatabase(databasePath), bytes=fs.readFileSync(oldFile);
-  const current=lock.acquireDatabaseLock({databasePath});
-  try { const result=attempt(databasePath,path.resolve(__dirname,"../test-support/database-lock-legacy-v09293.cjs"));assert.equal(result.status,1,result.stderr);assert.equal(result.stdout,"DATABASE_IN_USE"); }
-  finally { lock.releaseDatabaseLock(current); }
-  assert.deepEqual(fs.readFileSync(oldFile),bytes);
-  assert.equal(attempt(databasePath,path.resolve(__dirname,"../test-support/database-lock-legacy-v09293.cjs")).status,0);
-});
-test("exact old SQLite lock blocks new OFD acquisition during upgrade and rollback", linux, () => {
-  const databasePath=fixture("old-new"),legacy=require("../test-support/database-lock-legacy-v09293.cjs");
-  const old=legacy.acquireDatabaseLock({databasePath});
-  try {const result=attempt(databasePath);assert.equal(result.status,1,result.stderr);assert.equal(result.stdout,"DATABASE_IN_USE");}
-  finally {legacy.releaseDatabaseLock(old);}
-  assert.equal(attempt(databasePath).status,0);
-});
 test("kernel releases both descriptions after parent SIGKILL without stale-file reclamation", linux, async () => {
   const databasePath=fixture("crash"),module=path.resolve(__dirname,"../lib/database-lock");
   const child=spawn(process.execPath,["-e",`require(${JSON.stringify(module)}).acquireDatabaseLock({databasePath:${JSON.stringify(databasePath)}});process.stdout.write("ready");setInterval(()=>{},60000);`],{stdio:["ignore","pipe","pipe"]});

@@ -9,6 +9,7 @@ from gates import verified_patch_remediations
 class VerifiedSecurityBackportTests(unittest.TestCase):
     def fixture(self):
         policy=json.loads((Path(__file__).parent/'patch-policy.json').read_text())['securityBackports'][0]
+        policy.update(reviewedOn='2026-10-24',expiresOn='2026-11-23')
         record={name:policy[name] for name in ('advisory','package','version','patchSha256','originalTarballIntegrity','originalTarballSha256','upstreamCommit','installedTreeSha256','expiresOn')}
         record.update(status='remediated_by_verified_patch',regressionTestSha256=policy['regressionTestSha256'],regressionPassed=True,regressionPassCount=14,
                       installedFiles={name:item['afterSha256'] for name,item in policy['installedFiles'].items()})

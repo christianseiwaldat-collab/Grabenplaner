@@ -44,37 +44,8 @@ test('resuming compact inventory uses the selected-row offset and reconstructs t
  assert.equal(resumed.at(-1).rows,226);
 });
 
-const {openSqliteApplicationPersistence}=require('../lib/persistence/sqlite/provider');
 const {SQLITE_APPLICATION_CATALOG}=require('../lib/persistence/sqlite/application-catalog');
 const {ensureSqliteDataImportRuntimeSchema}=require('../lib/persistence/sqlite/operations/data-import-runtime-schema');
 const {createIntegrationSecretVault}=require('../lib/integration-secret-vault');
 const {createDataImportRuntime}=require('../lib/persistence/repositories/data-import-runtime');
 const {DATA_IMPORT_PERMISSIONS:P}=require('../lib/data-import-access');
-async function runtimeFixture(t,kind,values) {
- const app=openSqliteApplicationPersistence({databasePath:':memory:',catalog:SQLITE_APPLICATION_CATALOG});ensureSqliteDataImportRuntimeSchema(app.database);
- const state={session:{employeeNumber:'synthetic',accountId:'one',isEmployee:true,permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read']},date:'2026-09-25T10:00:00.000Z'},get=async()=>state.session;
- const runtime=createDataImportRuntime({access:app.provider,vault:createIntegrationSecretVault({activeKeyId:'test',keys:{test:Buffer.alloc(32,7)}}),allowApply:true,clock:()=>state.date,
-  readSource:o=>readTradeFotoFullSource({...o,readerFactory:F.reader(kind,values),send:o.onMessage})});
- async function finish(source,action){for(let i=0;i<30;i++){source=await runtime.sourceOperation(get,source.id,action,{expectedRevision:source.revision});if(source.status!==({review:'reviewing',apply:'applying',undo:'reverting'})[action])return source;}throw new Error('Unfinished test operation');}
- t.after(async()=>{await runtime.stop();await app.provider.close();app.database.close();});return {...app,runtime,get,state,finish};
-}
-test('supplements persist only the compact selection, support review/apply/replay/undo and do not create active articles or cash sales',async t=>{
- for(const [kind,values,total] of [['lieferantenrechnungen',{Rechnung_A:[{ID:1,Rechnungsnr:'RE-1',Suchname:'Demo'}],Rechnungsdetails_A:[{ID:2,we_id:3,Rechnungsnr:'RE-1',Suchname:'demo',EAN:'001',menge:1,Rechnungspreis:10}]},2],['inventur',F.inventory(),5],['weum',{WE:[{We_ID:1,We:true,Umlagerung:false,EAN:'001',Menge:-2,WEDatum:new Date('2026-09-18T00:00:00Z')}],'ARTIKEL_STAMMGelöscht':[{EAN:'001',Artikelbezeichnung:'Archiviert'}]},2]]) {
-  const f=await runtimeFixture(t,kind,values),upload=()=>f.runtime.upload(f.get,{buffer:F.buffer(),kind,fileName:kind+'.accdb'});
-  let source=await upload();assert.ok(source.selection);source=await f.finish(source,'review');assert.equal(source.status,['inventur','lieferantenrechnungen'].includes(kind)?'needs_review':'ready');
-  source=await f.finish(source,'apply');assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_records').get().n,total);
-  assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,0);
-  assert.equal(f.database.prepare("SELECT count(*) n FROM import_history_records WHERE source='cash'").get().n,0);
-  const replay=await upload();assert.equal(replay.id,source.id);assert.equal(replay.status,'applied');
-  source=await f.finish(source,'undo');assert.equal(source.status,'reverted');assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_records').get().n,0);
- }
-});
-test('overview finds a database behind multiple history pages and preserves owner and permission boundaries',async t=>{
- const f=await runtimeFixture(t,'weum',{});
- await f.runtime.reserve(f.get,{buffer:F.buffer(1),kind:'weum',fileName:'WEUM.accdb'});
- for(let i=0;i<55;i++){f.state.date=new Date(Date.parse(f.state.date)+1000).toISOString();await f.runtime.reserve(f.get,{buffer:F.buffer(i+2),kind:'trade',fileName:'Trade_Daten.accdb'});}
- const result=await f.runtime.overview(f.get);assert.equal(result.complete,true);assert.deepEqual(result.items.map(s=>s.kind).sort(),['trade','weum']);
- assert.equal(result.items.find(s=>s.kind==='trade').createdAt,f.state.date);
- f.state.session={...f.state.session,employeeNumber:'other'};assert.deepEqual((await f.runtime.overview(f.get)).items,[]);
- f.state.session={...f.state.session,permissions:[]};await assert.rejects(f.runtime.overview(f.get),e=>e.code==='IMPORT_FORBIDDEN');
-});

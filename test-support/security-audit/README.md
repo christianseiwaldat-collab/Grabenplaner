@@ -53,7 +53,7 @@ The `.probe.cjs` suffix deliberately excludes these observation probes from auto
 The regular regression tests exercise the current conditional login statements and their transaction boundaries:
 
 ```powershell
-node --test --test-concurrency=1 test/portal-login-security.test.js test/portal-login-concurrency.test.js test/portal-login-multiconnection.test.js test/portal-login-concurrency-api.test.js test/authentication-catalog-qualification.test.js
+node --no-experimental-sqlite --test --test-concurrency=1 test/portal-login-security.test.js test/portal-login-concurrency.test.js test/portal-login-concurrency-api.test.js test/authentication-catalog-qualification.test.js
 ```
 
 SQLite tests use fresh synthetic databases. The multiconnection test starts eight independent native connections to one temporary database. The HTTP test retains real scrypt calculations and coordinates callback delivery to reproduce overlapping requests deterministically. These tests cover account-wide counters shared by browser and mobile, active and expired locks, successful login resets, credential changes, transaction rollback, and session creation/revocation.
@@ -68,7 +68,7 @@ Use a fresh, owned Linux x64 glibc test environment with synthetic data. Copy th
 
 ```sh
 pnpm install --prod --frozen-lockfile --config.node-linker=hoisted --store-dir /absolute/owned/store --package-import-method=copy
-node test-support/security-audit/linux-native-runtime.probe.cjs --output /absolute/private-output/linux-native-runtime.json
+node --no-experimental-sqlite --test test/postgresql-only-runtime.test.js test/postgresql-only-catalog-boundary.test.js
 node --test --test-concurrency=1 test-support/security-audit/ops-dependency-remediation.probe.cjs
 ```
 

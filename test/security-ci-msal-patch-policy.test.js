@@ -2,7 +2,7 @@
 const test = require("node:test"), assert = require("node:assert/strict");
 const { checkBackportPolicy, checkDeclarations } = require("../scripts/security/verify-patch.cjs");
 const policy = require("../scripts/security/patch-policy.json");
-const backport = policy.securityBackports[0];
+const backport = { ...policy.securityBackports[0], reviewedOn: "2026-10-24", expiresOn: "2026-11-23" };
 function fixture() {
   const installedHashes = Object.fromEntries(Object.entries(backport.installedFiles).map(([relative, hashes]) => [relative, hashes.afterSha256]));
   return { patchHash: backport.patchSha256, packageJsonHash: backport.packageJsonSha256, licenseHash: backport.licenseSha256,

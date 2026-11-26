@@ -27,9 +27,6 @@ const {
 const {
   UI_PREFERENCES_STATEMENTS,
 } = require("../lib/persistence/statements/ui-preferences");
-const {
-  createSqliteApplicationFixture,
-} = require("../test-support/sqlite-application-fixture");
 
 const DATABASE_URL = String(process.env.TEST_POSTGRESQL_URL || "").trim();
 
@@ -196,10 +193,17 @@ async function exerciseUiPreferences({
     hasPersistenceCode(PERSISTENCE_ERROR_CODES.FOREIGN_KEY_VIOLATION),
   );
 
-  return Object.freeze({
-    employeeWithQuote: await repository.list("E'2"),
-    final: await repository.list("E1"),
-  });
+  assert.deepEqual(await repository.list("E'2"), [{ preferenceKey: "theme", value: "light" }]);
+  assert.deepEqual(await repository.list("E1"), transactionResult);
+
+  const panelKey = "work_rule_assessment_expanded";
+  assert.equal(await repository.get("E1", panelKey), null);
+  await repository.upsert("E1", panelKey, "1");
+  await repository.upsert("E1", "theme", "light");
+  assert.equal((await repository.get("E1", panelKey)).value, "1");
+  assert.equal(await repository.get("E'2", panelKey), null);
+  await repository.upsert("E1", panelKey, "0");
+  assert.equal((await repository.get("E1", panelKey)).value, "0");
 }
 
 test("v0.87 DB Block 5: UI-Präferenzslice ist vollständig, reproduzierbar und nicht der Vollkatalog", () => {
@@ -289,11 +293,11 @@ test("v0.87 DB Block 5: UI-Praeferenzpins verwerfen Vertragsdrift bei identische
 });
 
 if (!DATABASE_URL) {
-  test("v0.87 DB Block 5: UI-Präferenzparität benötigt TEST_POSTGRESQL_URL", {
-    skip: "TEST_POSTGRESQL_URL ist nicht gesetzt; die reale Dual-Provider-Fixture bleibt lokal aus.",
+  test("Persistenz der UI-Präferenzen benötigt TEST_POSTGRESQL_URL", {
+    skip: "TEST_POSTGRESQL_URL ist nicht gesetzt.",
   }, () => {});
 } else {
-  test("v0.87 DB Block 5: UI-Präferenzen sind auf SQLite und PostgreSQL fachlich gleich", async () => {
+  test("PostgreSQL speichert UI-Präferenzen pro Konto und rollt fehlerhafte Änderungen zurück", async () => {
     const schema = schemaName();
     const quotedSchema = `"${schema}"`;
     const configuration = createPostgresqlPoolConfiguration({
@@ -314,7 +318,6 @@ if (!DATABASE_URL) {
     const adminPool = new Pool(configuration);
     let postgresqlProvider;
     let applicationPool;
-    let sqliteFixture;
     try {
       await adminPool.query(`CREATE SCHEMA ${quotedSchema}`);
       await adminPool.query(`
@@ -349,23 +352,12 @@ if (!DATABASE_URL) {
         acquireTimeoutMilliseconds: configuration.connectionTimeoutMillis,
       });
       const postgresqlRepository = createUiPreferencesRepository(postgresqlProvider);
-      sqliteFixture = await createSqliteApplicationFixture({
-        employeeNumbers: ["E1", "E'2"],
-      });
-
-      const sqliteResult = await exerciseUiPreferences({
-        repository: sqliteFixture.repositories.uiPreferences,
-        transaction: (work) => sqliteFixture.transaction((repositories) => (
-          work(repositories.uiPreferences)
-        )),
-      });
-      const postgresqlResult = await exerciseUiPreferences({
+      await exerciseUiPreferences({
         repository: postgresqlRepository,
         transaction: (work) => postgresqlProvider.transaction((executor) => (
           work(createUiPreferencesRepository(executor))
         )),
       });
-      assert.deepEqual(postgresqlResult, sqliteResult);
     } finally {
       const cleanupErrors = [];
       appendSettledFailures(cleanupErrors, await Promise.allSettled([
@@ -373,7 +365,6 @@ if (!DATABASE_URL) {
         !postgresqlProvider && applicationPool
           ? applicationPool.end()
           : null,
-        sqliteFixture?.close(),
       ].filter(Boolean)));
       try {
         await adminPool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);

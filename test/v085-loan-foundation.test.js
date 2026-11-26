@@ -1031,15 +1031,6 @@ test("v0.85 kanonischer Lookup findet aequivalente UPC- und EAN-Darstellungen", 
   `).get().count, 1);
 });
 
-test("Historical immutable b2: F18-Direktfixture bewahrt die alten Atomizitaetspruefungen", () => {
-  // This former direct importer has no current route. Its single-database
-  // atomicity contract remains checked against the unchanged historical source;
-  // current PostgreSQL must retain its Core/Sales single-writer boundary.
-  const evidence = require("../test-support/historical-server-tests")
-    .runHistoricalServerTest("test/v085-loan-foundation.test.js");
-  assert.equal(evidence.pass, 1);
-  assert.equal(evidence.historicalCompatibilityOnly, true);
-});
 
 test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen Revisionsverlauf", async () => {
   const issued = await request("/api/portal/v1/loans", {

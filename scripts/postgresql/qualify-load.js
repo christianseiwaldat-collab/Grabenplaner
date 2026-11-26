@@ -12,7 +12,12 @@ async function main(){await withReportFixture(async f=>{
   report.workerConfiguration.authorityReaderPool=1;report.workerReadiness=f.workerReadiness;
   assert.equal(report.workerReadiness.length,3);assert.ok(report.workerReadiness.every(item=>item.ready&&item.scheduling.applied&&item.scheduling.workerNice===19));
   const catalog=createSalesArticleCatalogRepository(f.access),articles=Array.from({length:report.articleCount},(_,i)=>({...article(String(i+1).padStart(8,'0')),description:(i%2?'Canon EOS':'Sony A7')+' Synthetisch '+i,prices:[{priceType:'sales',amount:(100+i%1000)+'.123456789012',currency:'EUR',priceBasis:'gross',qualityStatus:'confirmed',sourceField:'Verkaufspreis'}]}));
-  console.log('Preparing 20,000 valid synthetic articles; bulk fixture setup after separate runtime-import qualification');let at=performance.now();await require('../../test-support/postgresql-migration/load-articles').seedLoadArticles(f,articles);report.articleFixtureMs=performance.now()-at;report.articleFixtureMode='Existing SQLite repository creates the synthetic source state; bulk PostgreSQL setup with active constraints, not a historical migration or import benchmark';console.log('Article fixture ready');
+  console.log('Preparing 20,000 valid synthetic articles in PostgreSQL');
+  let at=performance.now();
+  await catalog.importSnapshot(articleSnapshot(1,articles));
+  report.articleFixtureMs=performance.now()-at;
+  report.articleFixtureMode='Synthetic rows imported through the PostgreSQL application repository before load measurement';
+  console.log('Article fixture ready');
   const receipts=Array.from({length:report.receiptCount},(_,i)=>{
     const r=receipt(i+1,'480',Array.from({length:4},()=>({UMarke:i%2?'Canon':'Sony'}))),date=(i<1000?'2026':'2025')+'-08-'+String(i%28+1).padStart(2,'0')+'T00:00:00.000';
     r.head.Bondatum=date;for(const line of r.lines)line.Bondatum=date;return r;

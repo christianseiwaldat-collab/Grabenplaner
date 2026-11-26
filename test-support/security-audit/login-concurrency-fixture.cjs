@@ -8,33 +8,17 @@ const NOW = new Date("2026-10-18T12:00:00.000Z");
 const OLD_HASH = "synthetic-credential-generation-1";
 const NEW_HASH = "synthetic-credential-generation-2";
 
-async function withFixture(kind, work) {
-  if (kind === "postgresql") {
-    for (const purpose of ["APP", "MIGRATOR"]) {
-      const url = new URL(process.env[`GP_CORE_${purpose}_URL`]);
-      assert.equal(url.hostname, "127.0.0.1");
-      assert.equal(url.pathname, "/gp_migration_core");
-    }
-    return require("../postgresql-migration/core-fixture").withCoreFixture(async f => {
-      await f.migrator.query("SET ROLE gp_core_owner; SET search_path=pg_catalog,gp");
-      return work(await model(f.postgres, (sql, values = []) => f.migrator.query(sql, values),
-        async (sql, values = []) => (await f.migrator.query(sql, values)).rows));
-    });
+async function withFixture(work) {
+  for (const purpose of ["APP", "MIGRATOR"]) {
+    const url = new URL(process.env[`GP_CORE_${purpose}_URL`]);
+    assert.equal(url.hostname, "127.0.0.1");
+    assert.equal(url.pathname, "/gp_migration_core");
   }
-  const { openSqliteApplicationPersistence } = require("../../lib/persistence/sqlite/provider");
-  const { SQLITE_APPLICATION_CATALOG } = require("../../lib/persistence/sqlite/application-catalog");
-  const { ensureSqliteApplicationSchema } = require("../../lib/persistence/sqlite/operations/application-schema");
-  const app = openSqliteApplicationPersistence({ databasePath: ":memory:", catalog: SQLITE_APPLICATION_CATALOG });
-  try {
-    ensureSqliteApplicationSchema(app.database);
-    app.database.exec(`INSERT INTO locations(id,name,active) VALUES('18','Synthetic',1);
-      INSERT INTO employees(personnel_number,full_name,nickname,home_location_id,active) VALUES('00001','Synthetic','Synthetic','18',1);
-      INSERT INTO portal_users(employee_number,password_hash,role,active) VALUES('00001','synthetic','employee',1);`);
-    const sql = value => value.replace(/\$\d+/g, "?");
-    return await work(await model(app.provider,
-      async (query, values = []) => app.database.prepare(sql(query)).run(...values),
-      async (query, values = []) => app.database.prepare(sql(query)).all(...values)));
-  } finally { await app.provider.close(); app.database.close(); }
+  return require("../postgresql-migration/core-fixture").withCoreFixture(async f => {
+    await f.migrator.query("SET ROLE gp_core_owner; SET search_path=pg_catalog,gp");
+    return work(await model(f.postgres, (sql, values = []) => f.migrator.query(sql, values),
+      async (sql, values = []) => (await f.migrator.query(sql, values)).rows));
+  });
 }
 
 async function model(provider, execute, all) {

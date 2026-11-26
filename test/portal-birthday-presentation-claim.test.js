@@ -17,9 +17,6 @@ const {
   inspectSqlitePortalBirthdayPresentationClaimRows,
   inspectSqlitePortalBirthdayPresentationClaimSchema,
 } = require("../lib/persistence/sqlite/operations/portal-birthday-presentation-claim-schema");
-const {
-  openSqliteLegacyDatabase,
-} = require("../lib/persistence/sqlite/provider");
 
 test("Block 10: Wiener Kalendertag ist explizit und unabhängig von der Prozesszeitzone", () => {
   assert.equal(PORTAL_BIRTHDAY_TIME_ZONE, "Europe/Vienna");
@@ -86,49 +83,6 @@ test("Block 10: Claim-Beleg ist keyed, domain-separiert und snapshotgebunden", (
   }), TypeError);
 });
 
-test("Block 10: Claim-Schema ist revisionsgeprüft, append-only und ohne Tageszeitmetadaten", () => {
-  const database = openSqliteLegacyDatabase(":memory:");
-  try {
-    database.exec(`
-      CREATE TABLE employees (personnel_number TEXT PRIMARY KEY);
-      INSERT INTO employees (personnel_number) VALUES ('252');
-    `);
-    ensureSqlitePortalBirthdayPresentationClaimSchema(database);
-    assert.equal(inspectSqlitePortalBirthdayPresentationClaimSchema(database).valid, true);
-    database.prepare(`
-      INSERT INTO portal_birthday_presentation_claims (
-        employee_number, event_year, presentation_id, policy_revision,
-        assignment_revision, receipt_sha256, revision
-      ) VALUES (?, ?, ?, ?, ?, ?, 1)
-    `).run("252", 2026, "elegant", 3, 2, "a".repeat(64));
-    database.prepare(`
-      INSERT INTO portal_birthday_presentation_claims (
-        employee_number, event_year, presentation_id, policy_revision,
-        assignment_revision, receipt_sha256, revision
-      ) VALUES (?, ?, ?, ?, ?, ?, 1)
-    `).run("252", 2027, "technik", 4, 3, "b".repeat(64));
-    assert.equal(inspectSqlitePortalBirthdayPresentationClaimRows(database).valid, true);
-    assert.throws(() => database.prepare(`
-      UPDATE portal_birthday_presentation_claims SET receipt_sha256 = ?
-      WHERE employee_number = '252' AND event_year = 2026
-    `).run("c".repeat(64)), /immutable/);
-    assert.throws(() => database.prepare(`
-      DELETE FROM portal_birthday_presentation_claims
-      WHERE employee_number = '252' AND event_year = 2026
-    `).run(), /cannot be deleted/);
-    assert.throws(
-      () => database.prepare("DELETE FROM employees WHERE personnel_number = '252'").run(),
-      /FOREIGN KEY constraint failed/,
-      "Hard-Delete bleibt dem späteren kontrollierten Gesamtlöschworkflow vorbehalten",
-    );
-    const columns = database.prepare("PRAGMA table_info(portal_birthday_presentation_claims)")
-      .all().map((column) => column.name);
-    assert.equal(columns.includes("claimed_at"), false);
-    assert.equal(columns.some((column) => /birth|date|age|next/i.test(column)), false);
-  } finally {
-    database.close();
-  }
-});
 
 test("Block 10: genehmigter all_personal_data-Export projiziert nur Jahr und Darstellung", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");

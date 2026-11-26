@@ -1,5 +1,6 @@
 "use strict";
 const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { openApplicationForCurrentTest } = require("../test-support/postgresql-api/preload");
 const assert = require("node:assert/strict"), test = require("node:test");
 const crypto = require("node:crypto"), fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-branch-sales-"));
@@ -78,7 +79,7 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
     assert.equal((await request("/api/receipt-search/context")).status, 403);
   });
   await t.test('bestehender Artikelimport ermöglicht RE und Ziel-RE auch vor dem vollständigen Stammdatenimport',async()=>{
-    const storage=require('../lib/persistence/sqlite/provider').openSqliteApplicationPersistence({databasePath:process.env.DB_PATH,catalog:require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG});
+    const storage=openApplicationForCurrentTest();
     try{
       const articles=[{sourceArticleKey:'1',articleNumber:'00042',description:'Kamera Aurora',active:true,sourceUpdatedAt:null,identifiers:[],prices:[
         {priceType:'average_purchase',priceBasis:'unknown',qualityStatus:'unresolved',sourceField:'DurchschnittEK',amount:'100',currency:'EUR'},
@@ -96,7 +97,7 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
     await enable([R]); assert.equal((await request("/api/portal/v1/branch-articles")).status, 403);
     const context = await request("/api/portal/v1/branch-receipts/context"); assert.equal(context.status, 200); assert.equal(context.data.available, false);
     assert.equal((await post("search", query)).status, 503);
-    ids = await require("./fixtures/branch-sales-data").seedBranchSalesData({ databasePath: process.env.DB_PATH, vault });
+    ids = await require("./fixtures/branch-sales-data").seedBranchSalesData({ vault });
     await enable([A, R]);
   });
   await t.test("Artikelnummer, Bezeichnung, EAN, Archiv und Seitengrenzen nutzen den gemeinsamen Katalog", async () => {

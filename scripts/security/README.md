@@ -113,11 +113,11 @@ Ausgelassene Dateien, Regeln, Analysefehler und Zeitabbrüche bleiben blockieren
 `exceptions.json` enthält ausschließlich einzeln geprüfte Treffer mit exaktem
 Fingerprint, tatsächlichem Datei-/Gitblob-SHA256, Begründung, Verantwortlichkeit,
 Prüfdatum und Ablaufdatum. Keine Advisory-Ausnahmen sind genehmigt. P0/P1 sind
-auf höchstens 14, P2/P3 auf höchstens 30 Kalendertage begrenzt. Die aktuellen
-synthetischen/Shellsyntax-Treffer wurden zweimal unabhängig gelesen und sind
-auf 14 Tage begrenzt. Zwei einzelne Dateien besitzen zusätzlich genau geprüfte
-LF-Checkout-Hashes; es gibt keine allgemeine Inhaltsnormalisierung. Neue oder
-verschobene Treffer, neue historische Commits und Inhaltsdrift blockieren.
+auf höchstens 14, P2/P3 auf höchstens 30 Kalendertage begrenzt. Die am
+26.11.2026 erneut geprüften Testdaten und Shellsyntax-Treffer sind auf 14 Tage
+begrenzt. Die beobachteten LF- und CRLF-Varianten einzelner Dateien sind mit
+eigenen Rohhashes erfasst. Neue oder verschobene Treffer, neue historische
+Commits und Inhaltsdrift erfordern eine erneute Prüfung.
 
 SAST verwendet getrennt `sast-dispositions.json`. Eine Entscheidung gilt nur
 für einen konkret geprüften Fehlalarm: kanonische Upstream-Regel-ID, relativer
@@ -139,12 +139,12 @@ zusätzliche Inhaltsvarianten sind nicht zulässig.
 Veraltete, doppelte, nicht zuordenbare oder unvollständige Entscheidungen
 scheitern geschlossen. Nicht geprüfte und echte Befunde bleiben blockierend.
 Eine Entscheidung kann niemals Parserfehler, Zeitlimits oder fehlende
-Dateiabdeckung aufheben. Die am 18.10.2026 einzeln geprüften 2.983 aktuellen
-Hinweise sind an 148 Kontextdateien gebunden und bis 17.11.2026 befristet.
-Die vollständige Linux-Abdeckung wurde aus dem Vollscan und genau zwei
-quell- und regelgebundenen Nachläufen nachgewiesen. Historische echte Fehler
-bleiben als behoben dokumentiert. Neue Scannerhinweise werden nicht automatisch
-als Fehlalarm übernommen; Änderungen und Ablauf erfordern eine erneute Prüfung.
+Dateiabdeckung aufheben. Die technische Prüfung vom 26.11.2026 bestätigt
+byteidentische Quellen und Kontextdateien anhand des erfolgreichen Linux-Laufs
+43715794752. Die 13 verschobenen Treffer und der geänderte Lockdatei-Kontext
+wurden anhand ihrer jeweiligen Quelldifferenzen erneut geprüft. Die
+Entscheidungen sind bis 26.12.2026 befristet. Der aktuelle Linux-Vollscan muss
+die Treffermenge bestätigen. Neue Treffer erfordern eine eigene Prüfung.
 
 Die Regel-ID wird gegen die vollständige ID-Liste des hashgeprüften
 Upstream-Profils aufgelöst, unabhängig von temporären Scannerpfaden. Der

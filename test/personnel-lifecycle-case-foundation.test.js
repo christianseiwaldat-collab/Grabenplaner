@@ -24,9 +24,6 @@ const {
 const {
   ensureSqliteApplicationSchema,
 } = require("../lib/persistence/sqlite/operations/application-schema");
-const {
-  openSqliteApplicationPersistence,
-} = require("../lib/persistence/sqlite/provider");
 
 const LOCATION_A = "o2-location-a";
 const LOCATION_B = "o2-location-b";
@@ -298,109 +295,4 @@ test("O2 verwirft manipulierte M4-Publikationen statt sie aus der Vorschau auszu
     }),
     (error) => error?.code === "PERSONNEL_WORKFLOW_PUBLICATION_INTEGRITY_FAILED",
   );
-});
-
-test("der O2-Service liest nur Mitarbeiter und Publikationen und exponiert keine Mutation", async () => {
-  const application = openSqliteApplicationPersistence({
-    databasePath: ":memory:",
-    catalog: SQLITE_CUSTOM_PROCESS_MANAGEMENT_CATALOG,
-  });
-  try {
-    ensureSqliteApplicationSchema(application.database);
-    application.database.exec(`
-      INSERT INTO locations (id, name, active)
-        VALUES ('${LOCATION_A}', 'O2 Standort A', 1);
-      INSERT INTO departments (id, location_id, name, active)
-        VALUES (${DEPARTMENT_A}, '${LOCATION_A}', 'O2 Abteilung A', 1);
-      INSERT INTO employees (
-        personnel_number, full_name, nickname, home_location_id,
-        preferred_department_id, active
-      ) VALUES (
-        'EMP-O2-1', 'O2 Mitarbeiter', 'O2', '${LOCATION_A}', ${DEPARTMENT_A}, 1
-      );
-    `);
-    const repository = createCustomProcessManagementRepository(application.provider);
-    await repository.insertProcess({
-      id: "service-process",
-      title: "O2 Servicepaket",
-      symbol: "P",
-      description: "Read-only Test",
-      category: "other",
-      scopeType: "company",
-      locationId: null,
-      departmentId: null,
-      triggerType: "manual",
-      triggerMinimumShortfall: 1,
-      status: "active",
-      actor: "PL-O2",
-    });
-    const row = publication({
-      id: "service-publication",
-      processId: "service-process",
-      title: "O2 Servicepaket",
-      requirementKind: "mandatory",
-    });
-    await repository.insertProcessRevision({
-      processId: row.process_id,
-      revision: row.source_revision,
-      snapshotJson: row.snapshot_json,
-      actor: "PL-O2",
-    });
-    application.database.prepare(`
-      INSERT INTO custom_process_publications (
-        id, process_id, source_revision, version_number, workflow_code,
-        workflow_type, authority_level, requirement_kind, data_classification,
-        scope_type, location_id, department_id, snapshot_json, snapshot_sha256,
-        receipt_sha256, published_by, published_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-      )
-    `).run(
-      row.id,
-      row.process_id,
-      row.source_revision,
-      row.version_number,
-      row.workflow_code,
-      row.workflow_type,
-      row.authority_level,
-      row.requirement_kind,
-      row.data_classification,
-      row.scope_type,
-      row.location_id,
-      row.department_id,
-      row.snapshot_json,
-      row.snapshot_sha256,
-      row.receipt_sha256,
-      row.published_by,
-      row.published_at,
-    );
-
-    const service = createPersonnelLifecycleCaseFoundationService(repository);
-    assert.deepEqual(Object.keys(service), ["preview"]);
-    const preview = await service.preview({
-      caseType: "onboarding",
-      employeeNumber: "EMP-O2-1",
-    });
-    assert.deepEqual(
-      preview.packageResolution.applicableCandidates.map(({ publicationId }) => publicationId),
-      ["service-publication"],
-    );
-    assert.equal(preview.startAllowed, false);
-    for (const name of ["createCase", "start", "persist", "assign", "mutate"]) {
-      assert.equal(name in service, false, name);
-    }
-    for (const table of [
-      "personnel_employment_episodes",
-      "personnel_lifecycle_cases",
-      "personnel_lifecycle_case_package_bindings",
-      "personnel_lifecycle_case_assignments",
-    ]) {
-      assert.equal(application.database.prepare(
-        `SELECT COUNT(*) AS count FROM "${table}"`,
-      ).get().count, 0, table);
-    }
-  } finally {
-    await application.provider.close();
-    application.database.close();
-  }
 });

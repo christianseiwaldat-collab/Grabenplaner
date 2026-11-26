@@ -108,7 +108,6 @@
     "test/v087-block4-loan-overview.test.js",
     "test/v087-block4-organization-accounts.test.js",
     "test/v087-block5-loan-photo-appendix.test.js",
-    "test/v087-block6-work-rule-panel-state.test.js",
     "test/v087-cost-center-types.test.js",
     "test/v087-employee-cost-center-assignment.test.js",
     "test/v087-mobile-portal-personalization.test.js",

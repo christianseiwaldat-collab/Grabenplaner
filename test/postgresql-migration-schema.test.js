@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {Client}=require('pg');
 const {createSchemaPlan,identifier}=require('../lib/persistence/postgresql/core/schema');
 const {verifyEnvironment}=require('../lib/persistence/postgresql/core/environment');
-const {createSqliteSource,seedCoreFixture}=require('../test-support/postgresql-migration/sqlite-source');
+const {seedCoreFixture}=require('../test-support/postgresql-migration/core-seed');
 const source=require('../test-support/postgresql-migration/source-schema-v09237.json');
 const inventory=require('../test-support/postgresql-migration-doc-fixtures/block-1-inventory.json');
 const live={skip:!process.env.GP_PG_MIGRATION_LIVE};
@@ -15,9 +15,8 @@ test('Core schema has an explicit plan for every owned table and trigger',()=>{
   const ids=source.objects.map(o=>identifier(o.name));assert.ok(ids.every(id=>Buffer.byteLength(id)<=63));
   assert.equal(new Set(ids).size,ids.length);
 });
-test('Live Core schema and organization rules preserve the SQLite business constraints',live,async()=>{
+test('Live PostgreSQL Core schema enforces organization constraints',live,async()=>{
   const client=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await client.connect();
-  const sqlite=createSqliteSource();
   try {
     await verifyEnvironment(client,{purpose:'migrator'});
     const tables=(await client.query("SELECT tablename FROM pg_tables WHERE schemaname='gp'")).rows.map(r=>r.tablename);
@@ -31,9 +30,8 @@ test('Live Core schema and organization rules preserve the SQLite business const
     const proxy={exec(sql){operations.push([sql,[]]);},prepare(sql){return{run(...params){operations.push([sql,params]);}};}};
     seedCoreFixture(proxy,2);
     for(const [sql,params] of operations.filter(([sql])=>!['BEGIN','COMMIT'].includes(sql))){let n=0;await client.query(sql.replace(/\?/g,()=>'$'+(++n)),params);}
-    seedCoreFixture(sqlite,2);
     const actual=(await client.query('SELECT personnel_number,cost_center_id,home_location_id FROM employees ORDER BY personnel_number')).rows;
-    assert.deepEqual(actual,sqlite.prepare('SELECT personnel_number,cost_center_id,home_location_id FROM employees ORDER BY personnel_number').all().map(r=>({...r})));
+    assert.deepEqual(actual.map(row=>[row.personnel_number,row.home_location_id]),[['00001','18'],['00002','18']]);
     const rejected=[
       ["UPDATE employees SET cost_center_id='unknown' WHERE personnel_number='00001'",'COST_CENTER'],
       ["UPDATE employees SET position_id='unknown' WHERE personnel_number='00001'",'POSITION'],
@@ -42,29 +40,27 @@ test('Live Core schema and organization rules preserve the SQLite business const
       ["UPDATE locations SET cost_center_id='' WHERE id='18'",'LOCATION_COST_CENTER'],
     ];
     for(const [sql,message] of rejected){
-      assert.throws(()=>sqlite.prepare(sql).run());
       await client.query('SAVEPOINT rejected_case');
       await assert.rejects(client.query(sql),error=>['23514','23503','23505'].includes(error.code)&&(!message||error.message.includes(message)));
       await client.query('ROLLBACK TO SAVEPOINT rejected_case');await client.query('RELEASE SAVEPOINT rejected_case');
     }
     await client.query('ROLLBACK');
-  } finally {sqlite.close();await client.end();}
+  } finally {await client.end();}
 });
 test('Live stored history remains immutable and keeps exact payload text',live,async()=>{
   const client=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await client.connect();
-  const sqlite=createSqliteSource();
   try {
     await verifyEnvironment(client,{purpose:'migrator'});await client.query('BEGIN');await client.query('SET LOCAL ROLE gp_core_owner');await client.query('SET LOCAL search_path=pg_catalog,gp');
     const sql="INSERT INTO work_rule_governance_events(id,aggregate_type,aggregate_id,sequence_no,event_type,payload_json,payload_sha256,actor_employee_number,actor_role,permission_used,occurred_at,receipt_sha256) VALUES ('historical-test','profile','old-profile',1,'created',?,?,'00001','developer','rules:write','2020-02-29T23:59:59.999Z',?)";
     const payload='{"amount":"000001.123456789012","identifier":"0018","nullable":null}',hash='a'.repeat(64);
-    sqlite.prepare(sql).run(payload,hash,hash);let n=0;await client.query(sql.replace(/\?/g,()=>'$'+(++n)),[payload,hash,hash]);
+    let n=0;await client.query(sql.replace(/\?/g,()=>'$'+(++n)),[payload,hash,hash]);
     assert.equal((await client.query("SELECT payload_json FROM work_rule_governance_events WHERE id='historical-test'")).rows[0].payload_json,payload);
     for(const sql of ["UPDATE work_rule_governance_events SET payload_json='{}' WHERE id='historical-test'","DELETE FROM work_rule_governance_events WHERE id='historical-test'"]){
-      assert.throws(()=>sqlite.prepare(sql).run());await client.query('SAVEPOINT immutable_case');
+      await client.query('SAVEPOINT immutable_case');
       await assert.rejects(client.query(sql),{code:'23514'});await client.query('ROLLBACK TO SAVEPOINT immutable_case');
     }
     await client.query('ROLLBACK');
-  }finally{sqlite.close();await client.end();}
+  }finally{await client.end();}
 });
 test('Live schema migration repeats without duplicate DDL or changes to historical markers',live,async()=>{
   const client=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await client.connect();
@@ -77,28 +73,28 @@ test('Live schema migration repeats without duplicate DDL or changes to historic
 });
 test('Live JSON, date, ASCII case and NULL compatibility match stored Core contracts',live,async()=>{
   const client=new Client({connectionString:process.env.GP_CORE_READER_URL});await client.connect();
-  const sqlite=createSqliteSource();
   try {
     await verifyEnvironment(client,{purpose:'reader'});
     const cases=[
-      ["SELECT lower('ÄBC') value","SELECT gp.lower('ÄBC') value"],
-      ["SELECT json_type('{\"n\":2}', '$.n') value","SELECT gp.json_type('{\"n\":2}', '$.n') value"],
-      ["SELECT json_extract('{\"text\":\"a\"}', '$.text') value","SELECT gp.json_extract('{\"text\":\"a\"}', '$.text') value"],
-      ["SELECT date('2024-02-29','+1 day') value","SELECT gp.date('2024-02-29','+1 day') value"],
-      ["SELECT date('2024-02-29','+1 year') value","SELECT gp.date('2024-02-29','+1 year') value"],
-      ["SELECT date('2026-01-31','+1 month') value","SELECT gp.date('2026-01-31','+1 month') value"],
-      ["SELECT date('2026-03-31','-1 month') value","SELECT gp.date('2026-03-31','-1 month') value"],
-      ["SELECT datetime('2026-09-12T01:30:00+02:00') value","SELECT gp.datetime('2026-09-12T01:30:00+02:00') value"],
-      ["SELECT strftime('%Y-%m-%dT%H:%M:%fZ','2026-09-12 10:11:12.123') value","SELECT gp.strftime('%Y-%m-%dT%H:%M:%fZ','2026-09-12 10:11:12.123') value"],
-      ["SELECT substr('abcdef',-3,2) value","SELECT gp.substr('abcdef',-3,2) value"],
-      ["SELECT substr('abcdef',4,-2) value","SELECT gp.substr('abcdef',4,-2) value"],
-      ["SELECT substr('abcdef',0,3) value","SELECT gp.substr('abcdef',0,3) value"],
+      ["SELECT gp.lower('ÄBC') value","Äbc"],
+      ["SELECT gp.json_type('{\"n\":2}', '$.n') value","integer"],
+      ["SELECT gp.json_extract('{\"text\":\"a\"}', '$.text') value","a"],
+      ["SELECT gp.date('2024-02-29','+1 day') value","2024-03-01"],
+      ["SELECT gp.date('2024-02-29','+1 year') value","2025-03-01"],
+      ["SELECT gp.date('2026-01-31','+1 month') value","2026-03-03"],
+      ["SELECT gp.date('2026-03-31','-1 month') value","2026-03-03"],
+      ["SELECT gp.datetime('2026-09-12T01:30:00+02:00') value","2026-09-11 23:30:00"],
+      ["SELECT gp.strftime('%Y-%m-%dT%H:%M:%fZ','2026-09-12 10:11:12.123') value","2026-09-12T10:11:12.123Z"],
+      ["SELECT gp.substr('abcdef',-3,2) value","de"],
+      ["SELECT gp.substr('abcdef',4,-2) value","bc"],
+      ["SELECT gp.substr('abcdef',0,3) value","ab"],
     ];
-    for(const [a,b] of cases)assert.equal((await client.query(b)).rows[0].value,sqlite.prepare(a).get().value);
+    for(const [sql,expected] of cases)assert.equal((await client.query(sql)).rows[0].value,expected,sql);
     const json='[true,false,null,12,"12",""]';
-    const expected=sqlite.prepare('SELECT CAST(value AS TEXT) value,type FROM json_each(?) ORDER BY key').all(json).map(row=>({...row}));
+    const expected=[{value:'1',type:'true'},{value:'0',type:'false'},{value:null,type:'null'},
+      {value:'12',type:'integer'},{value:'12',type:'text'},{value:'',type:'text'}];
     assert.deepEqual((await client.query('SELECT value,type FROM gp.json_each($1) ORDER BY key::integer',[json])).rows,expected);
-  } finally {sqlite.close();await client.end();}
+  } finally {await client.end();}
 });
 
 test('Live migrations reject changed target rules and refuse to rebuild occupied tables',live,async()=>{
