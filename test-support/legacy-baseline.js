@@ -52,7 +52,6 @@ function legacyPath(relative) {
       || relative.split("/").some(part => !part || part === "." || part === "..")) throw new Error("LEGACY_TEST_BASELINE_PATH");
   return path.join(sourceRoot(), relative);
 }
-function legacyRequire(relative) { return require(legacyPath(relative)); }
 function linkFrozenDependencies() {
   const crypto = require("node:crypto");
   const lockDigest = file => crypto.createHash("sha256")
@@ -77,4 +76,4 @@ function linkFrozenDependencies() {
   if (fs.realpathSync(entry) !== target) throw new Error("LEGACY_TEST_DEPENDENCY_LINK_MISMATCH");
   return target;
 }
-module.exports = { BASELINE, legacyPath, legacyRequire, sourceRoot, linkFrozenDependencies };
+module.exports = { BASELINE, legacyPath, sourceRoot, linkFrozenDependencies };
