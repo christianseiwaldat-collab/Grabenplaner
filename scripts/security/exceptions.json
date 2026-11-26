@@ -4,26 +4,6 @@
   "findingExceptions": [
     {
       "scanner": "secrets",
-      "fingerprint": "9a2736d4afef782e30d5362bd40384d0e0dd1e8a7417943d7adefdd370dfc7da",
-      "sourceSha256": "7c8f0e98b64aa7a01230d3c7001d9c0beae2098fdfff1ba1c23b587fede45b63",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/passkey-application-context.test.js:93. This literal is the public CSRF cookie-name prefix. The token is constructed from a runtime value. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "dd8ece933083a54a592ce63443416e91a293296bc74b5d30cad456093e877c3e",
-      "sourceSha256": "f7baeede9c6d8d56e8bdfa28362fc60422d1035daa71d5a8199906975c5e3810",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/passkeys-upgrade-restore-postgresql.test.js:4. This public opt-in marker selects the isolated PostgreSQL passkey upgrade test. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
       "fingerprint": "39c1843aab2d738e976cc753aa024a52c038de13151a5b8a96e74f80f222ee02",
       "sourceSha256": "08081b7a589c46abbdfa46dea0d1f0055e8916a0129ffb423e5cbd41cd4d630c",
       "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
@@ -114,16 +94,6 @@
     },
     {
       "scanner": "secrets",
-      "fingerprint": "ea6679352c885c370eaec8952411d85fd2653676e1dd46e3767d0dd9685ea10c",
-      "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/v087-database-block5-postgresql-pool-policy.test.js:246. This synthetic database URL is used to verify error redaction. The host is a reserved example name and the test does not connect to it. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
       "fingerprint": "2a3fe27c586928638a075ec2ec73274aceafad499b75e6d9dcf033903d1831d0",
       "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
       "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
@@ -198,96 +168,6 @@
       "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
       "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
       "reason": "0179d7f6c424d4ae53609b71b0caff7af6c08f42:server-tools/linux/recovery/grabenplaner-recovery.sh:78. This shell span initializes an empty credential-file variable and a numeric result flag. Credential material is loaded only at runtime. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "d367af92b81bd432d068fb2963d3dc2f0e443c670baa3cb596f981e34c0578b1",
-      "sourceSha256": "30a93d29ae6e6294565b9e58e8d30efd750eeb617f1aac8a78c720bb376dfbf9",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/passkeys-browser-tooling.test.js:46. This assertion names the public passkey upgrade-test fixture marker. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "0dc6b16e399ad383cc2feeb6aa0a7c98369b006bcf3da69c4d266f982fade3a2",
-      "sourceSha256": "3199017d6e27ad9ef01e4e152f4a017ac43cd1d9335243559d2268e9cf9ddbf8",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/session-security-migration.test.js:50. This public placeholder stands for an unchanged legacy hash in an isolated session migration fixture. It is never used to authenticate. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "e09210da2e1a867f2048f95574ce0c393d9c005d8ef46e5c5484e5ec25c63beb",
-      "sourceSha256": "db1f3c35f356105f33050a9405c6579611c702391fc3e3aa9018ca21f1309bdf",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test-support/postgresql-migration/ci-stock-import-delete.js:98. This public environment marker selects the synthetic pre-passkey test fixture for a child process. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "d367af92b81bd432d068fb2963d3dc2f0e443c670baa3cb596f981e34c0578b1",
-      "sourceSha256": "81aae4df072d83d2faaed1c0e1f6ebaa1baddd93c356a5f36ada286cf9bf1bd0",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/passkeys-browser-tooling.test.js:46. This assertion names the public passkey upgrade-test fixture marker. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "9a2736d4afef782e30d5362bd40384d0e0dd1e8a7417943d7adefdd370dfc7da",
-      "sourceSha256": "5a4aaee2aff75cf822eabc9e7c6e2c0c7212fee9d9ce552590146bc6e7c13e2b",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/passkey-application-context.test.js:93. This literal is the public CSRF cookie-name prefix. The token is constructed from a runtime value. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "dd8ece933083a54a592ce63443416e91a293296bc74b5d30cad456093e877c3e",
-      "sourceSha256": "7c7e4b04797fdc3da0ded84ffe35f74517453924a72010b3ed58c8c7fa252c4f",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/passkeys-upgrade-restore-postgresql.test.js:4. This public opt-in marker selects the isolated PostgreSQL passkey upgrade test. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "0dc6b16e399ad383cc2feeb6aa0a7c98369b006bcf3da69c4d266f982fade3a2",
-      "sourceSha256": "760a9409dd7bdf849cabfea78d8415c79fdbeb2bf1cc4c1ed52d045151c67838",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/session-security-migration.test.js:50. This public placeholder stands for an unchanged legacy hash in an isolated session migration fixture. It is never used to authenticate. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "ea6679352c885c370eaec8952411d85fd2653676e1dd46e3767d0dd9685ea10c",
-      "sourceSha256": "07f8da0da71398c7524e88ed95e7427b3225a8eb1bd22c5de6412a58605a9506",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test/v087-database-block5-postgresql-pool-policy.test.js:246. This synthetic database URL is used to verify error redaction. The host is a reserved example name and the test does not connect to it. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "e09210da2e1a867f2048f95574ce0c393d9c005d8ef46e5c5484e5ec25c63beb",
-      "sourceSha256": "dd092d60e027763adcd3a061f6d7efb1803d8d36762fc6417ab1dbbf9553b773",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout test-support/postgresql-migration/ci-stock-import-delete.js:98. This public environment marker selects the synthetic pre-passkey test fixture for a child process. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
       "reviewedOn": "2026-11-26",
       "expiresOn": "2026-12-10",
       "priority": "P2"

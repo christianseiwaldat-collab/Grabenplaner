@@ -90,7 +90,11 @@ function passwordResponseFixture({ transactionFailure = false, readFailure = fal
     },
     issuePortalSessionCookies(_request, _response, token, absoluteExpiresAt) {
       assert(state.committed); assert.equal(absoluteExpiresAt, lifetime.absoluteExpiresAt);
-      state.cookies.push("grabenplaner_session=" + token, "grabenplaner_csrf=" + context.portalCsrfToken(token)); state.events.push("cookies");
+      state.cookies.push(
+        `${context.PORTAL_SESSION_COOKIE}=${token}`,
+        `${context.PORTAL_CSRF_COOKIE}=${context.portalCsrfToken(token)}`,
+      );
+      state.events.push("cookies");
     }, publicPortalUser: value => value,
   };
   vm.runInNewContext(source.slice(passwordRouteStart, passwordRouteEnd), context);
