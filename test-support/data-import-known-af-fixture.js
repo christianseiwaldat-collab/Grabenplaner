@@ -23,15 +23,15 @@ async function withImportFixture(work){
   await work({provider:access,core:core.migrator,sales:client,vault,protection});
  },{warmWorkers:false});
 }
-async function withFixture({kind='trade',values={},counts={},allowApply=true},work){
+async function withFixture({kind='trade',values={},counts={},allowApply=true,runtimeFactory=createDataImportRuntime},work){
  return withImportFixture(async storage=>{
  const state={session:{employeeNumber:'synthetic-1',accountId:'personal-1',isEmployee:true,role:'developer',permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read']}};
  const getSession=async()=>state.session,keyVault=storage.vault;
  const readSource=options=>readTradeFotoFullSource({...options,send:options.onMessage,readerFactory:readerFactory(kind,values,counts)});
  const options={access:storage.provider,vault:keyVault,allowApply,readSource,clock:()=>TIME};
- let runtime=createDataImportRuntime(options);
+ let runtime=runtimeFactory(options);
  const upload=(buffer=sourceBuffer())=>runtime.upload(getSession,{buffer,kind});
- const reload=()=>{runtime=createDataImportRuntime(options);return runtime;};
+ const reload=()=>{runtime=runtimeFactory(options);return runtime;};
  async function finish(source,action){let n=0;do{source=await runtime.sourceOperation(getSession,source.id,action,{expectedRevision:source.revision});
   if(++n>700)throw new Error('Synthetic source operation did not terminate');}while(source.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));return source;}
  try{await work({...storage,state,getSession,keyVault,options,upload,reload,finish,get runtime(){return runtime;}});}

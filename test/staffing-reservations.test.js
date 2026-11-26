@@ -26,8 +26,11 @@ const input = {
 async function fixture({ migrator: database, postgres: provider, postgresRepositories: repositories }) {
   await database.query("SET ROLE gp_core_owner");
   await database.query(`
-    INSERT INTO gp.locations (id, name, active) VALUES ('05','05',1), ('11','11',1), ('13','13',0), ('18','18',1), ('99','99',1)
-    ON CONFLICT (id) DO UPDATE SET active=excluded.active;
+    INSERT INTO gp.cost_centers (id, code, name, type, cost_center_type_id) VALUES
+      ('cc05','05','05','branch','branch'), ('cc11','11','11','branch','branch'),
+      ('cc13','13','13','branch','branch'), ('cc99','99','99','branch','branch');
+    INSERT INTO gp.locations (id, name, active, cost_center_id) VALUES
+      ('05','05',1,'cc05'), ('11','11',1,'cc11'), ('13','13',0,'cc13'), ('99','99',1,'cc99');
     INSERT INTO gp.departments (id, location_id, name, active) VALUES (917, '11', 'Zielabteilung', 1);
   `);
   for (const [number, branch] of [["Emma", "18"], ["252", "18"], ["275", "05"], ["201", "11"]]) {
