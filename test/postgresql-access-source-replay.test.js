@@ -249,9 +249,14 @@ async function ordinaryTradeReplayFixture({provider, core, sales, vault, protect
   f.setPublications([stockPublication]);
   const inheritedStock = () => first(sales, 'SELECT * FROM integration.import_history_records WHERE id=$1', [stockTarget.id]);
   const stockBefore = await inheritedStock();
-  const ownRows = () => Promise.all(['import_master_records', 'import_master_segments', 'import_master_bindings', 'import_master_events'].map(table =>
-    read(sales, 'SELECT * FROM trade.' + table + ' WHERE ' + (table === 'import_master_records' ? 'id' : 'record_id') + '=$1 ORDER BY to_jsonb(' + table + ')::text', [anchorId])));
+  const ownRows = () => Promise.all([
+    read(sales, 'SELECT * FROM trade.import_master_records WHERE id=$1', [anchorId]),
+    read(sales, 'SELECT * FROM trade.import_master_segments WHERE record_id=$1 ORDER BY kind,data_class', [anchorId]),
+    read(core, 'SELECT * FROM gp.import_master_bindings WHERE record_id=$1', [anchorId]),
+    read(core, 'SELECT * FROM gp.import_master_events WHERE record_id=$1 ORDER BY id', [anchorId]),
+  ]);
   const before = await ownRows(), manualBefore = await catalog.getByArticleNumber('000042'), imageBefore = await images.metadata('000042');
+  assert.ok(before.every(records => records.length > 0), 'the synthetic Core mapping and Sales anchor must exist before replay');
   const oldCore = f.core.query.bind(f.core); f.core.query = async (sql, args) => {
     if (sql.includes('FROM gp.data_import_sources') || sql.startsWith('UPDATE gp.data_import_sources')) return core.query(sql, args);
     return oldCore(sql, args);

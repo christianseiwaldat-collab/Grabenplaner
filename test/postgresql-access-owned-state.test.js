@@ -104,7 +104,12 @@ async function targetDatabase(t, f) {
 async function fixture(t, { bulk = 1, authenticated = false, strictRunKeys = false } = {}) {
   const directory = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'gp-owned-state-test-'))); await fs.chmod(directory, 0o700);
   const salesDb = await salesDatabase(t, strictRunKeys), { client: coreDb } = await cluster.database(t);
-  await coreDb.query('CREATE SCHEMA gp; SET search_path=pg_catalog,gp; CREATE TABLE trade_source_references(id TEXT PRIMARY KEY); CREATE TABLE import_master_holds(record_id TEXT,consumer_id TEXT); CREATE TABLE article_reference_snapshots(product_id TEXT,revision INTEGER);');
+  await coreDb.query(`
+    CREATE SCHEMA gp;
+    CREATE TABLE gp.trade_source_references(id TEXT PRIMARY KEY);
+    CREATE TABLE gp.import_master_holds(record_id TEXT,consumer_id TEXT);
+    CREATE TABLE gp.article_reference_snapshots(product_id TEXT,revision INTEGER);
+  `);
   const protection = createDataImportProtection({ encryptionKey: Buffer.alloc(32, 6), indexKey: Buffer.alloc(32, 17), keyId: 'owned-state' });
   t.after(async () => { protection.destroy(); await fs.rm(directory, { recursive: true, force: true }); });
   const defs = definitions('trade'), masterDef = defs.find(d => d.name === 'ARTIKEL_STAMM'), historyDef = defs.find(d => d.name === 'ARTIKEL_FILIALEN'), fileSha256 = 'a'.repeat(64);
@@ -257,7 +262,7 @@ test('uncovered current source facts and unexpected incoming GP foreign keys ref
   await assert.rejects(exportState(master), error => error.code === 'PG_DEPLOY_ACCESS_SOURCE_COVERAGE');
   const price = await fixture(t, { bulk: 1 }); await price.salesDb.query('UPDATE sales_article_import_snapshots SET source_file_sha256=$1 WHERE id=$2', ['b'.repeat(64), sha('snapshot-0')]);
   await assert.rejects(exportState(price), error => error.code === 'PG_DEPLOY_ACCESS_SOURCE_COVERAGE');
-  const g = await fixture(t, { bulk: 1 }); await g.salesDb.query('CREATE TABLE own_new_history_reference(id TEXT PRIMARY KEY,record_id TEXT REFERENCES import_history_records(id));');
+  const g = await fixture(t, { bulk: 1 }); await g.salesDb.query('CREATE TABLE integration.own_new_history_reference(id TEXT PRIMARY KEY,record_id TEXT REFERENCES integration.import_history_records(id));');
   await insert(g.salesDb, 'own_new_history_reference', { id: 'own', record_id: uuid(1000) });
   await assert.rejects(exportState(g), error => error.code === 'PG_DEPLOY_OWNED_FK_CLOSURE');
 });
@@ -380,7 +385,7 @@ test('fresh omission requires actual completed run HMAC, exact schema and recogn
 
 test('fresh-generation mode still rejects missing retained foreign-key anchors before sealing', cluster.options, async t => {
   const f = await fixture(t, { bulk: 1, authenticated: true }), { archiveProof, sourceReplayPlan, ...input } = f;
-  await f.salesDb.query('CREATE TABLE own_future_history_link(id TEXT PRIMARY KEY,record_id TEXT REFERENCES import_history_records(id))');
+  await f.salesDb.query('CREATE TABLE integration.own_future_history_link(id TEXT PRIMARY KEY,record_id TEXT REFERENCES integration.import_history_records(id))');
   await insert(f.salesDb, 'own_future_history_link', { id: 'own', record_id: uuid(1000) });
   await assert.rejects(exportState({ ...input, basis: P.FRESH_BASIS }), { code: 'PG_DEPLOY_OWNED_FK_CLOSURE' });
   await assert.rejects(fs.access(path.join(f.directory, P.FILE)), { code: 'ENOENT' });
