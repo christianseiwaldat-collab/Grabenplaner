@@ -1801,7 +1801,6 @@ const BASELINE_TEST_FILES = Object.freeze([
   "test/v087-block4-organization-accounts.test.js",
   "test/v087-block5-loan-photo-appendix.test.js",
   "test/v087-block5-loan-photo-migration.test.js",
-  "test/v087-block6-work-rule-panel-state.test.js",
   "test/v087-block7-settings-appearance.test.js",
   "test/v087-block8-cost-center-migration.test.js",
   "test/v087-cost-center-types.test.js",
