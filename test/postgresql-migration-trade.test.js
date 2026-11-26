@@ -34,7 +34,7 @@ test('Live Block 6 all 66 master profiles preserve encrypted source values and m
   assert.ok(views.some(v=>v.segments.attributes.AKurzbeschreibung===memo));
   const encrypted=(await f.client.query('SELECT payload FROM trade.import_master_segments')).rows;
   assert.ok(!JSON.stringify(encrypted).includes('never execute'));assert.equal(f.sqlite.prepare('SELECT count(*) n FROM crm_customers').get().n,0);
-}));
+},{compareWithSqlite:true}));
 test('Live Block 6 article imports, exact prices, search, undo and own images survive source updates',live,()=>withSalesFixture(6,async f=>{
   const pg=createSalesArticleCatalogRepository(f.postgres),sq=createSalesArticleCatalogRepository(f.sqliteProvider),images=createSalesArticleImagesRepository(f.postgres);
   const prices=[{priceType:'sales',amount:'13.67144267874',currency:'EUR',priceBasis:'gross',qualityStatus:'confirmed',sourceField:'Verkaufspreis'}];
@@ -56,7 +56,7 @@ test('Live Block 6 article imports, exact prices, search, undo and own images su
   const audit=(await f.client.query('SELECT count(*)::int AS n FROM integration.core_audit_outbox')).rows[0].n;assert.ok(audit>=4);
   await f.client.query("UPDATE trade.sales_article_own_images SET sha256=$1 WHERE article_number='001234'",['0'.repeat(64)]);
   await assert.rejects(images.content('001234'),e=>e.code==='ARTICLE_IMAGE_INTEGRITY');
-}));
+},{compareWithSqlite:true}));
 test('Live Block 6 manual article writes enforce revisions, uniqueness and audit rollback',live,()=>withSalesFixture(6,async f=>{
   const catalog=createSalesArticleCatalogRepository(f.postgres);
   const call=input=>({input,actor:'00001',timestamp:TIME,mutationId:crypto.randomUUID()});

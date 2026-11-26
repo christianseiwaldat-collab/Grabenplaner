@@ -1,7 +1,6 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict'), crypto = require('node:crypto');
 const { ARTICLE_BRANCH_ORDER_STATEMENTS: S } = require('../lib/persistence/statements/sales-article-branch-orders');
-const { ARTICLE_BRANCH_ORDERS_CATALOG: sqliteCatalog } = require('../lib/persistence/sqlite/sales-article-branch-orders-catalog');
 const { IMPORT_HISTORY_STATEMENTS: H } = require('../lib/persistence/statements/import-history');
 const { IMPORT_MASTER_STATEMENTS: M } = require('../lib/persistence/statements/import-master-data');
 const scopeId = 'synthetic-branch-orders', articleMaster = 'synthetic-article', at = '2026-10-05T00:00:00.000Z';
@@ -54,31 +53,13 @@ async function check(access) {
   assert.deepEqual(await access.queryAll(S.internalSegments, { requests: [] }), []);
 }
 
-test('article branch order SQL isolates source, article, current revision and internal segments in SQLite', async t => {
-  const app = require('../lib/persistence/sqlite/provider').openSqliteApplicationPersistence({ databasePath: ':memory:',
-    catalog: require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG });
-  require('../lib/persistence/sqlite/operations/import-master-schema').ensureSqliteImportMasterSchema(app.database);
-  require('../lib/persistence/sqlite/operations/import-history-schema').ensureSqliteImportHistorySchema(app.database);
-  t.after(async () => { await app.provider.close(); app.database.close(); });
-  await seed(app.provider); await check(app.provider);
-  const plan = app.database.prepare('EXPLAIN QUERY PLAN ' + sqliteCatalog.find(entry => entry.statement === S.candidates).sql)
-    .all({ scopeId, articleMaster, limit: 401 }).map(row => row.detail).join('\n');
-  assert.match(plan, /SEARCH q USING COVERING INDEX import_history_reference_master \(master_record_id=\? AND role=\?\)/);
-  assert.doesNotMatch(plan, /SCAN r\b/);
-  const segmentPlan = app.database.prepare('EXPLAIN QUERY PLAN ' + sqliteCatalog.find(entry => entry.statement === S.internalSegments).sql)
-    .all({ requests: JSON.stringify([{ recordId: 'a-detail', revision: 1 }]) }).map(row => row.detail).join('\n');
-  assert.match(segmentPlan, /SEARCH s USING INDEX [^\n]*\(record_id=\? AND revision=\? AND data_class=\?\)/);
-});
-
 test('article branch order reads register once and qualify wholly in Sales without changing pinned catalogs', () => {
   const pinned = require('../lib/persistence/postgresql/sales/catalog').createSalesCatalog(8);
   assert.equal(pinned.entries.length, 219);
-  const sqlite = require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG;
   const reporting = require('../lib/persistence/postgresql/reporting/branch-article-catalog').BRANCH_ARTICLE_CATALOG;
   const catalog = require('../lib/persistence/postgresql/reporting/sales-article-branch-orders-catalog').ARTICLE_BRANCH_ORDERS_CATALOG;
   assert.equal(catalog.length, Object.keys(S).length);
   for (const statement of Object.values(S)) {
-    assert.equal(sqlite.filter(entry => entry.statement === statement).length, 1);
     assert.equal(reporting.filter(entry => entry.statement === statement).length, 1);
     assert.equal(pinned.entries.some(entry => entry.statement.id === statement.id), false);
   }

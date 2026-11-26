@@ -25,15 +25,6 @@ const {
 const {
   PLANNING_SETTINGS_STATEMENTS,
 } = require("../lib/persistence/statements/planning-settings");
-const {
-  SQLITE_APPLICATION_CATALOG,
-} = require("../lib/persistence/sqlite/application-catalog");
-const {
-  ensureSqliteApplicationSchema,
-} = require("../lib/persistence/sqlite/operations/application-schema");
-const {
-  openSqliteApplicationPersistence,
-} = require("../lib/persistence/sqlite/provider");
 
 const DATABASE_URL = String(process.env.TEST_POSTGRESQL_URL || "").trim();
 
@@ -133,23 +124,6 @@ function hasPersistenceCode(code) {
 function appendSettledFailures(errors, results) {
   for (const result of results) {
     if (result.status === "rejected") errors.push(result.reason);
-  }
-}
-
-async function closeSqliteApplication(application) {
-  const errors = [];
-  try {
-    await application.provider.close();
-  } catch (error) {
-    errors.push(error);
-  }
-  try {
-    application.database.close();
-  } catch (error) {
-    errors.push(error);
-  }
-  if (errors.length > 0) {
-    throw new AggregateError(errors, "SQLite-Planning-Fixture-Cleanup fehlgeschlagen.");
   }
 }
 
@@ -297,11 +271,11 @@ test("v0.87 DB Block 5: Planning-Settings-Pins verwerfen Vertragsdrift bei ident
 });
 
 if (!DATABASE_URL) {
-  test("v0.87 DB Block 5: Planning-Settings-Parität benötigt TEST_POSTGRESQL_URL", {
-    skip: "TEST_POSTGRESQL_URL ist nicht gesetzt; die reale Dual-Provider-Fixture bleibt lokal aus.",
+  test("v0.87 DB Block 5: Nativer Datenbanktest benötigt TEST_POSTGRESQL_URL", {
+    skip: "TEST_POSTGRESQL_URL ist nicht gesetzt.",
   }, () => {});
 } else {
-  test("v0.87 DB Block 5: Planning-Settings sind auf SQLite und PostgreSQL fachlich gleich", async () => {
+  test("PostgreSQL speichert und sortiert Planungseinstellungen atomar", async () => {
     const schema = schemaName();
     const quotedSchema = `"${schema}"`;
     const configuration = createPostgresqlPoolConfiguration({
@@ -322,7 +296,6 @@ if (!DATABASE_URL) {
     const adminPool = new Pool(configuration);
     let postgresqlProvider;
     let applicationPool;
-    let sqliteApplication;
     try {
       await adminPool.query(`CREATE SCHEMA ${quotedSchema}`);
       await adminPool.query(`
@@ -344,28 +317,12 @@ if (!DATABASE_URL) {
         postgresqlProvider,
       );
 
-      sqliteApplication = openSqliteApplicationPersistence({
-        databasePath: ":memory:",
-        catalog: SQLITE_APPLICATION_CATALOG,
-      });
-      ensureSqliteApplicationSchema(sqliteApplication.database);
-      const sqliteRepository = createPlanningSettingsRepository(
-        sqliteApplication.provider,
-      );
-
-      const sqliteResult = await exerciseSettings({
-        repository: sqliteRepository,
-        transaction: (work) => sqliteApplication.provider.transaction(
-          (executor) => work(createPlanningSettingsRepository(executor)),
-        ),
-      });
       const postgresqlResult = await exerciseSettings({
         repository: postgresqlRepository,
         transaction: (work) => postgresqlProvider.transaction(
           (executor) => work(createPlanningSettingsRepository(executor)),
         ),
       });
-      assert.deepEqual(postgresqlResult, sqliteResult);
       assert.deepEqual(postgresqlResult, [
         { key: "Alpha", value: "0" },
         { key: "beta", value: "null" },
@@ -377,9 +334,6 @@ if (!DATABASE_URL) {
         postgresqlProvider?.close(),
         !postgresqlProvider && applicationPool
           ? applicationPool.end()
-          : null,
-        sqliteApplication
-          ? closeSqliteApplication(sqliteApplication)
           : null,
       ].filter(Boolean)));
       try {

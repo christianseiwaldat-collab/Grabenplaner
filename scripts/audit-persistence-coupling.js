@@ -905,9 +905,6 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/cash-history-snapshot-prototype.test.js",
   "test/cash-snapshots.test.js",
   "test/cash-publication-integration.test.js",
-  // Synthetic in-memory receipt paging; no production driver capability.
-  "test/sales-report-receipt-issues.test.js",
-  "test/sales-report-receipt-issues-postgresql.test.js",
   "test-support/large-data-backup-qualification.mjs",
   "test-support/tradefoto-full-backup-measurement.js",
   "test/background-backup-consistency.test.js",
@@ -947,7 +944,6 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/work-rule-governance-persistence.test.js",
   "test/v087-absence-management-persistence.test.js",
   "test/v087-application-seeding.test.js",
-  "test/v087-application-schema-operation.test.js",
   "test/v087-branding-persistence.test.js",
   "test/v087-collective-agreements-persistence.test.js",
   "test/crm-api-contract.test.js",
@@ -1033,8 +1029,6 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/v087-protected-record-migrations.test.js",
   "test/v087-runtime-recovery-persistence.test.js",
   "test/v087-sickness-amu-management-persistence.test.js",
-  "test/v087-sqlite-operations.test.js",
-  "test/v087-sqlite-persistence-provider.test.js",
   "test/v087-startup-schema-migrations.test.js",
   "test/v087-time-tracking-persistence.test.js",
   "test/v087-wifi-automation-persistence.test.js",
@@ -1092,11 +1086,9 @@ const PHASE_4_PERSISTENCE_FILES = Object.freeze([
 ]);
 const PHASE_4_PERSISTENCE_FILE_SET = new Set(PHASE_4_PERSISTENCE_FILES);
 const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
-  "test-support/sqlite-migration-fixture.js",
   "test/v087-database-block4-application-migrations.test.js",
   "test/v087-database-block4-dialect-contract.test.js",
   "test/v087-database-block4-migration-contract.test.js",
-  "test/v087-database-block4-sqlite-migration-runner.test.js",
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
@@ -1671,7 +1663,6 @@ const BASELINE_TEST_FILES = Object.freeze([
   "test/v059-sickness-integration.test.js",
   "test/v060-portal-mobile-foundation.test.js",
   "test/v0611-installation-features.test.js",
-  "test/v0611-usb-profile-database.test.js",
   "test/v062-mobile-native-auth.test.js",
   "test/v063-import-payroll.test.js",
   "test/v064-connectors-server.test.js",
@@ -1713,7 +1704,6 @@ const BASELINE_TEST_FILES = Object.freeze([
   "test/v087-block4-organization-accounts.test.js",
   "test/v087-block5-loan-photo-appendix.test.js",
   "test/v087-block5-loan-photo-migration.test.js",
-  "test/v087-block6-work-rule-panel-state.test.js",
   "test/v087-block7-settings-appearance.test.js",
   "test/v087-block8-cost-center-migration.test.js",
   "test/v087-cost-center-types.test.js",
@@ -1829,7 +1819,6 @@ const TEST_SPECIAL_GROUPS = Object.freeze({
     "test/work-rule-store.test.js",
   ]),
   "portable-usb-legacy-test": new Set([
-    "test/v0611-usb-profile-database.test.js",
   ]),
 });
 
@@ -1866,7 +1855,6 @@ const BASELINE_DIRECT_TEST_DRIVER_FILES = Object.freeze([
   "test/v053-time-corrections.test.js",
   "test/v057-codespaces-demo.test.js",
   "test/v058-personnel-rights-encryption.test.js",
-  "test/v0611-usb-profile-database.test.js",
   "test/v063-import-payroll.test.js",
   "test/v071-cost-centers-personnel.test.js",
   "test/v071-shift-locations.test.js",
@@ -1917,8 +1905,6 @@ const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
   "test/sales-article-catalog-search.test.js",
   "scripts/benchmark-sales-search.js",
   "test/cash-publication-integration.test.js",
-  "test/sales-report-receipt-issues.test.js",
-  "test/sales-report-receipt-issues-postgresql.test.js",
   "test-support/cash-history-snapshot-prototype.js",
   "test/data-import-state-counts.test.js",
   ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![

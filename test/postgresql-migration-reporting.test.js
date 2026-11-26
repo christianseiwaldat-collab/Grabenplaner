@@ -44,7 +44,7 @@ test('Live Block 8 generated search values match SQLite for accents, wildcards, 
     const input={query,sort,direction,limit:5,offset:0};assert.deepEqual(await pg.search(input,projection),await sqlite.search(input,projection),JSON.stringify(input));
   }
   const folded=(await f.client.query('SELECT count(*)::int n FROM trade.sales_article_search_projection WHERE search_text_folded<>gp.ascii_fold(gp.lower(search_text))')).rows[0].n;assert.equal(folded,0);
-}));
+},{compareWithSqlite:true}));
 test('Live Block 8 real PostgreSQL worker produces a PDF, preserves cash margin and enforces revocation/cancellation',live,()=>withReportFixture(async f=>{
   const built=await f.cash.build(sourceRows([receipt(1,'120',[{}]),receipt(2,'39.08',[{VKMenge:'2',VK_Preis:'19.54',RohertragDM:'8.141667',KalkRohertrag:'16.283333'}])]));await f.cash.activate(f.cash.request(built.id));
   const session=await f.resolvePrincipal('00001');assert.ok(session.permissions.includes('sales:analytics:margin:read'));

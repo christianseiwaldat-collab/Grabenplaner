@@ -25,15 +25,6 @@ const {
   createPostgresqlPoolConfiguration,
   isLoopbackHostname,
 } = require("../lib/persistence/postgresql/policy");
-const {
-  SQLITE_APPLICATION_CATALOG,
-} = require("../lib/persistence/sqlite/application-catalog");
-const {
-  ensureSqliteApplicationSchema,
-} = require("../lib/persistence/sqlite/operations/application-schema");
-const {
-  openSqliteApplicationPersistence,
-} = require("../lib/persistence/sqlite/provider");
 
 const DATABASE_URL = String(process.env.TEST_POSTGRESQL_URL || "").trim();
 const FIXED_TIMESTAMP = "2026-07-29 12:34:56";
@@ -134,23 +125,6 @@ function hasPersistenceCode(code) {
 function appendSettledFailures(errors, results) {
   for (const result of results) {
     if (result.status === "rejected") errors.push(result.reason);
-  }
-}
-
-async function closeSqliteApplication(application) {
-  const errors = [];
-  try {
-    await application.provider.close();
-  } catch (error) {
-    errors.push(error);
-  }
-  try {
-    application.database.close();
-  } catch (error) {
-    errors.push(error);
-  }
-  if (errors.length > 0) {
-    throw new AggregateError(errors, "SQLite-Abteilungs-Fixture-Cleanup fehlgeschlagen.");
   }
 }
 
@@ -297,11 +271,11 @@ test("v0.87 DB Block 5: Abteilungspins verwerfen Vertragsdrift bei identischem Q
 });
 
 if (!DATABASE_URL) {
-  test("v0.87 DB Block 5: Abteilungsparität benötigt TEST_POSTGRESQL_URL", {
-    skip: "TEST_POSTGRESQL_URL ist nicht gesetzt; die reale Dual-Provider-Fixture bleibt lokal aus.",
+  test("v0.87 DB Block 5: Nativer Datenbanktest benötigt TEST_POSTGRESQL_URL", {
+    skip: "TEST_POSTGRESQL_URL ist nicht gesetzt.",
   }, () => {});
 } else {
-  test("v0.87 DB Block 5: Abteilungen sind auf SQLite und PostgreSQL fachlich gleich", async () => {
+  test("PostgreSQL speichert und sortiert Abteilungen samt ihren Filialzuordnungen", async () => {
     const schema = schemaName();
     const quotedSchema = `"${schema}"`;
     const configuration = createPostgresqlPoolConfiguration({
@@ -322,7 +296,6 @@ if (!DATABASE_URL) {
     const adminPool = new Pool(configuration);
     let postgresqlProvider;
     let applicationPool;
-    let sqliteApplication;
     try {
       await adminPool.query(`CREATE SCHEMA ${quotedSchema}`);
       await adminPool.query(`
@@ -364,27 +337,6 @@ if (!DATABASE_URL) {
         postgresqlProvider,
       );
 
-      sqliteApplication = openSqliteApplicationPersistence({
-        databasePath: ":memory:",
-        catalog: SQLITE_APPLICATION_CATALOG,
-      });
-      ensureSqliteApplicationSchema(sqliteApplication.database);
-      sqliteApplication.database.prepare(`
-        INSERT INTO locations (id, name, min_staff, active)
-        VALUES ('18', 'Filiale 18', 0, 1)
-      `).run();
-      const sqliteRepository = createOrganizationPersonnelRepository(
-        sqliteApplication.provider,
-      );
-
-      const sqliteResult = await exerciseDepartments({
-        repository: sqliteRepository,
-        setFixedTimestamps: async () => {
-          sqliteApplication.database.prepare(`
-            UPDATE departments SET created_at = ?
-          `).run(FIXED_TIMESTAMP);
-        },
-      });
       const postgresqlResult = await exerciseDepartments({
         repository: postgresqlRepository,
         setFixedTimestamps: () => adminPool.query(`
@@ -393,7 +345,6 @@ if (!DATABASE_URL) {
         `, [FIXED_TIMESTAMP]),
       });
 
-      assert.deepEqual(postgresqlResult, sqliteResult);
       assert.deepEqual(postgresqlResult, [
         {
           id: 1,
@@ -420,9 +371,6 @@ if (!DATABASE_URL) {
         postgresqlProvider?.close(),
         !postgresqlProvider && applicationPool
           ? applicationPool.end()
-          : null,
-        sqliteApplication
-          ? closeSqliteApplication(sqliteApplication)
           : null,
       ].filter(Boolean)));
       try {

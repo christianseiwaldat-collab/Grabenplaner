@@ -1,39 +1,14 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
-const { DatabaseSync } = require('node:sqlite');
 const Issues = require('../lib/sales-report-receipt-issues');
-const { CASH_SNAPSHOT_TABLES } = require('../lib/persistence/statements/cash-snapshots');
 const { readCheckedCashReportBatch, readCashReportReceiptIssues, START } = require('../lib/persistence/repositories/checked-cash-report-batch');
-const name = t => CASH_SNAPSHOT_TABLES.find(table => table.name === t).sqlName;
 
-test('head-only and undated receipts are found across complete pages without mixing datasets or dates', () => {
-  const db = new DatabaseSync(':memory:');
-  try {
-    const head = name('Umsatz_KASSE'), line = name('Umsatz_Kasse_Details');
-    db.exec(`CREATE TABLE ${head}(dataset_slot INTEGER,source_row INTEGER,business_date TEXT);
-      CREATE TABLE ${line}(dataset_slot INTEGER,parent_row INTEGER);`);
-    const insert = db.prepare(`INSERT INTO ${head} VALUES(?,?,?)`);
-    for (let i = 1; i <= 405; i++) insert.run(1, i, i <= 203 ? '2026-02-01' : null);
-    insert.run(1, 406, '2026-01-01'); insert.run(2, 1, '2026-02-01');
-    // A child from another dataset must not hide this head. A real child
-    // suppresses a dated head but cannot make an undated head disappear.
-    db.exec(`INSERT INTO ${line} VALUES(2,1),(1,2),(1,405);`);
-    const query = db.prepare(Issues.CATALOG[0].sql);
-    const params = { datasetSlot: 1, dateFrom: '2026-02-01', dateTo: '2026-02-28', afterDate: '9999-12-31', afterRow: 10000000, limit: 201 };
-    const rows = [], pages = [];
-    for (;;) {
-      const page = query.all(params); pages.push(page.length); rows.push(...page);
-      if (page.length < params.limit) break;
-      params.afterDate = page.at(-1).businessDate; params.afterRow = page.at(-1).sourceRow;
-    }
-    assert.deepEqual(pages, [201, 201, 2]);
-    assert.equal(rows.length, 404); assert.equal(new Set(rows.map(r => r.sourceRow)).size, 404);
-    assert.ok(rows.some(r => r.sourceRow === 1)); assert.ok(!rows.some(r => r.sourceRow === 2 || r.sourceRow === 406));
-    assert.equal(rows.filter(r => r.businessDate === null).length, 202);
-    const sql = Issues.postgresql()[0].sql;
-    assert.match(sql, /kassa\."cash_snapshot_1"/); assert.match(sql, /kassa\."cash_snapshot_6"/);
-    assert.match(sql, /IS NOT DISTINCT FROM/); assert.match(sql, /NULLS LAST/);
-  } finally { db.close(); }
+test('receipt-issue paging uses native PostgreSQL snapshot tables and a null-safe cursor', () => {
+  const sql = Issues.postgresql()[0].sql;
+  assert.match(sql, /kassa\."cash_snapshot_1"/);
+  assert.match(sql, /kassa\."cash_snapshot_6"/);
+  assert.match(sql, /IS NOT DISTINCT FROM/);
+  assert.match(sql, /NULLS LAST/);
 });
 
 function backendFor(checked) {

@@ -4,11 +4,8 @@ const {Client}=require('pg');
 const {verifyEnvironment,PROFILE}=require('../../lib/persistence/postgresql/core/environment');
 const {stageTables,relation,SEARCH_PATH}=require('../../lib/persistence/postgresql/sales/layout');
 const {openSalesDevelopmentApplication}=require('../../lib/persistence/postgresql/sales/application');
-const {createSqliteSource,seedCoreFixture}=require('./sqlite-source');
-const {createSqlitePersistenceProvider}=require('../../lib/persistence/sqlite/provider');
-const {SQLITE_APPLICATION_CATALOG}=require('../../lib/persistence/sqlite/application-catalog');
 const {createDataImportProtection}=require('../../lib/data-import-protection');
-async function withSalesFixture(stage,work){
+async function withSalesFixture(stage,work,{compareWithSqlite=false}={}){
   const client=new Client({connectionString:process.env.GP_SALES_MIGRATOR_URL});await client.connect();
   let owned=false,sqlite,sqliteProvider,application,protection;
   const marker='synthetic-sales-'+crypto.randomUUID();let relations;
@@ -24,12 +21,19 @@ async function withSalesFixture(stage,work){
     assert.equal((await client.query('SELECT * FROM gp.migration_fixture_owner')).rows.length,0,'No other fixture may own this database');
     assert.ok((await client.query(relations.map(table=>'SELECT EXISTS(SELECT 1 FROM '+table+') AS occupied').join(' UNION ALL '))).rows.every(r=>!r.occupied),'Synthetic fixture refuses existing business rows');
     await client.query('INSERT INTO gp.migration_fixture_owner(id) VALUES($1)',[marker]);owned=true;
-    sqlite=createSqliteSource();seedCoreFixture(sqlite,3);
-    require('../../lib/persistence/sqlite/operations/import-history-snapshots-schema').ensureSqliteImportHistorySnapshotsSchema(sqlite);
-    sqliteProvider=createSqlitePersistenceProvider({database:sqlite,catalog:SQLITE_APPLICATION_CATALOG,closeDatabase:false});
+    let comparison = {};
+    if(compareWithSqlite){
+      const {createSqliteSource,seedCoreFixture}=require('./sqlite-source');
+      const {createSqlitePersistenceProvider}=require('../../lib/persistence/sqlite/provider');
+      const {SQLITE_APPLICATION_CATALOG}=require('../../lib/persistence/sqlite/application-catalog');
+      sqlite=createSqliteSource();seedCoreFixture(sqlite,3);
+      require('../../lib/persistence/sqlite/operations/import-history-snapshots-schema').ensureSqliteImportHistorySnapshotsSchema(sqlite);
+      sqliteProvider=createSqlitePersistenceProvider({database:sqlite,catalog:SQLITE_APPLICATION_CATALOG,closeDatabase:false});
+      comparison={sqlite,sqliteProvider};
+    }
     application=await openSalesDevelopmentApplication({profile:PROFILE,databaseUrl:process.env.GP_SALES_APP_URL,tlsMode:'disable-local-only',stage});
     protection=createDataImportProtection({encryptionKey:Buffer.alloc(32,42),indexKey:Buffer.alloc(32,43),keyId:'synthetic-migration',compression:true});
-    await work({client,sqlite,sqliteProvider,postgres:application.provider,application,protection,stage});
+    await work({client,postgres:application.provider,application,protection,stage,...comparison});
   }finally{
     await application?.close();await sqliteProvider?.close();sqlite?.close();protection?.destroy();
     await client.query('ROLLBACK');await client.query('RESET ROLE');

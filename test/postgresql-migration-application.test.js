@@ -34,7 +34,7 @@ test('Live Core composition reads real repository projections with identical fie
   }
   const sales=require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG.find(e=>e.statement.id.startsWith('cash-'));
   await assert.rejects(f.postgres[sales.statement.operation](sales.statement,{}),e=>[PERSISTENCE_ERROR_CODES.STATEMENT_INVALID,PERSISTENCE_ERROR_CODES.CONTRACT_VIOLATION].includes(e.code));
-}));
+},{compareWithSqlite:true}));
 
 test('Live notification cursors retain insertion order and page correctly across idempotent duplicates',live,async()=>withCoreFixture(async f=>{
   for(const repos of [f.sqliteRepositories,f.postgresRepositories]){
@@ -50,7 +50,7 @@ test('Live notification cursors retain insertion order and page correctly across
     await absence.markNotificationRead({id:second[0].id,employeeNumber:'00002'});
     assert.deepEqual((await absence.mobileNotifications({employeeNumber:'00002',cursor:1000000,limit:20},true)).map(n=>n.id),['message-a']);
   }
-}));
+},{compareWithSqlite:true}));
 
 test('Live absence approval transitions keep the same business state',live,async()=>withCoreFixture(async f=>{
   const snapshots=[];
@@ -66,7 +66,7 @@ test('Live absence approval transitions keep the same business state',live,async
     snapshots.push({id:approved.id,employee:approved.employee_number,status:approved.status,stage:approved.approval_stage,localBy:approved.local_approved_by,hrBy:approved.hr_approved_by});
   }
   assert.deepEqual(snapshots[1],snapshots[0]);
-}));
+},{compareWithSqlite:true}));
 
 test('Live concurrent Core writes respect optimistic revisions and recover after a row lock timeout',live,async()=>withCoreFixture(async f=>{
   const org=f.postgresRepositories.organizationPersonnel;
@@ -100,7 +100,7 @@ test('Live planning writes preserve booleans, nullable departments, week-spannin
     assert.ok(!(await planning.listSettings()).some(s=>s.key==='must-rollback'));
   }
   assert.deepEqual(snapshots[1],snapshots[0]);
-}));
+},{compareWithSqlite:true}));
 
 test('Live role and position defaults, grants and denials retain Developer full access',live,async()=>withCoreFixture(async f=>{
   const snapshots=[];
@@ -125,7 +125,7 @@ test('Live role and position defaults, grants and denials retain Developer full 
     assert.deepEqual(removed.granted_permissions,[]);assert.deepEqual(removed.denied_permissions,[]);
   }
   assert.deepEqual(snapshots[1],snapshots[0]);
-}));
+},{compareWithSqlite:true}));
 
 test('Live time entry transactions are atomic and duplicate request IDs cannot create another booking',live,async()=>withCoreFixture(async f=>{
   const snapshots=[];
@@ -141,7 +141,7 @@ test('Live time entry transactions are atomic and duplicate request IDs cannot c
     assert.equal(await time.getClientRequestEntry(rolled),null);
   }
   assert.deepEqual(snapshots[1],snapshots[0]);
-}));
+},{compareWithSqlite:true}));
 
 async function createProcessRun(repository,suffix){
   const processId='process-'+suffix,stepId='step-'+suffix,runId='run-'+suffix;
@@ -164,7 +164,7 @@ test('Live workflows preserve revisions, idempotent steps and multi-table rollba
     snapshots.push(generatedTimes({process:await process.processById({id:ids.processId,includeArchived:0}),steps:await process.listProcessSteps({processId:ids.processId}),run:await process.openRunById({id:ids.runId})}));
   }
   assert.deepEqual(snapshots[1],snapshots[0]);
-}));
+},{compareWithSqlite:true}));
 
 test('Live CRM preserves customer numbers, Unicode/wildcard search and optimistic revisions',live,async()=>withCoreFixture(async f=>{
   const snapshots=[];
@@ -180,4 +180,4 @@ test('Live CRM preserves customer numbers, Unicode/wildcard search and optimisti
     const final={...await crm.get(created.id)};delete final.id;snapshots.push(final);
   }
   assert.deepEqual(snapshots[1],snapshots[0]);
-}));
+},{compareWithSqlite:true}));
