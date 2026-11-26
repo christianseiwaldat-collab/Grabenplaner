@@ -54,46 +54,6 @@
     },
     {
       "scanner": "secrets",
-      "fingerprint": "de4c1b8ed5c7ec22aaf723f3c94a7126544f6d38614862c87fb29eaa149d8cdf",
-      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:127. This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "ea01b0063f2041e717dc64faaadf3770d3727ce072afe0c2a441416e5bf6f7c3",
-      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:138. This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "312f9b7a9cb188c1d05943440894ea9c96933a1e5fdb962b50950b1459796c31",
-      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:139. This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "22dea58d3398ee38e7b65e6ae62c62cee18ae3fdd58834982ca7a77d758923cc",
-      "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "Current checkout server-tools/linux/recovery/grabenplaner-recovery.sh:78. This shell span initializes an empty credential-file variable and a numeric result flag. Credential material is loaded only at runtime. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
       "fingerprint": "2a3fe27c586928638a075ec2ec73274aceafad499b75e6d9dcf033903d1831d0",
       "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
       "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",

@@ -124,7 +124,8 @@ restore_timer_state() {
 }
 
 restore_original_credentials() {
-  local rollback_config_next="" rollback_password_next="" stage_failed=0 restore_failed=0
+  local stage_failed=0 restore_failed=0
+  local rollback_config_next="" rollback_password_next=""
   [[ -n "$operation_root" && -f "$operation_root/original-rclone.conf" \
     && -f "$operation_root/original-rclone-config-password" ]] || return 1
   rollback_config_next="$(mktemp --tmpdir="$OFFSITE_CREDENTIAL_STATE_ROOT" .rclone.conf.rollback.XXXXXXXX)" || return 1
@@ -132,11 +133,17 @@ restore_original_credentials() {
     rm -f -- "$rollback_config_next"
     return 1
   }
-  install -m 0600 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" \
-    -- "$operation_root/original-rclone.conf" "$rollback_config_next" || stage_failed=1
-  install -m 0600 -o root -g root \
-    -- "$operation_root/original-rclone-config-password" "$rollback_password_next" || stage_failed=1
-  if (( stage_failed == 0 )); then sync -f "$rollback_config_next" "$rollback_password_next" || stage_failed=1; fi
+  if ! install -m 0600 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" \
+    -- "$operation_root/original-rclone.conf" "$rollback_config_next"; then
+    stage_failed=1
+  fi
+  if ! install -m 0600 -o root -g root \
+    -- "$operation_root/original-rclone-config-password" "$rollback_password_next"; then
+    stage_failed=1
+  fi
+  if (( stage_failed == 0 )) && ! sync -f "$rollback_config_next" "$rollback_password_next"; then
+    stage_failed=1
+  fi
   if (( stage_failed == 0 )); then
     mv -f -- "$rollback_config_next" "$OFFSITE_RCLONE_CONFIG" || restore_failed=1
     [[ -e "$rollback_config_next" ]] || rollback_config_next=""

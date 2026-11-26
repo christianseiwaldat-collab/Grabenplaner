@@ -73,12 +73,13 @@ for helper in "$RECOVERY_METADATA" "$RECOVERY_VERIFY" "$RECOVERY_APPLY" "$RECOVE
   (( (8#$helper_mode & 022) == 0 )) || offsite_die "Ein Recovery-Helfer ist unzulaessig beschreibbar."
 done
 
-operation_root=""
-restore_root=""
-uploader_credentials=""
 operation_success=0
 failure_code="RECOVERY_FAILED"
+operation_root=""
+restore_root=""
 declare -a temporary_files=()
+uploader_credentials=""
+
 cleanup() {
   local status=$?
   for temporary_file in "${temporary_files[@]}"; do rm -f -- "$temporary_file" 2>/dev/null || true; done
