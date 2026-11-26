@@ -95,7 +95,7 @@
       "packageJsonSha256": "b00b6d35eda6d4aa6893baf19e53b7d005019ed840e4fa116c926a532ec577cf",
       "licenseSha256": "6236fa0b88a4a0cce3dda0367979491b2052b3c8d6b1c10b3668de083e86a7f0",
       "regressionTest": "test/security-minimatch-compatibility.test.js",
-      "regressionTestSha256": "c356db1a1554d7ce5a7819cca2805f362bc0f660a39b7b40ee500a4e30966dda",
+      "regressionTestSha256": "c7b2d36d0ede04d5c03527290f5c64a68e61cc1b61ec4f3f4839e706d25b82c6",
       "reviewedOn": "2026-11-26",
       "expiresOn": "2026-12-26",
       "owner": "Grabenplaner dependency maintainers",
