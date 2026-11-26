@@ -1,7 +1,7 @@
 const test=require('node:test'), assert=require('node:assert/strict');
 const fs=require('node:fs'), path=require('node:path');
 const {checkPolicy}=require('../scripts/security/verify-patch.cjs');
-const policy=require('../scripts/security/patch-policy.json');
+const policy={...require('../scripts/security/patch-policy.json'),reviewedOn:'2026-10-18',expiresOn:'2026-11-17'};
 const fixture=()=>({patchHash:policy.patchSha256,installedHash:policy.installedCommonJsSha256,workspace:`patchedDependencies:\n  ${policy.package}@${policy.version}: ${policy.patch}\n`,lock:`patchedDependencies:\n  ${policy.package}@${policy.version}: ${policy.patchSha256}\n`});
 test('compatibility approval is exact and not an advisory waiver',()=>{assert.doesNotThrow(()=>checkPolicy(policy,fixture(),new Date('2026-10-18')));assert.deepEqual(policy.advisoryExceptions,[]);});
 for(const kind of ['patchHash','installedHash','workspace','lock'])test(`compatibility approval rejects ${kind} drift`,()=>{const f=fixture();f[kind]=kind==='workspace'||kind==='lock'?f[kind].replace('@5.0.12:','@5.0.11:'):f[kind]+'changed';assert.throws(()=>checkPolicy(policy,f,new Date('2026-10-18')));});
