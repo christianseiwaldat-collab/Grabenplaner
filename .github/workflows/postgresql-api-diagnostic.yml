@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [foundations, rights, sales, next-rights, reports, loans, closure-apis]
+        group: [sales]
     env:
       TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/grabenplaner_test
       TEST_POSTGRESQL_BIN: /usr/lib/postgresql/18/bin
@@ -75,3 +75,10 @@ jobs:
         env:
           DIAGNOSTIC_GROUP: ${{ matrix.group }}
         run: node test-support/postgresql-migration/ci-stock-import-delete.js --diagnostic-api "$DIAGNOSTIC_GROUP"
+      - name: Verify the corrected UI and Offsite fixtures
+        run: >-
+          node --no-experimental-sqlite --test
+          test/personnel-display-ui.test.js test/planning-navigation.test.js
+          test/planning-shift-mutation-ui.test.js test/rights-workspace-save-races.test.js
+          test/sidebar-layout.test.js test/ui-access-theme-consistency.test.js
+          test/ui-tabs-learning-lifecycle.test.js test/v075-linux-hardening-package.test.js

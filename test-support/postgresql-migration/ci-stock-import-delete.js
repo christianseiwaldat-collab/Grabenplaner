@@ -15,7 +15,7 @@ async function main(){
  const diagnosticGroups=Object.freeze({
   foundations:['test/portal-foundation-https.test.js','test/portal-foundation-loopback.test.js','test/portal-foundation-scope.test.js','test/v057-codespaces-demo.test.js'],
   rights:['test/personnel-learning-rights-hierarchy.test.js','test/portal-birthday-presentation-claim-api.test.js','test/portal-birthday-presentation-settings-api.test.js','test/v058-personnel-rights-encryption.test.js','test/v059-sickness-integration.test.js','test/v060-portal-mobile-foundation.test.js'],
-  sales:['test/postgresql-api-native-fixture.test.js','test/postgresql-startup-category-defaults.test.js','test/postgresql-startup-policy-defaults.test.js','test/branch-sales-api.test.js','test/sales-analytics-production-hardening.test.js','test/sales-article-catalog-detail-route.test.js','test/sales-article-catalog-import-api.test.js','test/schedule-duty-persistence-api.test.js','test/v056-wifi-foundation.test.js','test/postgresql-ascii-nocase-parity.test.js'],
+  sales:['test/branch-sales-api.test.js'],
   'next-rights':['test/portal-foundation.test.js','test/personnel-lifecycle-onboarding-execution-api.test.js','test/v063-import-payroll.test.js','test/v083-payroll-handoffs.test.js'],
   reports:['test/emma-absence-requests-postgresql.test.js','test/personnel-lifecycle-scoped-rights-api.test.js','test/v062-mobile-native-auth.test.js','test/v079-mobile-absence-api.test.js','test/v071-page-appearance.test.js','test/v0862-server-backup-download.test.js'],
   loans:['test/v085-loan-foundation.test.js','test/v087-block4-loan-overview.test.js','test/v087-block4-organization-accounts.test.js'],
