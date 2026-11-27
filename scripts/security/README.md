@@ -113,10 +113,17 @@ Ausgelassene Dateien, Regeln, Analysefehler und Zeitabbrüche bleiben blockieren
 `exceptions.json` enthält ausschließlich einzeln geprüfte Treffer mit exaktem
 Fingerprint, tatsächlichem Datei-/Gitblob-SHA256, Begründung, Verantwortlichkeit,
 Prüfdatum und Ablaufdatum. Keine Advisory-Ausnahmen sind genehmigt. P0/P1 sind
-auf höchstens 14, P2/P3 auf höchstens 30 Kalendertage begrenzt. Die am
-26.11.2026 erneut geprüften Testdaten und Shellsyntax-Treffer aus der
-Git-Historie sind auf 14 Tage begrenzt. Neue oder verschobene Treffer, neue
-historische Commits und Inhaltsdrift erfordern eine erneute Prüfung.
+auf höchstens 14, P2/P3 auf höchstens 30 Kalendertage begrenzt.
+
+Die 13 am 26.11.2026 geprüften historischen Gitleaks-Fehlalarme sind in
+`historicalSecretReviews` mit Prüfer, Prüfdatum und Begründung dokumentiert.
+Die Einstufung gilt dauerhaft für die belegte Kombination aus Git-Commit,
+Regel, Pfad, Zeilen, Spalten und vollständigem Gitblob-SHA256 sowie den
+hashgebundenen Gitleaks-Eingaben. Beide Gitleaks-Scans laufen vollständig.
+Der private Prüfbeleg enthält sämtliche Rohbefunde und die Zuordnung der
+bestätigten historischen Fehlalarme. Änderungen am Scanner oder seiner
+Regelkonfiguration erfordern eine erneute Zuordnung. Neue, abweichende
+oder aktuelle Fundstellen unterliegen dem regulären Blockierverhalten.
 
 SAST verwendet getrennt `sast-dispositions.json`. Eine Entscheidung gilt nur
 für einen konkret geprüften Fehlalarm: kanonische Upstream-Regel-ID, relativer
