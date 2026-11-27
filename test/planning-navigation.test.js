@@ -27,7 +27,9 @@ function navigation(locations, role = "manager") {
     requestAnimationFrame: callback => callback(),
     escapeHtml: value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]),
   });
-  vm.runInContext(source.slice(source.indexOf("function navigationGroups()"), source.indexOf("function schedulePdfDesignCatalog(")), context);
+  const locationFunctions = source.slice(source.indexOf("function locationFunctionAccess()"), source.indexOf("function planningContextQuery("));
+  const navigationFunctions = source.slice(source.indexOf("function navigationGroups()"), source.indexOf("function schedulePdfDesignCatalog("));
+  vm.runInContext(locationFunctions + navigationFunctions, context);
   return { context, node, render: () => context.renderContextNavigation() };
 }
 

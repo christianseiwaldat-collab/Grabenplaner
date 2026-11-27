@@ -92,7 +92,7 @@ function tabsFixture() {
     'canManageMobilePortalLocationDisplay','loadMobilePortalLocationDisplay']) context[name]=() => Promise.resolve();
   context.setView=view => {context.state.currentView=view;};
   for(const button of [...settings,...team])button.focus=() => {context.document.activeElement=button;};
-  load(context,['visibleManagedTabButtons','syncManagedTabSelection','setManagedTabPanel','reconcileManagedTabs',
+  load(context,['locationFunctionAccess','canOpenTeamWorkspace','visibleManagedTabButtons','syncManagedTabSelection','setManagedTabPanel','reconcileManagedTabs',
     'handleManagedTabKeydown','setSettingsTab','setPersonnelTab','functionSearchSettingsTabButton','applyFunctionSearchNavigationState']);
   const key=(kind,button,value) => {
     let prevented=false;

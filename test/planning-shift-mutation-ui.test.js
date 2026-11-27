@@ -12,7 +12,7 @@ function fixture(id = "") {
     shiftStart: "09:00", shiftEnd: "17:00", shiftArea: "Verkauf", shiftNote: "Entwurf" })
     .map(([key, value]) => ["#" + key, { value, disabled: false }]));
   const state = { portalSession: { user: { id: "actor-a" } }, currentView: "planning", locationId: "18", departmentId: "",
-    weekStart: "2032-07-05", locations: [{ id: "18" }], data: { shifts: [] }, allEmployees: ["retained roster"], vacationData: { year: 2032 } };
+    weekStart: "2032-07-05", locations: [{ id: "18", active: true }], data: { shifts: [] }, allEmployees: ["retained roster"], vacationData: { year: 2032 } };
   const calls = [], toasts = [], renders = [], timersCleared = [], formAttributes = new Map();
   const save = { disabled: false }, remove = { disabled: false }, alreadyDisabled = { disabled: true };
   let confirmations = 0, closed = 0, locked = false;
@@ -37,7 +37,8 @@ function fixture(id = "") {
     loadAll: () => { throw Error("A shift mutation must not reload unrelated application data"); },
   });
   vm.runInContext("let shiftMutation=null, shiftEditorGeneration=0, shiftRulePreviewTimer=123, shiftRulePreviewRequest=preview; let loadAllGeneration=0, planningPeriodController=null;\n"
-    + ["captureGpContext", "gpContextCurrent", "captureGpEditor", "gpEditorCurrent", "shiftMutationScope", "shiftMutationCurrent",
+    + ["activeLocations", "locationFunctionAccess", "locationsForFunction", "planningContextQuery",
+      "captureGpContext", "gpContextCurrent", "captureGpEditor", "gpEditorCurrent", "shiftMutationScope", "shiftMutationCurrent",
       "beginShiftMutation", "finishShiftMutation", "saveShift", "deleteShift", "applyLoadedSchedule", "enrichLoadedSchedule", "loadPlanningPeriod"]
       .map(name => functionSource(name)).join("\n"), context);
   const schedule = shifts => ({ weekStart: state.weekStart, context: { locationId: state.locationId }, settings: {}, shifts,

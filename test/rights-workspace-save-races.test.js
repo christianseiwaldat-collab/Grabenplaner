@@ -185,7 +185,7 @@ function fixture(options = {}) {
     "rightsEditorDependencyApplies", "rightsEditorScopeContext", "rightsEditorHasOrganizationalPermissions",
     "rightsEditorSelectedScope", "refreshRightsEditorSaveState", "refreshRightsEditorScope",
     "enforceRightsEditorPermissionDependencies", "permissionEligibleForRole", "lifecycleRightsDependency",
-    "openRightsEditor", "loadRightsManagement", "rightsEditorDraftSignature", "saveUserRights"];
+    "openLocationFunctionRights", "openRightsEditor", "loadRightsManagement", "rightsEditorDraftSignature", "saveUserRights"];
   const closeStart = source.indexOf('elements.rightsEditorModal?.addEventListener("close",');
   const closeEnd = source.indexOf('\nelements.rightsEditorForm?.addEventListener("submit"', closeStart);
   assert.ok(closeStart >= 0 && closeEnd > closeStart, "Production close listener missing");

@@ -57,7 +57,7 @@ function principalContext(permissions = [], { portalEnabled = true, role = "mana
       portalSession: { user: { role, employeeNumber: "SYNTHETIC-ACCESS-QA", permissions: [...permissions] } },
     },
   };
-  const sources = ["canAccessTeamManagement", "canReadCentralPersonnel", "canReadCentralVacations",
+  const sources = ["locationFunctionAccess", "canAccessTeamManagement", "canOpenTeamWorkspace", "canReadCentralPersonnel", "canReadCentralVacations",
     "canOpenPersonnelAdministrationTab", "filialDashboardCatalog", "personnelDashboardCatalog"]
     .map(name => functionSource(name)).join("\n");
   // Unrelated catalog capabilities stay denied, so they cannot mask the gates under test.

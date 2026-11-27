@@ -4,8 +4,7 @@
 const crypto = require("node:crypto");
 const C = require("../../lib/data-import-contract");
 const H = require("../../lib/tradefoto-history-profiles");
-const { openSqliteApplicationPersistence } = require("../../lib/persistence/sqlite/provider");
-const { SQLITE_APPLICATION_CATALOG } = require("../../lib/persistence/sqlite/application-catalog");
+const { openApplicationForCurrentTest } = require("../../test-support/postgresql-api/preload");
 const { createSalesArticleCatalogRepository } = require("../../lib/persistence/repositories/sales-article-catalog");
 const { salesArticleImportContentSha256 } = require("../../lib/sales-article-catalog");
 const { loadManagedDataImportProtection } = require("../../lib/data-import-managed-protection");
@@ -18,8 +17,8 @@ const TIME = "2026-09-13T12:00:00.000Z";
 const digest = text => crypto.createHash("sha256").update(text).digest("hex");
 const raw = (name, values) => ({ ...Object.fromEntries(H.tableFor("cash", name).columns.map(c => [c.name, null])), ...values });
 
-async function seedBranchSalesData({ databasePath, vault, ownLocation = "93", otherLocation = "94", replacePreview = false }) {
-  const app = openSqliteApplicationPersistence({ databasePath, catalog: SQLITE_APPLICATION_CATALOG });
+async function seedBranchSalesData({ vault, ownLocation = "93", otherLocation = "94", replacePreview = false }) {
+  const app = openApplicationForCurrentTest();
   let protection;
   try {
     const catalog = createSalesArticleCatalogRepository(app.provider);
@@ -80,8 +79,8 @@ async function seedBranchSalesData({ databasePath, vault, ownLocation = "93", ot
   } finally { protection?.destroy(); await app.provider.close(); app.database.close(); }
 }
 
-async function enrichBranchSalesData({ databasePath, vault }) {
-  const app = openSqliteApplicationPersistence({ databasePath, catalog: SQLITE_APPLICATION_CATALOG });
+async function enrichBranchSalesData({ vault }) {
+  const app = openApplicationForCurrentTest();
   let protection;
   try {
     protection = await loadManagedDataImportProtection({ access: app.provider, vault, create: false });
