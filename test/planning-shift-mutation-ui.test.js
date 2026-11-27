@@ -32,13 +32,15 @@ function fixture(id = "") {
     api: (url, options = {}) => new Promise((resolve, reject) => calls.push({ url, options, resolve, reject })),
     showToast: (message, error = false) => toasts.push({ message, error }),
     contextQuery: () => "&location=" + state.locationId,
+    activeLocations: () => state.locations,
     syncXoffiImport() {}, settingsConfirmationReadToken: () => ({ key: "current" }), settingsSaveKey: () => "current", acknowledgeSettingsRead() {},
     render: options => renders.push({ data: state.data, options }),
     loadAll: () => { throw Error("A shift mutation must not reload unrelated application data"); },
   });
   vm.runInContext("let shiftMutation=null, shiftEditorGeneration=0, shiftRulePreviewTimer=123, shiftRulePreviewRequest=preview; let loadAllGeneration=0, planningPeriodController=null;\n"
     + ["captureGpContext", "gpContextCurrent", "captureGpEditor", "gpEditorCurrent", "shiftMutationScope", "shiftMutationCurrent",
-      "beginShiftMutation", "finishShiftMutation", "saveShift", "deleteShift", "applyLoadedSchedule", "enrichLoadedSchedule", "loadPlanningPeriod"]
+      "beginShiftMutation", "finishShiftMutation", "saveShift", "deleteShift", "applyLoadedSchedule", "enrichLoadedSchedule",
+      "locationFunctionAccess", "locationsForFunction", "planningContextQuery", "loadPlanningPeriod"]
       .map(name => functionSource(name)).join("\n"), context);
   const schedule = shifts => ({ weekStart: state.weekStart, context: { locationId: state.locationId }, settings: {}, shifts,
     totals: { E1: 450 }, enrichmentPending: true });

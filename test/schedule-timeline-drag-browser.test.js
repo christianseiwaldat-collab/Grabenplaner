@@ -9,7 +9,8 @@ const { planningShiftRevision } = require("../lib/planning-shift-precondition");
 const app = read("app.js");
 const controls = app.slice(app.indexOf("state.timelineShiftDrag = window.GPScheduleTimelineDrag"),
   app.indexOf('elements.optionList.addEventListener("click"'));
-const functions = ["renderTimeline", "canDragTimelineShifts", "readTimelineShift", "saveTimelineShift"]
+const functions = ["renderTimeline", "canDragTimelineShifts", "readTimelineShift", "saveTimelineShift",
+  "isWeekLocked", "locationFunctionAccess", "locationFunctionAllows"]
   .map(name => functionSource(name)).join("\n");
 const original = {
   id: 7, employee_number: "E1", location_id: "18", department_id: 2, duty_code: "department",
@@ -60,7 +61,7 @@ function fixtureSource() {
     const scheduleEmployeeAccessibleLabel = employee => employee.full_name;
     const xoffiImportedBadge = () => "";
     const isAutomaticallyWeekLocked = () => false;
-    const isWeekLocked = () => Boolean(state.data.manualScheduleLock?.locked);
+    const isManuallyWeekLocked = () => Boolean(state.data.manualScheduleLock?.locked);
     const globalBlockForDate = date => date === "2026-12-08" ? { reason: "Feiertag" } : null;
     const publicHolidayForDate = () => null;
     const dayConfig = () => ({ start: "09:00", end: "18:00" });
@@ -170,9 +171,16 @@ test("timeline drag resizes and moves shifts in the original employee lane", {
 
     await page.evaluate(() => { fixture.state.data.manualScheduleLock = { locked: true }; fixture.render(); });
     assert.equal(await block(page).locator("[data-shift-edge]").count(), 0);
+    await page.evaluate(() => {
+      fixture.state.data.manualScheduleLock.locked = false;
+      fixture.state.portalSession.user.locationFunctions = { scheduleWrite: ["05"], scheduleRead: ["05", "18"] };
+      fixture.render();
+    });
+    assert.equal(await block(page).getAttribute("data-shift-draggable"), null);
+    assert.equal(await block(page).locator("[data-shift-edge]").count(), 0);
 
     await page.setViewportSize({ width: 515, height: 800 });
-    await page.evaluate(() => { fixture.state.data.manualScheduleLock.locked = false; fixture.render(); });
+    await page.evaluate(() => { fixture.state.portalSession.user.locationFunctions.scheduleWrite = ["18"]; fixture.render(); });
     const scrollArea = await page.locator(".timeline-scroll").boundingBox();
     await drag(page, block(page), () => ({ x: scrollArea.x + scrollArea.width - 10 }));
     await page.waitForFunction(() => {
