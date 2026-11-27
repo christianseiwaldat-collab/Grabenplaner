@@ -40,6 +40,11 @@ if (process.platform === "linux" && process.getuid() !== 0) {
     copyModule(oldSource, oldModule); copyModule(path.join(repository, "server-tools/linux/offsite"), candidateModule);
     // This frozen bridge qualifies the historical 12 -> original 13 step.
     // Upload hardening and the rebind refresh are later explicit transitions.
+    const originalInstaller = spawnSync("git", ["-c", "safe.directory=" + repository, "-c", "core.fsmonitor=false", "show",
+      "dbe3d998f6e6a96d6078376e50125db233caaa6c:server-tools/linux/offsite/install-grabenplaner-offsite.sh"], { cwd: repository });
+    assert.ifError(originalInstaller.error);
+    assert.equal(originalInstaller.status, 0, originalInstaller.stderr.toString("utf8"));
+    fs.writeFileSync(path.join(candidateModule, "install-grabenplaner-offsite.sh"), originalInstaller.stdout);
     fs.copyFileSync(path.join(oldModule, "grabenplaner-offsite-upload.sh"), path.join(candidateModule, "grabenplaner-offsite-upload.sh"));
     fs.copyFileSync(path.join(oldModule, "grabenplaner-offsite-rebind-rclone.sh"), path.join(candidateModule, "grabenplaner-offsite-rebind-rclone.sh"));
     fs.mkdirSync(path.dirname(candidateHelper), { recursive: true, mode: 0o700 });

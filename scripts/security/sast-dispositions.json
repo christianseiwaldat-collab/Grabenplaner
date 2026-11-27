@@ -28946,18 +28946,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2799,
+        "line": 2800,
         "column": 42
       },
       "end": {
-        "line": 2802,
+        "line": 2803,
         "column": 16
       },
-      "fingerprint": "ad6c57a72b682764df4c8579ee4b31ad266d162b7ad44cb005ef5e5345c37fbe",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "a6418099b3854469a656d603ce4613cf2e7acb6ea6d85aeda5bdf026a20258e5",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -28968,10 +28968,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2522: identifier escape Lines 1938: identifier lexer Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -28981,18 +28981,18 @@
       "rule": "javascript.lang.security.audit.detect-redos",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2946,
+        "line": 2947,
         "column": 10
       },
       "end": {
-        "line": 2946,
+        "line": 2947,
         "column": 150
       },
-      "fingerprint": "2fa1f1fbac8c76a8f2c3298be165ba9781a12b213a81b6ccef6a30ed66959ee9",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "c9a794609ab4af1dd50b7f6965514ad0731ab3401fc7699cf5e14e04352c881f",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29003,10 +29003,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2668: reviewed exact recognizer Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29016,18 +29016,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2957,
+        "line": 2958,
         "column": 21
       },
       "end": {
-        "line": 2957,
+        "line": 2958,
         "column": 77
       },
-      "fingerprint": "36b9b4a7260dfd7c20bd2e1b417159043833c4a5b219aee6af571aa35f0c610c",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "9f6875a0d02f2e0b95bb72dd6296536dedbcbfab31e641bd1ffde1743b2f076c",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29038,10 +29038,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2673: opener grammar precedes constructor Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29051,18 +29051,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2975,
+        "line": 2976,
         "column": 21
       },
       "end": {
-        "line": 2975,
+        "line": 2976,
         "column": 74
       },
-      "fingerprint": "20dafaf6ab12aa48777ba21c2a91d44223213de0dd7e38c4b7962c55b0e26120",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "a8380106de5337ca6f7215410f934c289c2b3cbd4d837f4586101a292468f1ad",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29073,10 +29073,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2692: two-value quote source and escaping Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29086,18 +29086,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3095,
+        "line": 3096,
         "column": 18
       },
       "end": {
-        "line": 3095,
+        "line": 3096,
         "column": 94
       },
-      "fingerprint": "b671f3b21c22d9bd801cafe89407a0cb641d98337f41f6469cda1b08a898dcc8",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "dfddaa028694c3bbde3151560e4ca7e7aa7c0a975086900a20efc92b04e7f1ef",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29108,10 +29108,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2817: constructor Lines 4794: fixed literal invocation Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29121,18 +29121,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3108,
+        "line": 3109,
         "column": 42
       },
       "end": {
-        "line": 3108,
+        "line": 3109,
         "column": 83
       },
-      "fingerprint": "e9629dfe517aac73620c5ef7e4b475beb024b1dc280dd8d2a81fabcc7971b6bd",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "4cf9f929e82823d25d9aeeb04acf667a2b8bbaecfce66522bd3e30df8adb6ff4",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29143,10 +29143,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2830: internal regex clone Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29156,18 +29156,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3420,
+        "line": 3421,
         "column": 14
       },
       "end": {
-        "line": 3420,
+        "line": 3421,
         "column": 52
       },
-      "fingerprint": "a20509b1d80ee008d8cc1abf96ef100c54b2ee4ec652f81f37d1f801c5353f1b",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "e44584a15ef5d6c5745effc563ae0d73172458d48ad4593e93e6da87deaf50d1",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29178,10 +29178,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 3127: local tool wrapper Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29191,18 +29191,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3673,
+        "line": 3674,
         "column": 30
       },
       "end": {
-        "line": 3673,
+        "line": 3674,
         "column": 57
       },
-      "fingerprint": "3cc7ef66deda74e8ba8847ac0803752fa7827c1cd91e10e51b1c378270ac91bf",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "ac173860fcc49c3416dae4a70fafce58d5369a2092ac1429c97322adb0680d4a",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29213,10 +29213,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 3372: containment check Lines 3382: require after containment Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29226,18 +29226,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3825,
+        "line": 3826,
         "column": 14
       },
       "end": {
-        "line": 3825,
+        "line": 3826,
         "column": 52
       },
-      "fingerprint": "6ae94f070d80f821e2a6983c0e037b00d4eb4f34eb28a78b43473d665e7834ea",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "96768b1c905a459d57c9826e3c813263b09a1f6ecf2d764f006cd8f0be96288a",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29248,10 +29248,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 3516: tool scope Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29261,18 +29261,18 @@
       "rule": "javascript.lang.security.audit.unsafe-dynamic-method",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3899,
+        "line": 3900,
         "column": 14
       },
       "end": {
-        "line": 3901,
+        "line": 3902,
         "column": 9
       },
-      "fingerprint": "8a3646636ade6dd983f9aa9a73465a8b51986ca8cfd895c99d31d228ed6a357d",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "d57f944eb3ff34980da70646da41898a31e59245a4baaa4977bbad52f97c86e8",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29283,10 +29283,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 3605: fixed internal factory dispatcher Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }
@@ -29296,18 +29296,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 4605,
+        "line": 4606,
         "column": 22
       },
       "end": {
-        "line": 4605,
+        "line": 4606,
         "column": 60
       },
-      "fingerprint": "7e9968b50998a80d13a84ddf4964c828412e905bed397ba603c8649c125b4fa1",
-      "sourceSha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+      "fingerprint": "a65bbaf6ae0d63f5800cad2a6bc95d85cee8c7bb5708653d8fe4b880e16bfb8b",
+      "sourceSha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
       "sourceSha256Variants": [
-        "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-        "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+        "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+        "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -29318,10 +29318,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
+          "sha256": "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254",
           "sha256Variants": [
-            "71eb9a32b7d0692dce1a23cfe1bbb3fb7250092113e15e8f92433067607548a0",
-            "94d1e98a2f986b574e50915f1fe724cc72ce199dc396682c3851b90133a56724"
+            "6bf0cd1a3b87bab609ce9097a0d350b75ee0388e6afe98bb614a4ee55582f9ab",
+            "d5d34ae3f9a9427bde1b2d6d4493f75677975522f0d0a4c730778f577da5e254"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 4296: tool scope Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI. Article delta review 2026-10-31: Exactly two literal migration/reporting module paths are added to the existing reviewed migration-development file set. No matching expression, execution logic, SQL/compiler boundary or source access rule is widened beyond these concrete modules. Release delta review 2026-11-01: Adds only five literal import-preview catalog/statement/test paths and one synthetic Emma API test classification. The audit rules, compiler restrictions and production persistence boundary remain unchanged. Compatibility fixture review 2026-11-01: one explicit historical catalog re-export path added to the existing classification. Driver and raw-SQL permissions unchanged; production package excludes this directory. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves the sole change is one fixed migration module path in MIGRATION_DEVELOPMENT_FILES. All eleven complete finding spans, identifier grammar, escaping, execution logic and driver boundary remain byte-identical. Coordinates shift by exactly one line; final-head Linux SAST must independently confirm them. Existing authority, classification and expiry are retained. Exact seven-line receipt-inventory delta reviewed 2026-11-08; all audit executable expressions and complete sink bytes remain unchanged. Final exact one-line test-only classification reviewed 2026-11-08; no executable-expression or authority change. Technical review 2026-11-15: the complete f249 file equals the prior reviewed file plus exactly14 comment/quoted-path registration lines. All11 reported complete UTF8-byte sink spans are unchanged and shift by14 lines. New inventory names remain exact; no regexp/prefix-wide driver exception or new executable dispatch expression is introduced. Original deadlines and classifications retained. Current exact context revalidated 2026-11-17 (Codex, no human approval): The delta classifies only fixed maintenance-capability metadata paths and synthetic test contracts. It grants no database driver/provider access; thirteen inventory regressions preserve strict rejection including executable shell heredocs. 2026-11-18 technical context review: The delta classifies fixed Core absence/reservation statement names for the audit. It neither grants runtime database access nor executes source-supplied commands."
         }

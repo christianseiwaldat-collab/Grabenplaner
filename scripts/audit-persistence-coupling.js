@@ -389,6 +389,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'scripts/postgresql/create-isolated-environment.sh',
   'test-support/postgresql-migration/source-schema-v09237.json',
   'test-support/postgresql-migration/sqlite-source.js',
+  'test-support/postgresql-migration/core-seed.js',
   'test-support/postgresql-migration/core-fixture.js',
   'test-support/postgresql-migration/query-inputs.js',
   'test/postgresql-migration-inventory.test.js',
