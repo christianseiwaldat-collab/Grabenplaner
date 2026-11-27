@@ -115,6 +115,29 @@ Die Reihenfolge fuer eine spaeter ausdruecklich freigegebene Auslieferung ist:
    die urspruenglichen Timerzustaende wiederhergestellt. Der normale
    nachgelagerte Assuranceabschluss bleibt ein eigener Nachweis.
 
+## rclone-Neuanbindung im Modul 13
+
+Für den Wechsel des rclone-Rollback-Skripts gibt es im selben geschützten
+Einstieg die ausdrückliche Option `--rebind`. Sie setzt das installierte
+Offsite 13 mit abgeschlossenem Upload-Hardening voraus. Der Modulfingerabdruck
+und die alten und neuen Skriptbytes sind im Prüfhelfer fest gebunden. Für den
+Installer gelten die beiden veröffentlichten Fassungen aus dem Upload-Refresh
+und der v0.92.105-Auslieferung. Der Beleg bindet die tatsächlich installierte
+Installerdatei auch dann, wenn die neue Paketversion die andere freigegebene
+Fassung enthält.
+
+Die Schritte für Paketbindung, Vorabprüfung, Sperren und App-Update gelten
+auch mit `--rebind`. Die Prüfung der Fingerabdrücke läuft bereits vor ClamAV
+und wird unter der Wartungssperre wiederholt. Das Journal sichert das
+rclone-Skript und den zugehörigen Installationsbeleg. Die Providerbindung
+wird aus dem geprüften bisherigen Beleg übernommen.
+
+Bei einer Unterbrechung wählt `--recover` den Übergang anhand des geschützten
+Transaktionsverzeichnisses. Beim rclone-Wechsel liegt es unter
+`/opt/grabenplaner-offsite/.offsite-rebind-refresh-UUID`. Der Appmanifest-Hash
+entscheidet über die Rückkehr zum alten Skript oder die Bestätigung des neuen
+Stands.
+
 ## Fehler, Unterbrechung und Rueckkehr
 
 Die private Transaktion liegt neben dem externen Modul in
