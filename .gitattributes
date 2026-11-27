@@ -43,6 +43,8 @@ scripts/security/*.py text eol=lf
 scripts/security/requirements.in text eol=lf
 scripts/security/requirements.txt text eol=lf
 scripts/security/tools.json text eol=lf
+# Historical Gitleaks reviews bind these exact rule configuration bytes.
+scripts/security/gitleaks.toml text eol=lf
 .github/security-semgrep-core-pin.json text eol=lf
 scripts/security/fixtures/ocaml-config.3/* -text
 # Immutable upstream evidence keeps original whitespace and exact byte hashes.

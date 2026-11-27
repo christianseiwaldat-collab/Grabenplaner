@@ -1,136 +1,179 @@
 {
   "schemaVersion": 1,
   "advisoryExceptions": [],
-  "findingExceptions": [
-    {
-      "scanner": "secrets",
-      "fingerprint": "39c1843aab2d738e976cc753aa024a52c038de13151a5b8a96e74f80f222ee02",
-      "sourceSha256": "08081b7a589c46abbdfa46dea0d1f0055e8916a0129ffb423e5cbd41cd4d630c",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "3be4a7333a6952b816280d7843c53ec589c5e935:test-support/postgresql-migration/ci-stock-import-delete.js:97. This public environment marker selects the synthetic pre-passkey test fixture for a child process. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "407a40a4edef005ef35c087e05fa8445fb4a8350664be01226f639c1e2c78c4d",
-      "sourceSha256": "ccfce6c8a5b424f9200c91e94aac8cd5ab7ce1ad10ac0980c7b8d609a430e6a6",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "3be4a7333a6952b816280d7843c53ec589c5e935:test/passkeys-browser-tooling.test.js:46. This assertion names the public passkey upgrade-test fixture marker. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "9eaaed128eae7b0cd29f5e9b847f89f3dd0ac90c61ac748bd682dda882928e33",
-      "sourceSha256": "7c8f0e98b64aa7a01230d3c7001d9c0beae2098fdfff1ba1c23b587fede45b63",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "3be4a7333a6952b816280d7843c53ec589c5e935:test/passkey-application-context.test.js:93. This literal is the public CSRF cookie-name prefix. The token is constructed from a runtime value. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "3c908cdcef382bb10540473f15d48b9f5dbf4095922ed0df6ca2c4b8c06e3ec9",
-      "sourceSha256": "ad22c1f3b70bae78b9c628c7145893e0e6b3879ba496905bf8fd33a13b23e058",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "3be4a7333a6952b816280d7843c53ec589c5e935:test/passkeys-upgrade-restore-postgresql.test.js:4. This public opt-in marker selects the isolated PostgreSQL passkey upgrade test. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "dc11925892f29ddbd7fe05378f458e405757a62f4bf2910efe8d4f2654849c0c",
-      "sourceSha256": "47e10d598747b9098337ca65ea44f327581b40af6b8e2e56277853a4ac7d3f8d",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "27858f422df279ae5cb0484a33657fde637dc449:test-support/postgresql-migration/ci-stock-import-delete.js:97. This public environment marker selects the synthetic pre-passkey test fixture for a child process. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "2a3fe27c586928638a075ec2ec73274aceafad499b75e6d9dcf033903d1831d0",
-      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "1971f66e3b0bd0abc47e9988f5a54da1e3873fba:test/session-security-migration.test.js:28. This public placeholder stands for an unchanged legacy hash in an isolated session migration fixture. It is never used to authenticate. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "95d16169993b1b04189743b031756e70faedbebfe9d94c914eadb88b49b571f4",
-      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "1971f66e3b0bd0abc47e9988f5a54da1e3873fba:test/session-security-migration.test.js:81. This public placeholder stands for an unchanged legacy hash in an isolated session migration fixture. It is never used to authenticate. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "4409a8564e7cedad60fb27100ea7d3e4c93667cc643464947b795d73327743e2",
-      "sourceSha256": "7fea774726f147b59e1805a1bc4c8d5b7b6cde1d0a125cafebbfbaad0c7142b8",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "5f806efe50964a15190f1b929dcd2e6463a8e5d5:test/sales-article-sales.test.js:92. This literal is a synthetic article identity in the sales catalog fixture. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "7eb479091d503289d94e6a7c3bf79bf382853d5299b0fe5a113f26b503d2bda1",
-      "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "623e1145fefcdc87f0d922e6c784a00f6582bc3e:test/v087-database-block5-postgresql-pool-policy.test.js:246. This synthetic database URL is used to verify error redaction. The host is a reserved example name and the test does not connect to it. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "15a1dc715958ce63135a5b4e1e83cb665388a57c389bd11093c8c57e28732303",
-      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:124. This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "0d69da10cfd9784fdb4e6bb5c4a0c952bad96a1581b2ec97e5ccb3b53c5b3496",
-      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:135. This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "f6f5955119998229eed48fc461f3db22a49964d14ec07daf3e3b4c600f60b349",
-      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:136. This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    },
-    {
-      "scanner": "secrets",
-      "fingerprint": "90becb22e5eb74c76c68918a9ad7beab30ca170440528c704f7a9ba4adba6b25",
-      "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
-      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
-      "reason": "0179d7f6c424d4ae53609b71b0caff7af6c08f42:server-tools/linux/recovery/grabenplaner-recovery.sh:78. This shell span initializes an empty credential-file variable and a numeric result flag. Credential material is loaded only at runtime. The reviewed scanner rule, location and complete source bytes are bound by the fingerprint and SHA-256.",
-      "reviewedOn": "2026-11-26",
-      "expiresOn": "2026-12-10",
-      "priority": "P2"
-    }
-  ]
+  "findingExceptions": [],
+  "historicalSecretReviews": {
+    "scannerInputsSha256": "4a3028c0a89ed8c8bf3903ff8a0ab9e14820d242adea77549dd577b361554c93",
+    "findings": [
+      {
+        "commit": "3be4a7333a6952b816280d7843c53ec589c5e935",
+        "rule": "generic-api-key",
+        "path": "test-support/postgresql-migration/ci-stock-import-delete.js",
+        "line": 97,
+        "endLine": 97,
+        "startColumn": 167,
+        "endColumn": 214,
+        "sourceSha256": "08081b7a589c46abbdfa46dea0d1f0055e8916a0129ffb423e5cbd41cd4d630c",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This public environment marker selects the synthetic pre-passkey test fixture for a child process."
+      },
+      {
+        "commit": "3be4a7333a6952b816280d7843c53ec589c5e935",
+        "rule": "generic-api-key",
+        "path": "test/passkeys-browser-tooling.test.js",
+        "line": 46,
+        "endLine": 46,
+        "startColumn": 103,
+        "endColumn": 150,
+        "sourceSha256": "ccfce6c8a5b424f9200c91e94aac8cd5ab7ce1ad10ac0980c7b8d609a430e6a6",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This assertion names the public passkey upgrade-test fixture marker."
+      },
+      {
+        "commit": "3be4a7333a6952b816280d7843c53ec589c5e935",
+        "rule": "generic-api-key",
+        "path": "test/passkey-application-context.test.js",
+        "line": 93,
+        "endLine": 93,
+        "startColumn": 53,
+        "endColumn": 79,
+        "sourceSha256": "7c8f0e98b64aa7a01230d3c7001d9c0beae2098fdfff1ba1c23b587fede45b63",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This literal is the public CSRF cookie-name prefix. The token is constructed from a runtime value."
+      },
+      {
+        "commit": "3be4a7333a6952b816280d7843c53ec589c5e935",
+        "rule": "generic-api-key",
+        "path": "test/passkeys-upgrade-restore-postgresql.test.js",
+        "line": 4,
+        "endLine": 4,
+        "startColumn": 18,
+        "endColumn": 81,
+        "sourceSha256": "ad22c1f3b70bae78b9c628c7145893e0e6b3879ba496905bf8fd33a13b23e058",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This public opt-in marker selects the isolated PostgreSQL passkey upgrade test."
+      },
+      {
+        "commit": "27858f422df279ae5cb0484a33657fde637dc449",
+        "rule": "generic-api-key",
+        "path": "test-support/postgresql-migration/ci-stock-import-delete.js",
+        "line": 97,
+        "endLine": 97,
+        "startColumn": 167,
+        "endColumn": 214,
+        "sourceSha256": "47e10d598747b9098337ca65ea44f327581b40af6b8e2e56277853a4ac7d3f8d",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This public environment marker selects the synthetic pre-passkey test fixture for a child process."
+      },
+      {
+        "commit": "1971f66e3b0bd0abc47e9988f5a54da1e3873fba",
+        "rule": "generic-api-key",
+        "path": "test/session-security-migration.test.js",
+        "line": 28,
+        "endLine": 28,
+        "startColumn": 75,
+        "endColumn": 117,
+        "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This public placeholder stands for an unchanged legacy hash in an isolated session migration fixture. It is never used to authenticate."
+      },
+      {
+        "commit": "1971f66e3b0bd0abc47e9988f5a54da1e3873fba",
+        "rule": "generic-api-key",
+        "path": "test/session-security-migration.test.js",
+        "line": 81,
+        "endLine": 81,
+        "startColumn": 111,
+        "endColumn": 153,
+        "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This public placeholder stands for an unchanged legacy hash in an isolated session migration fixture. It is never used to authenticate."
+      },
+      {
+        "commit": "5f806efe50964a15190f1b929dcd2e6463a8e5d5",
+        "rule": "generic-api-key",
+        "path": "test/sales-article-sales.test.js",
+        "line": 92,
+        "endLine": 92,
+        "startColumn": 124,
+        "endColumn": 162,
+        "sourceSha256": "7fea774726f147b59e1805a1bc4c8d5b7b6cde1d0a125cafebbfbaad0c7142b8",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This literal is a synthetic article identity in the sales catalog fixture."
+      },
+      {
+        "commit": "623e1145fefcdc87f0d922e6c784a00f6582bc3e",
+        "rule": "generic-api-key",
+        "path": "test/v087-database-block5-postgresql-pool-policy.test.js",
+        "line": 246,
+        "endLine": 246,
+        "startColumn": 10,
+        "endColumn": 37,
+        "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This synthetic database URL is used to verify error redaction. The host is a reserved example name and the test does not connect to it."
+      },
+      {
+        "commit": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12",
+        "rule": "generic-api-key",
+        "path": "server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh",
+        "line": 124,
+        "endLine": 124,
+        "startColumn": 34,
+        "endColumn": 74,
+        "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal."
+      },
+      {
+        "commit": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12",
+        "rule": "generic-api-key",
+        "path": "server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh",
+        "line": 135,
+        "endLine": 135,
+        "startColumn": 61,
+        "endColumn": 101,
+        "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal."
+      },
+      {
+        "commit": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12",
+        "rule": "generic-api-key",
+        "path": "server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh",
+        "line": 136,
+        "endLine": 136,
+        "startColumn": 71,
+        "endColumn": 112,
+        "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This shell span initializes an empty rollback variable or operates on a runtime credential file. It contains no credential literal."
+      },
+      {
+        "commit": "0179d7f6c424d4ae53609b71b0caff7af6c08f42",
+        "rule": "generic-api-key",
+        "path": "server-tools/linux/recovery/grabenplaner-recovery.sh",
+        "line": 78,
+        "endLine": 79,
+        "startColumn": 2,
+        "endColumn": 20,
+        "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
+        "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+        "reviewedOn": "2026-11-26",
+        "reason": "This shell span initializes an empty credential-file variable and a numeric result flag. Credential material is loaded only at runtime."
+      }
+    ]
+  }
 }
