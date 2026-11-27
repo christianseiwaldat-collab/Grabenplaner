@@ -27,7 +27,8 @@ async function loadFor({ portalEnabled, permissions, statusFailure = false }) {
       return [];
     },
   });
-  vm.runInContext("let loadAllGeneration=0; let planningPeriodController=null;\n" + functionSource("loadAll"), context);
+  const functions = ["activeLocations", "locationFunctionAccess", "locationsForFunction", "planningContextQuery", "loadAll"];
+  vm.runInContext("let loadAllGeneration=0; let planningPeriodController=null;\n" + functions.map(name => functionSource(name)).join("\n"), context);
   await context.loadAll();
   return { calls, state };
 }

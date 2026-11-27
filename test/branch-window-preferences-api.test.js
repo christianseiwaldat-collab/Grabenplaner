@@ -20,7 +20,7 @@ async function request(route, {session,method='GET',body,csrf=true}={}) {
   return {status:response.status,data:await response.json(),headers:response.headers};
 }
 const account = name => ({loginName:name,displayName:'Synthetic branch',accountType:'branch',active:true,
-  password:'Windows-Synthetic-Test!',permissions:[],scopes:[{locationId:'93'}]});
+  password:'Windows-Synthetic-Test7!',permissions:[],scopes:[{locationId:'93'}]});
 async function login(name) {
   const result=await request('/api/portal/v1/auth/login',{method:'POST',body:{loginName:name,password:account(name).password}});
   assert.equal(result.status,200,JSON.stringify(result.data));

@@ -31,6 +31,7 @@ const {
   PHASE_5_POSTGRESQL_DRIVER_FILES,
   PHASE_5_POSTGRESQL_FILES,
   PHASE_5_POSTGRESQL_TEST_FILES,
+  PRODUCTION_INDIRECT_GROUPS,
   SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT,
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT,
   SALES_ANALYTICS_PERSISTENCE_SLICE_FILES,
@@ -470,9 +471,12 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   const sastMetadata = report.findings.filter(entry => entry.file === "scripts/security/sast-dispositions.json");
   assert.ok(sastMetadata.length > 0);
   assert.ok(sastMetadata.every(entry => entry.owner === "security-review-evidence"));
-  const secretMetadata = report.findings.filter(entry => entry.file === "scripts/security/exceptions.json");
-  assert.ok(secretMetadata.length > 0);
-  assert.ok(secretMetadata.every(entry => entry.owner === "security-review-evidence"));
+  const secretMetadataPath = "scripts/security/exceptions.json";
+  const secretMetadataGroup = PRODUCTION_INDIRECT_GROUPS.find(group => group.files.includes(secretMetadataPath));
+  assert.equal(secretMetadataGroup?.owner, "security-review-evidence");
+  assert.ok(Array.isArray(JSON.parse(read(secretMetadataPath)).findingExceptions));
+  const secretMetadata = report.findings.filter(entry => entry.file === secretMetadataPath);
+  assert.ok(secretMetadata.every(entry => entry.owner === secretMetadataGroup.owner));
   const sastContextMetadata = report.findings.filter(entry => entry.file === "lib/security-sast-context-evidence.js");
   assert.ok(sastContextMetadata.length > 0);
   assert.ok(sastContextMetadata.every(entry => entry.owner === "security-review-evidence"));

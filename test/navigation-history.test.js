@@ -155,7 +155,13 @@ function administration() {
   for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'pausePersonnelLifecycleEditor', 'pauseEmployeeProfile', 'resumeEmployeeProfile', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'syncSalesArticleSearchWindow', 'syncGpWindows', 'syncStartDashboardVps', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'loadSalesArticleCatalogDetail', 'syncCrmCustomerWorkspace', 'syncSystemUtilizationWorkspace']) ctx[name] = () => {};
   for (const name of ['loadSalesArticleTablePreferences', 'loadSalesArticleLastImport', 'loadCrmPreferences']) ctx[name] = async () => {};
   vm.createContext(ctx);
-  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'canAccessPrivacyOrganization', 'normalizePrivacyOrganizationTab', 'firstAccessiblePrivacyOrganizationTab', 'canOpenPrivacyOrganizationTab', 'activatePrivacyOrganizationView', 'normalizeTechnicalSecurityTab', 'activateTechnicalSecurityView', 'setNavigationCurrent', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
+  const functions = ['activeLocations', 'locationFunctionAccess', 'locationFunctionAllows', 'locationsForFunction',
+    'planningContextQuery', 'canOpenTeamWorkspace', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement',
+    'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea',
+    'canAccessPrivacyOrganization', 'normalizePrivacyOrganizationTab', 'firstAccessiblePrivacyOrganizationTab',
+    'canOpenPrivacyOrganizationTab', 'activatePrivacyOrganizationView', 'normalizeTechnicalSecurityTab',
+    'activateTechnicalSecurityView', 'setNavigationCurrent', 'setView', 'applyRequestedView', 'currentAdministrationRoute'];
+  vm.runInContext(functions.map(name => functionSource(appSource, name)).join('\n'), ctx);
   ctx.grabenplanerNavigation = create({ window: win, app: 'admin', keys: ['view', 'section', 'kind', 'dashboard', 'process', 'location', 'department'],
     read: ctx.currentAdministrationRoute, apply: () => ctx.applyRequestedView({ fromHistory: true }) });
   ctx.grabenplanerNavigation.start(); return { ctx, win, calls, navigation, timeoutHandles };
