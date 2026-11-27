@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { randomBytes } = require("node:crypto");
 const { inspect } = require("node:util");
 const test = require("node:test");
 
@@ -242,9 +243,12 @@ test("v0.87 DB Block 5: Policy weist Grenzverletzungen und unbekannte Felder zur
 });
 
 test("v0.87 DB Block 5: Konfigurationsfehler geben keine URL-Zugangsdaten preis", () => {
-  const username = "secret-user";
-  const password = "S3hr-Geheim-987";
-  const databaseUrl = `postgresql://${username}:${password}@db.internal.example/grabenplaner?sslmode=require`;
+  const username = "fixture-" + randomBytes(8).toString("hex");
+  const password = randomBytes(16).toString("hex");
+  const url = new URL("postgresql://db.internal.example/grabenplaner?sslmode=require");
+  url.username = username;
+  url.password = password;
+  const databaseUrl = url.href;
 
   assert.throws(
     () => createPostgresqlPoolConfiguration({ databaseUrl }),

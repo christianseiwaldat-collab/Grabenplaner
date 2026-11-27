@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "policyVersion": 1,
-  "corpusVersion": "seclists-60e43f4d-p15-v1",
+  "policyVersion": 2,
+  "corpusVersion": "seclists-60e43f4d-p8-v2",
   "sourceReviewedAt": "2026-10-18",
-  "minimumCodePoints": 15,
+  "minimumCodePoints": 8,
   "maximumCodePoints": 256,
   "maximumUtf8Bytes": 1024,
   "inputSemantics": "UTF-8 strict, Unicode code points, no trim/case/NFC; LF/CRLF source row delimiters removed",
@@ -41,13 +41,16 @@
     }
   },
   "commonSelection": {
-    "strategy": "First 3000 unique policy-compatible values in source frequency order",
-    "finalSourceRow": 790039,
+    "strategy": "First 3000 unique values per length range in source frequency order. The short range covers 8 to 14 code points with a decimal digit and punctuation or a symbol. The 15+ range retains its original selection.",
+    "finalSourceRows": {
+      "legacy": 790039,
+      "short": 1000466
+    },
     "metrics": {
       "rows": 5189454,
       "invalidUtf8Rows": 0,
-      "outsidePolicyRows": 5048421,
-      "policyCompatibleRows": 141033
+      "outsidePolicyRows": 5008958,
+      "policyCompatibleRows": 180496
     }
   },
   "breachedSelection": {
@@ -57,8 +60,8 @@
     "metrics": {
       "rows": 14344391,
       "invalidUtf8Rows": 218,
-      "outsidePolicyRows": 13943181,
-      "policyCompatibleRows": 400992
+      "outsidePolicyRows": 13549702,
+      "policyCompatibleRows": 794471
     }
   },
   "limitations": [
@@ -70,16 +73,16 @@
   "artifacts": {
     "common": {
       "file": "common-sha256.txt",
-      "count": 3000,
-      "bytes": 195000,
-      "sha256": "30c1197d30a6cf571b4080ddddeb750d894e9d3bc8a7a923dec2f741eebc8aa3",
+      "count": 6000,
+      "bytes": 390000,
+      "sha256": "ff066890b3200abbd0e49e2608d6e35b0543bcdbebd165bbe9cd228cc5391cf5",
       "format": "sha256-hex-lines"
     },
     "breached": {
       "file": "breached-sha256.bin",
-      "count": 400992,
-      "bytes": 12831744,
-      "sha256": "e26c1eba937998cdef2b50f8636a238a25bdce8e42488dbfd471d7b51728e217",
+      "count": 794471,
+      "bytes": 25423072,
+      "sha256": "f2f09365b106a3bc1d794eddf46ceba57e0475e34c91eaafc9853bc4c82c337f",
       "format": "sha256-binary-sorted"
     }
   }

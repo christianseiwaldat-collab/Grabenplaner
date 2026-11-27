@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import tarfile
+import unicodedata
 import urllib.request
 
 COMMIT = '60e43f4d2b0251330ff18ea4fa76aabec0515dcb'
@@ -25,6 +26,9 @@ SOURCES = {
     'breachedReadme': ('Passwords/Leaked-Databases/README.md', 588,
                        'fed6fdd445f13340db1919401cce54c3beb1f09ed2ed1392d4ea46a7d7d7df1b'),
 }
+MINIMUM_CODE_POINTS = 8
+LEGACY_MINIMUM_CODE_POINTS = 15
+COMMON_LIMIT_PER_RANGE = 3000
 
 
 def digest_file(file):
@@ -67,11 +71,16 @@ def candidates(stream, metrics):
         except UnicodeDecodeError:
             metrics['invalidUtf8Rows'] += 1
             continue
-        if len(raw) > 1024 or not 15 <= len(value) <= 256:
+        if len(raw) > 1024 or not MINIMUM_CODE_POINTS <= len(value) <= 256:
             metrics['outsidePolicyRows'] += 1
             continue
+        if len(value) < LEGACY_MINIMUM_CODE_POINTS:
+            categories = {unicodedata.category(character) for character in value}
+            if 'Nd' not in categories or not any(category[0] in 'PS' for category in categories):
+                metrics['outsidePolicyRows'] += 1
+                continue
         metrics['policyCompatibleRows'] += 1
-        yield raw
+        yield raw, len(value)
 
 
 def metric():
@@ -88,23 +97,26 @@ def build(cache, destination, download=False):
     cache.mkdir(parents=True, exist_ok=True)
     inputs = {key: source_file(cache, spec, download) for key, spec in SOURCES.items()}
     common_metrics, breach_metrics = metric(), metric()
-    common, common_end_rank = set(), None
+    common_by_length = {'short': set(), 'legacy': set()}
+    common_end_ranks = {}
     with inputs['common'].open('rb') as source:
-        for raw in candidates(source, common_metrics):
-            digest = hashlib.sha256(raw).hexdigest()
-            if len(common) < 3000:
-                common.add(digest)
-                if len(common) == 3000:
-                    common_end_rank = common_metrics['rows']
-    if len(common) != 3000:
+        for raw, length in candidates(source, common_metrics):
+            key = 'short' if length < LEGACY_MINIMUM_CODE_POINTS else 'legacy'
+            bucket = common_by_length[key]
+            if len(bucket) < COMMON_LIMIT_PER_RANGE:
+                bucket.add(hashlib.sha256(raw).hexdigest())
+                if len(bucket) == COMMON_LIMIT_PER_RANGE:
+                    common_end_ranks[key] = common_metrics['rows']
+    if len(common_end_ranks) != len(common_by_length):
         raise ValueError('Not enough policy-compatible common passwords')
+    common = set.union(*common_by_length.values())
     breach = set()
     with tarfile.open(inputs['breached'], 'r:gz') as archive:
         members = archive.getmembers()
         if len(members) != 1 or members[0].name != 'rockyou.txt' or not members[0].isfile() or members[0].size != 139921497:
             raise ValueError('Unexpected archive structure or inflated size')
         with archive.extractfile(members[0]) as source:
-            for raw in candidates(source, breach_metrics):
+            for raw, _ in candidates(source, breach_metrics):
                 breach.add(hashlib.sha256(raw).digest())
     if len(breach) < 3000 or len(breach) * 32 > 32 * 1024 * 1024:
         raise ValueError('Unexpected policy-compatible breach corpus size')
@@ -116,13 +128,13 @@ def build(cache, destination, download=False):
         artifacts[key] = dict(file=file, count=count, bytes=len(data), sha256=hashlib.sha256(data).hexdigest(),
                               format='sha256-hex-lines' if key == 'common' else 'sha256-binary-sorted')
     manifest = dict(
-        schemaVersion=1, policyVersion=1, corpusVersion='seclists-60e43f4d-p15-v1', sourceReviewedAt='2026-10-18',
-        minimumCodePoints=15, maximumCodePoints=256, maximumUtf8Bytes=1024,
+        schemaVersion=1, policyVersion=2, corpusVersion='seclists-60e43f4d-p8-v2', sourceReviewedAt='2026-10-18',
+        minimumCodePoints=MINIMUM_CODE_POINTS, maximumCodePoints=256, maximumUtf8Bytes=1024,
         inputSemantics='UTF-8 strict, Unicode code points, no trim/case/NFC; LF/CRLF source row delimiters removed',
         sourceCommit=COMMIT,
         sources={key: dict(path=spec[0], url=BASE + spec[0], bytes=spec[1], sha256=spec[2]) for key, spec in SOURCES.items()},
-        commonSelection=dict(strategy='First 3000 unique policy-compatible values in source frequency order',
-                             finalSourceRow=common_end_rank, metrics=common_metrics),
+        commonSelection=dict(strategy='First 3000 unique values per length range in source frequency order. The short range covers 8 to 14 code points with a decimal digit and punctuation or a symbol. The 15+ range retains its original selection.',
+                             finalSourceRows=common_end_ranks, metrics=common_metrics),
         breachedSelection=dict(strategy='All distinct policy-compatible UTF-8 rows from the pinned RockYou archive',
                                archiveMember='rockyou.txt', archiveMemberBytes=139921497, metrics=breach_metrics),
         limitations=[

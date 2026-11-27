@@ -40,3 +40,8 @@ jobs:
         run: bash -n server-tools/linux/test-grabenplaner-server.sh
       - name: Verify the real kernel maintenance lease without rotating earlier backup points
         run: sudo "$(command -v node)" --no-global-search-paths --test test/postgresql-backup-preserve-shell.test.js
+      - name: Verify Offsite 13 rebind and rollback on Linux
+        run: >-
+          sudo "$(command -v node)" --no-global-search-paths --test --test-concurrency=1
+          test/offsite-postgresql-only-compat.test.js
+          test/offsite-upload-hardening-transition.test.js

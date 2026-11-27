@@ -13,7 +13,8 @@ const glob = utils("glob");
 const {checkGlobCompatibilityPolicy} = require("../scripts/security/verify-patch.cjs");
 const registered = require("../scripts/security/patch-policy.json");
 function policyFixture() {
-  const policy = registered.compatibilityPatches[0], policies = [registered,...registered.securityBackports,...registered.compatibilityPatches];
+  const policy = { ...registered.compatibilityPatches[0], reviewedOn: "2026-10-31", expiresOn: "2026-11-30" };
+  const policies = [registered,...registered.securityBackports,policy];
   return {policy, context:{patchHash:policy.patchSha256,packageJsonHash:policy.packageJsonSha256,licenseHash:policy.licenseSha256,
     treeHash:policy.installedTreeSha256,fileCount:policy.installedFileCount,regressionHash:policy.regressionTestSha256,
     installedHashes:Object.fromEntries(Object.entries(policy.installedFiles).map(([file,hashes]) => [file,hashes.afterSha256])),

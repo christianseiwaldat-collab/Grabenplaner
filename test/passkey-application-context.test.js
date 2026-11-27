@@ -1,6 +1,7 @@
 "use strict";
 const test = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
 const P = require("../lib/passkey-protocol");
+const { POLICY_VERSION, acceptsVerifiedPolicyVersion } = require("../lib/portal-password-policy");
 const crypto = require("node:crypto");
 const source = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
 const fragment = source.slice(source.indexOf("function assertPasskeyAccount("), source.indexOf("async function rotatePasskeySession("));
@@ -8,7 +9,7 @@ function fixture() {
   const state = { session: { id: "synthetic-session", sessionKind: "employee", employeeNumber: "EX-USER", permissions: [], scopes: [{ locationId: "EX-11" }], role: "employee" },
     actor: { active: true, employee_active: true, employee_number: "EX-USER", password_hash: "synthetic-current-hash", password_policy_version: 1 },
     account: { id: "synthetic-target", login_name: "EX-BRANCH", account_type: "branch", locationIds: ["EX-11"] } };
-  const sandbox = { Date, passkeyProtocol: P, PORTAL_PASSWORD_POLICY_VERSION: 1,
+  const sandbox = { Date, passkeyProtocol: P, PORTAL_PASSWORD_POLICY_VERSION: POLICY_VERSION, acceptsVerifiedPolicyVersion,
     RIGHTS_ADMIN_PORTAL_ROLES: new Set(["admin"]), BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION: "organization_accounts:password:manage",
     isReservedEmployeePrincipal: id => id === "system", httpError: (status, message, code) => Object.assign(Error(message), { status, code }),
     loadPortalSessionFromRequest: async () => structuredClone(state.session), sessionHasGlobalScope: session => session.role === "admin",
@@ -90,7 +91,11 @@ function passwordResponseFixture({ transactionFailure = false, readFailure = fal
     },
     issuePortalSessionCookies(_request, _response, token, absoluteExpiresAt) {
       assert(state.committed); assert.equal(absoluteExpiresAt, lifetime.absoluteExpiresAt);
-      state.cookies.push("grabenplaner_session=" + token, "grabenplaner_csrf=" + context.portalCsrfToken(token)); state.events.push("cookies");
+      state.cookies.push(
+        `${context.PORTAL_SESSION_COOKIE}=${token}`,
+        `${context.PORTAL_CSRF_COOKIE}=${context.portalCsrfToken(token)}`,
+      );
+      state.events.push("cookies");
     }, publicPortalUser: value => value,
   };
   vm.runInNewContext(source.slice(passwordRouteStart, passwordRouteEnd), context);

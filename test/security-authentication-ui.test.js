@@ -33,9 +33,11 @@ test("GP password forms separate existing credentials from the codepoint policy,
 test("new-password validation counts codepoints, preserves raw input and never truncates a long password", () => {
   const context = vm.createContext({}); vm.runInContext(read("password-policy.js"), context);
   const policy = context.GrabenplanerPasswordPolicy;
-  assert.match(policy.errorFor("x".repeat(14)), /mindestens 15/);
-  assert.match(policy.errorFor("😀".repeat(14)), /mindestens 15/);
-  for (const value of ["x".repeat(15), "😀".repeat(15), "😀".repeat(256), " ".repeat(15), "a\u0308".repeat(8)]) assert.equal(policy.errorFor(value), "");
+  assert.match(policy.errorFor("x".repeat(7)), /mindestens 8/);
+  assert.match(policy.errorFor("😀".repeat(7)), /mindestens 8/);
+  assert.match(policy.errorFor("x".repeat(8) + "!"), /Ziffer/);
+  assert.match(policy.errorFor("x".repeat(8) + "5"), /Sonderzeichen/);
+  for (const value of ["x".repeat(6) + "5!", "😀".repeat(7) + "5", "😀".repeat(255) + "𝟛", "a\u0308".repeat(3) + "8?"]) assert.equal(policy.errorFor(value), "");
   assert.match(policy.errorFor("😀".repeat(257)), /höchstens 256/);
   assert.match(policy.errorFor("\ud800" + "x".repeat(15)), /Unicode/);
   policy.configure({ passwordPolicy: { minCodePoints: 18, maxCodePoints: 80 } });
@@ -229,18 +231,18 @@ test("real browser: old credentials, Unicode form validity, optional reset field
       await page.evaluate(() => {
         window.submitted = []; window.invalidations = 0;
         for (const form of document.forms) form.addEventListener("submit", event => { event.preventDefault(); submitted.push(form.id); });
-        GrabenplanerPasswordPolicy.configure({ passwordMinLength: 15, passwordPolicy: { minCodePoints: 15, maxCodePoints: 256 } });
+        GrabenplanerPasswordPolicy.configure({ passwordMinLength: 8, passwordPolicy: { minCodePoints: 8, maxCodePoints: 256 } });
         GrabenplanerSessionLifecycle.listen(() => { invalidations++; });
       });
     }
     const page = pages[0];
     await page.locator("#loginPassword").fill("old-six"); await page.locator("#currentPassword").fill("old-six");
     await page.locator("#legacy button").click(); assert.deepEqual(await page.evaluate(() => submitted), ["legacy"]);
-    await page.locator("#newPassword").fill("😀".repeat(14)); await page.locator("#new button").click();
+    await page.locator("#newPassword").fill("😀".repeat(6) + "5"); await page.locator("#new button").click();
     assert.equal(await page.locator("#newPassword").evaluate(node => node.validity.customError), true);
-    await page.locator("#newPassword").fill("😀".repeat(15)); await page.locator("#new button").click();
+    await page.locator("#newPassword").fill("😀".repeat(7) + "5"); await page.locator("#new button").click();
     assert.deepEqual(await page.evaluate(() => submitted), ["legacy", "new"]);
-    await page.locator("#newPassword").fill("😀".repeat(256));
+    await page.locator("#newPassword").fill("😀".repeat(255) + "𝟛");
     assert.equal(Array.from(await page.locator("#newPassword").inputValue()).length, 256);
     assert.equal(await page.locator("#newPassword").evaluate(node => node.checkValidity()), true);
     await page.locator("#newPassword").fill("😀".repeat(257)); assert.equal(await page.locator("#newPassword").evaluate(node => node.checkValidity()), false);

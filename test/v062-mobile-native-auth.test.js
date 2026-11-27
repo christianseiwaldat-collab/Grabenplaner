@@ -34,8 +34,8 @@ const { app, db, hashPortalPassword, releaseInstanceLockForTests } = require("..
 const employeeNumber = "970";
 const otherEmployeeNumber = "971";
 const mustChangeEmployeeNumber = "972";
-const password = "SicheresMobilPasswort!";
-const mustChangePassword = "MobilesStartpasswort!";
+const password = "SicheresMobilPasswort!23";
+const mustChangePassword = "MobilesStartpasswort!24";
 const minimumMobileVersion = "0.3.0-alpha.1";
 let baseUrl;
 let httpServer;
@@ -448,7 +448,7 @@ test("v0.62: Startpasswort erlaubt Bootstrap und wird mit sicherer Sitzungsrotat
   const changed = await request("/api/mobile/v1/me/password", {
     method: "POST",
     accessToken: primary.payload.tokenSet.accessToken,
-    body: { currentPassword: mustChangePassword, newPassword: "NeuesMobilesPasswort!" },
+    body: { currentPassword: mustChangePassword, newPassword: "NeuesMobilesPasswort!25" },
   });
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   assert.equal(changed.payload.ok, true);
@@ -497,7 +497,7 @@ test("v0.62: Installation-Feature sperrt mobile Zeiterfassung und Passwortwechse
     method: "PUT",
     cookie,
     csrf,
-    body: { currentPassword: password, newPassword: "NochSichererMobilPass!" },
+    body: { currentPassword: password, newPassword: "NochSichererMobilPass!26" },
   });
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   const revoked = await request("/api/mobile/v1/bootstrap", { accessToken });
@@ -506,7 +506,7 @@ test("v0.62: Installation-Feature sperrt mobile Zeiterfassung und Passwortwechse
 
 test("P2: mobile access and refresh enforce the fixed end, including invalid original timestamps", async () => {
   // The preceding browser change intentionally replaced this shared fixture password.
-  const loginPassword = "NochSichererMobilPass!";
+  const loginPassword = "NochSichererMobilPass!26";
   const device = mobileDevice(`boundary-${crypto.randomUUID()}`);
   const loggedIn = await request("/api/mobile/v1/auth/login", {
     method: "POST", body: { employeeNumber, password: loginPassword, device },
@@ -539,7 +539,7 @@ test("P2: privileged mobile sessions have an eight-hour end and reject thirty mi
   db.prepare("UPDATE portal_users SET role='admin' WHERE employee_number=?").run(employeeNumber);
   try {
     const started = Date.now();
-    const loggedIn = await mobileLoginFor(employeeNumber, "NochSichererMobilPass!");
+    const loggedIn = await mobileLoginFor(employeeNumber, "NochSichererMobilPass!26");
     assert.equal(loggedIn.response.status, 201, JSON.stringify(loggedIn.payload));
     const tokens = loggedIn.payload.tokenSet, id = tokens.accessToken.split(".")[1];
     const duration = Date.parse(tokens.refreshTokenExpiresAt) - started;
@@ -554,7 +554,7 @@ test("P2: privileged mobile sessions have an eight-hour end and reject thirty mi
 });
 
 test("P2: a mobile password change preserves its fixed end, replaces tokens and revokes a second device", async () => {
-  const number = "979", initialPassword = "Synthetic mobile migration phrase", nextPassword = "Synthetic changed mobile phrase";
+  const number = "979", initialPassword = "Synthetic mobile migration phrase 7!", nextPassword = "Synthetic changed mobile phrase 8!";
   db.prepare("INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES(?,?,?,'#287a67',38.5,?,1)")
     .run(number, "Synthetic mobile", "Synthetic", locationId);
   db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password) VALUES(?,?,'employee',1,0)")

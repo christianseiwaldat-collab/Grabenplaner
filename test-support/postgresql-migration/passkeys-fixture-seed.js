@@ -3,7 +3,8 @@
 // Reuse the already qualified Core fixture's complete organizational seed.
 // Its SQL is collected as parameterized PostgreSQL commands; no SQLite database
 // is opened and no application integrity trigger is replaced or disabled.
-const { seedCoreFixture } = require("./sqlite-source");
+const { seedCoreFixture } = require("./core-seed");
+const UPGRADE_FIXTURE_ID = "before-passkeys-v1";
 const employee = (personnelNumber, fullName = "Synthetic upgrade actor") => ({
   sql: "INSERT INTO gp.employees(personnel_number,full_name,nickname,home_location_id,preferred_department_id,position_id,cost_center_id,active) VALUES($1,$2,'Synthetic','18',1,'verkaufsmitarbeiter','cc18',1)",
   values: [personnelNumber, fullName],
@@ -28,4 +29,4 @@ function seed({ principal, organizationId, passwordHash }) {
     { sql: "INSERT INTO gp.portal_organization_account_permissions(account_id,permission) VALUES($1,'schedule:location:view')", values: [organizationId] },
   ];
 }
-module.exports = { seed, employee };
+module.exports = { seed, employee, UPGRADE_FIXTURE_ID };

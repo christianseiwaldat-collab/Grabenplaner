@@ -7,7 +7,11 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
-from gates import Gate, validate_exceptions, remaining_findings, check_sast_result, check_sca_result, lock_packages, registry_vulnerability_count
+from gates import (
+    Gate, check_sast_result, check_sca_result, gitleaks_inputs_sha256, lock_packages,
+    registry_vulnerability_count, remaining_findings, review_historical_secrets,
+    validate_exceptions, validate_historical_secret_reviews,
+)
 from install_tools import verified_download
 
 
@@ -40,6 +44,68 @@ class GateContractTests(unittest.TestCase):
         for key in ('owner','reason'):
             p=self.policy();p['findingExceptions'][0][key]=''
             with self.assertRaises(ValueError):validate_exceptions(p,dt.date(2026,10,18))
+
+    def historical_review_policy(self):
+        row = {
+            'commit': 'a' * 40, 'rule': 'generic-api-key', 'path': 'test/fixture.js',
+            'line': 2, 'endLine': 2, 'startColumn': 3, 'endColumn': 12,
+            'sourceSha256': 'b' * 64, 'reviewedOn': '2026-11-26',
+            'owner': 'maintainer', 'reason': 'Reviewed public test marker in source.',
+        }
+        return {'scannerInputsSha256': 'c' * 64, 'findings': [row]}
+
+    def test_only_exact_history_finding_is_classified_after_the_previous_expiry(self):
+        policy = self.historical_review_policy()
+        reviews = validate_historical_secret_reviews(policy, 'c' * 64, dt.date(2100, 1, 1))
+        row = policy['findings'][0]
+        found = {**row, 'mode': 'git'}
+        other_findings = [
+            {**found, 'mode': 'dir'},
+            {**found, 'commit': 'd' * 40},
+            {**found, 'rule': 'different-rule'},
+            {**found, 'path': 'test/another-file.js'},
+            {**found, 'line': 3, 'endLine': 3},
+            {**found, 'endColumn': 13},
+            {**found, 'sourceSha256': 'e' * 64},
+        ]
+        reviewed, blocking = review_historical_secrets([*other_findings, found], reviews)
+        self.assertEqual(reviewed, [found])
+        self.assertEqual(remaining_findings('secrets', blocking, []), other_findings)
+        with self.assertRaisesRegex(ValueError, 'does not match a finding'):
+            review_historical_secrets(other_findings, reviews)
+
+    def test_history_review_rejects_rule_configuration_drift_and_malformed_entries(self):
+        policy = self.historical_review_policy()
+        today = dt.date(2026, 11, 27)
+        with self.assertRaisesRegex(ValueError, 'reviewed scanner'):
+            validate_historical_secret_reviews(policy, 'd' * 64, today)
+        row = policy['findings'][0]
+        for entries in (
+            [{**row, 'path': 'test/**'}],
+            [{**row, 'commit': 'HEAD'}],
+            [{**row, 'startColumn': True}],
+            [{**row, 'owner': ''}],
+            [row, row],
+        ):
+            with self.subTest(entries=entries), self.assertRaises(ValueError):
+                validate_historical_secret_reviews({**policy, 'findings': entries}, 'c' * 64, today)
+
+    def test_checked_in_history_reviews_bind_the_pinned_gitleaks_inputs(self):
+        directory = Path(__file__).parent
+        policy = json.loads((directory/'exceptions.json').read_text(encoding='utf-8'))
+        tool = json.loads((directory/'tools.json').read_text(encoding='utf-8'))['tools']['gitleaks']
+        inputs_sha256 = gitleaks_inputs_sha256(tool, directory/'gitleaks.toml')
+        history = policy['historicalSecretReviews']
+        reviews = validate_historical_secret_reviews(history, inputs_sha256, dt.date(2100, 1, 1))
+        self.assertEqual(len(reviews), len(history['findings']))
+        temporary = {
+            (entry['fingerprint'], entry['sourceSha256']) for entry in policy['findingExceptions']
+            if entry['scanner'] == 'secrets'
+        }
+        for row in reviews.values():
+            identity = ['git', row['rule'], row['path'], row['line'], row['endLine'], row['commit']]
+            fingerprint = hashlib.sha256(json.dumps(identity, separators=(',', ':')).encode()).hexdigest()
+            self.assertNotIn((fingerprint, row['sourceSha256']), temporary)
 
     def test_sast_requires_complete_server_coverage(self):
         with tempfile.TemporaryDirectory() as directory:

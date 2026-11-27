@@ -1,6 +1,12 @@
 # Versionsstatus
 
-## v0.92.105 Beta · Quellstand
+## v0.92.106 Beta · Quellstand
+
+Dienstplan, Urlaubsplanung, Filialbestellungen und Standortpflege können je Filiale freigegeben werden. Branding und mobile Standortübersicht nutzen die verfügbare Breite.
+
+Neue Passwörter benötigen mindestens acht Zeichen, eine Ziffer und ein Sonderzeichen. Die Prüfung gegen häufige und kompromittierte Passwörter berücksichtigt auch kürzere Kennwörter.
+
+Enthält den bisherigen Quellstand v0.92.105 Beta.
 
 Kassenbelege verlinken die Gerätehistorie. Abgeschlossene Datenbankimporte bieten Berichte als HTML, Markdown und PDF.
 Der filialbezogene Artikelbericht prüft die Artikelzuordnung zum Berichtszeitraum.

@@ -150,7 +150,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(status.operationMode, "server");
     assert.equal(status.httpsRequired, true);
     assert.equal(status.publicUrl, publicAddress);
-    assert.equal(status.passwordMinLength, 15);
+    assert.equal(status.passwordMinLength, 8);
     assert.equal(status.usbProvisioning.available, false);
     assert.equal(status.usbProvisioning.reasonCode, "POSTGRESQL_SERVER_ONLY");
 
@@ -240,7 +240,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
       body: JSON.stringify({ role: "employee", active: true, password: "123456" }),
     });
     assert.equal(shortPasswordResponse.status, 400);
-    const employeePassword = "MitarbeiterPasswort!";
+    const employeePassword = "kT8!zN5&";
     const employeeAccessResponse = await fetch(`${url}/api/portal/v1/users/102`, {
       method: "PUT", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
       body: JSON.stringify({ role: "employee", active: true, password: employeePassword, mustChangePassword: false }),
@@ -278,7 +278,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal((await deniedEmployeeUsbStatus.json()).code, "PORTAL_PERMISSION_DENIED");
     const employeePasswordChange = await fetch(`${url}/api/portal/v1/me/password`, {
       method: "PUT", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: employeeCookie, "X-CSRF-Token": employeeCsrf },
-      body: JSON.stringify({ currentPassword: employeePassword, newPassword: "MitarbeiterPasswortNeu!" }),
+      body: JSON.stringify({ currentPassword: employeePassword, newPassword: "qV7^pR3&" }),
     });
     assert.equal(employeePasswordChange.status, 200, await employeePasswordChange.clone().text());
     const rotatedEmployeeCookies = employeePasswordChange.headers.getSetCookie();

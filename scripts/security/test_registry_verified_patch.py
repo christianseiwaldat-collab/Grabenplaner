@@ -10,6 +10,7 @@ from gates import registry_audit_findings, verified_registry_patch_remediations
 class RegistryBackportTests(unittest.TestCase):
     def fixture(self):
         policy=json.loads((Path(__file__).parent/'patch-policy.json').read_text())['securityBackports'][0]
+        policy.update(reviewedOn='2026-10-24',expiresOn='2026-11-23')
         record={name:policy[name] for name in ('advisory','package','version','patchSha256','originalTarballIntegrity',
                 'originalTarballSha256','upstreamCommit','installedTreeSha256','expiresOn')}
         record.update(status='remediated_by_verified_patch',regressionTestSha256=policy['regressionTestSha256'],

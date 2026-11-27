@@ -3,6 +3,7 @@ const test = require("node:test"), assert = require("node:assert/strict"), crypt
 const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const { exactFile, targetPath } = require("../test-support/passkeys-browser/prepare.cjs");
+const { UPGRADE_FIXTURE_ID } = require("../test-support/postgresql-migration/passkeys-fixture-seed");
 const root = path.resolve(__dirname, ".."), pin = require("../test-support/passkeys-browser/browser-lock.json");
 test("Passkey browser artifacts reject changed bytes and indirect paths", t => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-browser-tool-")); t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
@@ -42,8 +43,10 @@ test("CI permanently requires old-schema restore, native FIDO and the unchanged 
   assert.match(workflow, /arguments\+=\(--passkeys-browser\)/); assert.match(workflow, /node test-support\/passkeys-browser\/write-ci-environment\.cjs/);
   const runner = fs.readFileSync(path.join(root, "test-support/postgresql-migration/ci-stock-import-delete.js"), "utf8");
   assert.match(runner, /delete env\.GP_WINDOW_BROWSER_TEST/); assert.match(runner, /delete env\.GP_PASSKEYS_UPGRADE_FIXTURE/);
-  assert.match(runner, /delete env\.GP_SECURITY_AUTH_BROWSER_TEST/); assert.match(runner, /GP_SECURITY_AUTH_BROWSER_TEST:'1'/);
-  assert.match(runner, /test\/passkeys-upgrade-restore-postgresql\.test\.js/); assert.match(runner, /GP_PASSKEYS_UPGRADE_FIXTURE:'before-passkeys-v1'/);
+  assert.match(runner, /delete env\.GP_SECURITY_AUTH_BROWSER_TEST/); assert.match(runner, /GP_SECURITY_AUTH_BROWSER_TEST:\s*'1'/);
+  assert.match(runner, /test\/passkeys-upgrade-restore-postgresql\.test\.js/);
+  assert.match(runner, /GP_PASSKEYS_UPGRADE_FIXTURE:\s*UPGRADE_FIXTURE_ID\b/);
+  assert.equal(UPGRADE_FIXTURE_ID, "before-passkeys-v1");
   assert.match(runner, /const upgradeCommand=\[.*'--test-timeout=420000'/);
   assert.match(workflow, /test\/passkey-key-policy\.test\.js/);
   for (const file of ["passkey-protocol-browser", "passkeys-management-browser", "passkey-auth-browser", "passkey-application-api", "security-reauthentication-ui"]) assert(runner.includes(`test/${file}.test.js`));
@@ -59,7 +62,7 @@ test("CI runs the note editor browser cases once with pinned tools and keeps the
   const step = workflow.slice(start, end);
   assert.match(step, /if: matrix\.shard == '1\/3'/);
   assert.match(step, /env:\r?\n          GP_SECURITY_BROWSER_TEST: '1'/);
-  assert.match(step, /node --no-global-search-paths --test --test-concurrency=1/);
+  assert.match(step, /node --no-experimental-sqlite --no-global-search-paths --test --test-concurrency=1/);
   assert.match(step, /--test-reporter=tap --test-timeout=120000/);
   assert.match(step, /test\/security-schedule-note-browser\.test\.js/);
   assert.equal((workflow.match(/GP_SECURITY_BROWSER_TEST/g) || []).length, 1);

@@ -1,6 +1,7 @@
 'use strict';
 // Fresh GitHub Actions service container only; never connects to a product DB.
 const crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process'),{Client}=require('pg');
+const { UPGRADE_FIXTURE_ID } = require('./passkeys-fixture-seed');
 async function main(){
  const shard=require('./application-test-shard.cjs').applicationTestShard(process.argv.slice(2));
  const diagnosticIndex=process.argv.indexOf('--diagnostic-api');
@@ -94,7 +95,13 @@ async function main(){
  ...(diagnosticGroup?[['--require','./test-support/postgresql-api/diagnostic-errors.js','--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...diagnosticGroups[diagnosticGroup]]]:process.argv.includes('--bootstrap-only')?[]:process.argv.includes('--full')
    ? [['--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...(shard?['--test-shard='+shard]:[])]]
    : [['--test','--test-concurrency=1','test/postgresql-cash-takeover.test.js']])];
- for(const args of commands){const childEnv=args===browserCommand?{...env,GP_WINDOW_BROWSER_TEST:'1',GP_SECURITY_AUTH_BROWSER_TEST:'1'}:args===upgradeCommand?{...env,GP_PASSKEYS_UPGRADE_FIXTURE:'before-passkeys-v1',GP_PASSKEYS_COMPATIBILITY_NATIVE:compatibilityOptIn}:env;const result=spawnSync(process.execPath,args,{env:childEnv,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}
+ for (const args of commands) {
+  const childEnv = args === browserCommand ? { ...env, GP_WINDOW_BROWSER_TEST: '1', GP_SECURITY_AUTH_BROWSER_TEST: '1' }
+   : args === upgradeCommand ? { ...env, GP_PASSKEYS_UPGRADE_FIXTURE: UPGRADE_FIXTURE_ID, GP_PASSKEYS_COMPATIBILITY_NATIVE: compatibilityOptIn }
+   : env;
+  const result = spawnSync(process.execPath, args, { env: childEnv, stdio: 'inherit' });
+  if (result.status !== 0) throw new Error('Synthetic migration qualification failed: ' + args[0]);
+ }
  const outputIndex=process.argv.indexOf('--environment-file');
  if(outputIndex!==-1){
   if(!local||!process.argv.includes('--bootstrap-only'))throw new Error('Fixture environment export is local-bootstrap-only');

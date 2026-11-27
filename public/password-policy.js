@@ -1,7 +1,8 @@
 (function (root) {
   "use strict";
   const selector = "input[data-gp-new-password]";
-  let minimum = 15, maximum = 256;
+  const defaultMinimum = 8;
+  let minimum = defaultMinimum, maximum = 256;
 
   function errorFor(value) {
     if (!value) return ""; // Required/optional belongs to the individual form.
@@ -12,6 +13,8 @@
     const length = characters.length;
     if (length < minimum) return `Das neue Passwort muss mindestens ${minimum} Zeichen lang sein.`;
     if (length > maximum) return `Das neue Passwort darf höchstens ${maximum} Zeichen lang sein.`;
+    if (!/\p{Nd}/u.test(value)) return "Das neue Passwort muss mindestens eine Ziffer enthalten.";
+    if (!/[\p{P}\p{S}]/u.test(value)) return "Das neue Passwort muss mindestens ein Sonderzeichen enthalten.";
     return "";
   }
 
@@ -28,7 +31,7 @@
     const policy = status.passwordPolicy || status;
     const min = Number(policy.minCodePoints ?? policy.minLength ?? status.passwordMinLength);
     const max = Number(policy.maxCodePoints ?? policy.maxLength);
-    minimum = Number.isSafeInteger(min) && min >= 15 && min <= 256 ? min : 15;
+    minimum = Number.isSafeInteger(min) && min >= defaultMinimum && min <= 256 ? min : defaultMinimum;
     maximum = Number.isSafeInteger(max) && max >= minimum && max <= 256 ? max : 256;
     root.document?.querySelectorAll(selector).forEach(input => validate(input));
   }

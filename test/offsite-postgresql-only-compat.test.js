@@ -1,6 +1,6 @@
 "use strict";
 const test = require("node:test"), assert = require("node:assert/strict");
-const fs = require("node:fs"), path = require("node:path"), os = require("node:os"), crypto = require("node:crypto");
+const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const repository = path.resolve(__dirname, ".."), helperRelative = "server-tools/linux/lib/offsite-postgresql-only-compat.js";
 
@@ -39,15 +39,9 @@ if (process.platform === "linux" && process.getuid() !== 0) {
     assert.ok(oldSource.includes("gp-historical-baseline-"), "only the explicitly extracted synthetic baseline may be read");
     copyModule(oldSource, oldModule); copyModule(path.join(repository, "server-tools/linux/offsite"), candidateModule);
     // This frozen bridge qualifies the historical 12 -> original 13 step.
-    // The newer upload is a separate explicit original13 -> refreshed13 transition.
+    // Upload hardening and the rebind refresh are later explicit transitions.
     fs.copyFileSync(path.join(oldModule, "grabenplaner-offsite-upload.sh"), path.join(candidateModule, "grabenplaner-offsite-upload.sh"));
-    // Keep the authentic original13 installer too; current installer-only
-    // capabilities belong to a later transition and must not alter this bridge.
-    const originalInstaller = fs.readFileSync(path.join(__dirname, "fixtures/offsite-module13-installer.fixture"));
-    assert.equal(crypto.createHash("sha256").update(originalInstaller).digest("hex"),
-      "cd7bc215f517d5781287796b9ea8cf66906569d0a498c831439f5ced25a5ae0e");
-    const installer = path.join(candidateModule, "install-grabenplaner-offsite.sh");
-    fs.writeFileSync(installer, originalInstaller); fs.chownSync(installer, 0, 0); fs.chmodSync(installer, 0o755);
+    fs.copyFileSync(path.join(oldModule, "grabenplaner-offsite-rebind-rclone.sh"), path.join(candidateModule, "grabenplaner-offsite-rebind-rclone.sh"));
     fs.mkdirSync(path.dirname(candidateHelper), { recursive: true, mode: 0o700 });
     fs.copyFileSync(path.join(repository, helperRelative), candidateHelper); fs.chownSync(candidateHelper, 0, 0); fs.chmodSync(candidateHelper, 0o600);
     const previous = spawnSync(process.execPath, [path.join(oldModule, "lib/offsite-contract.js"), "contract", oldModule], { encoding: "utf8" });

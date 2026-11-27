@@ -3226,7 +3226,6 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .personnel-directory-table .table-actions { justify-content:flex-start; }
   .personnel-directory-table .personnel-directory-empty { grid-column:1 / -1; }
   .personnel-directory-table .personnel-directory-empty::before { display:none; }
-  .location-list { grid-template-columns:1fr; }
 }
 @media (max-width:900px) {
   .personnel-candidate-workspace { grid-template-columns:1fr; }
@@ -3651,6 +3650,12 @@ html[data-active-page-theme="dark"] .personnel-lifecycle-editor-step-actions .da
 .department-list { display: grid; gap: 1px; background: #e6eae7; }
 .department-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 15px; background: #fff; font-size: 9.5px; }
 .location-card .empty-options { min-height:48px; margin:0; padding:14px 15px; border:0; color:var(--muted); background:var(--surface-soft); font-size:9px; text-align:left; }
+@media (max-width:1180px) {
+  .location-list { grid-template-columns:minmax(0,1fr); }
+  .location-card-head, .department-item { flex-wrap:wrap; align-items:flex-start; }
+  .location-card-head > div, .department-item > span { min-width:0; overflow-wrap:anywhere; }
+  .location-card .edit-button { max-width:100%; white-space:normal; }
+}
 .display-columns-button { min-height:40px; padding:0 14px; border:1px solid var(--line); border-radius:11px; color:var(--ink); background:var(--surface); font-size:9px; font-weight:800; cursor:pointer; }
 .display-columns-button:hover { border-color:var(--green); color:var(--green-dark); }
 .employee-sort-button { display:flex; align-items:center; gap:5px; width:100%; padding:0; border:0; color:inherit; background:transparent; font:inherit; font-weight:inherit; text-align:left; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
@@ -4377,6 +4382,14 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 .rights-editor-scope-options strong { font-size:9px; }
 .rights-editor-scope-options small { margin-top:3px; color:var(--muted); font-size:8px; line-height:1.35; }
 .rights-editor-scope-options label:has(input:disabled) { opacity:.62; cursor:not-allowed; }
+#rightsLocationFunctions summary { cursor:pointer; font-weight:750; }
+#rightsLocationFunctionsFields { border:0; min-width:0; margin:10px 0; padding:0; }
+.location-function-rights-table { max-height:min(35dvh,320px); overflow:auto; }
+.location-function-rights-table table { border-collapse:collapse; width:100%; }
+.location-function-rights-table th,.location-function-rights-table td { padding:7px; text-align:left; border-bottom:1px solid var(--line); }
+.location-function-rights-table thead th { position:sticky; top:0; background:var(--surface-muted); }
+.location-function-rights-table th select { display:block; width:100%; margin-top:5px; }
+.location-function-rights-table input[type="checkbox"] { width:18px; height:18px; min-height:0; accent-color:var(--green); }
 .personnel-field-rights-card { align-self:start; }
 .personnel-field-role { max-width:330px; margin:15px 0 10px; }
 .personnel-field-rights-legend { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
@@ -4499,7 +4512,6 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 #generalSettings .settings-accordion-copy strong,#pdfSettings .settings-accordion-copy strong { font-size:11.5px; }
 #generalSettings .settings-accordion-copy small,#pdfSettings .settings-accordion-copy small { font-size:8px; }
 #generalSettings .settings-field-disclosure-body,#pdfSettings .settings-field-disclosure-body { min-width:0; gap:11px; padding:12px; }
-#generalSettings #brandingSettings > .settings-accordion-grid { grid-template-columns:minmax(0,1fr); }
 #generalSettings #viewBehaviorSettingsCard > .settings-field-disclosure-body { grid-template-columns:repeat(2,minmax(0,1fr)); }
 #generalSettings #viewBehaviorSettingsCard > .settings-field-disclosure-body > .settings-note { grid-column:1 / -1; }
 #pdfSettings .pdf-card > .settings-field-disclosure-body { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }

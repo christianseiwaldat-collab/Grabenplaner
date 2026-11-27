@@ -10,7 +10,8 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const { loginFailureParameters, runLoginTransaction, acceptVerifiedLogin } = require("./lib/portal-login-security");
 const { POLICY_VERSION: PORTAL_PASSWORD_POLICY_VERSION, assertNewPassword,
-  assessExistingPassword, metadata: portalPasswordPolicyMetadata } = require("./lib/portal-password-policy");
+  assessExistingPassword, acceptsVerifiedPolicyVersion, MIN_CODE_POINTS: PORTAL_PASSWORD_MIN_CODE_POINTS,
+  metadata: portalPasswordPolicyMetadata } = require("./lib/portal-password-policy");
 const { browserSessionLifetime, isSessionTimeValid, mobileSessionLifetime,
   clampMobileAccessExpiry, isPrivilegedSession, instant: sessionInstant } = require("./lib/portal-session-security");
 const net = require("node:net");
@@ -650,6 +651,7 @@ const { PRIVACY_ORGANIZATION_CATALOG } = require("./lib/privacy-organization");
 const { createPrivacyOrganizationStore } = require("./lib/privacy-organization-store");
 const { createSecurityAuditStore } = require("./lib/security-audit-store");
 const { isPrivacyOrganizationSettingKey, publicSettingsRows } = require("./lib/privacy-organization-settings");
+const portalLocationFunctions = require("./lib/portal-location-functions");
 const { isSystemNotificationReceiptSettingKey } = require("./lib/system-notification-receipt-settings");
 const notificationReceiptModule = require("./lib/system-notification-receipt-store");
 const {
@@ -842,8 +844,6 @@ function normalizeAppFontScalePercent(value, fallback = APP_FONT_SCALE_DEFAULT) 
     : fallback;
 }
 
-const LOCAL_PORTAL_PASSWORD_MIN_LENGTH = 15;
-const SERVER_PORTAL_PASSWORD_MIN_LENGTH = 15;
 const PORTAL_SESSION_COOKIE = "grabenplaner_session";
 const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const MOBILE_ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -2104,7 +2104,7 @@ const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
 
 const defaultPortalSettings = {
   login_required: "1",
-  password_min_length: String(LOCAL_PORTAL_PASSWORD_MIN_LENGTH),
+  password_min_length: String(PORTAL_PASSWORD_MIN_CODE_POINTS),
   session_timeout_minutes: "480",
   max_failed_login_attempts: "5",
   account_lock_minutes: "15",
@@ -2295,7 +2295,7 @@ function requestOriginAllowed(request, origin) {
 if (serverModeActive) app.set("trust proxy", trustProxySetting);
 
 function portalPasswordMinLength() {
-  return LOCAL_PORTAL_PASSWORD_MIN_LENGTH;
+  return PORTAL_PASSWORD_MIN_CODE_POINTS;
 }
 
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -2512,6 +2512,7 @@ const systemDiagnosticsOperations = (require('./lib/persistence/postgresql/appli
 const auditLogOperations = (require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlAuditLogOperations(applicationPersistence.operations));
 let loanProtectedStorageSnapshot = (Object.freeze({documents:[],photos:[],photoAttachments:[]}));
 let applicationSettingsSnapshot = (Object.freeze({}));
+let portalLocationFunctionAssignments = new Map();
 let planningSettingsReadModel = Object.freeze({
   pdfSettings: Object.freeze([]),
   locationBranding: Object.freeze([]),
@@ -3333,6 +3334,7 @@ async function refreshPortalScopeProjectionSnapshot() {
 }
 
 function updateApplicationSettingsSnapshot(settings) {
+  portalLocationFunctionAssignments = portalLocationFunctions.readAssignments(settings);
   applicationSettingsSnapshot = Object.freeze(Object.fromEntries(
     publicSettingsRows(settings)
       .filter((row) => String(row.key) !== "vacation_count_saturday")
@@ -3478,7 +3480,13 @@ async function authorizePersistenceOperation({readOnly} = {}) {
     'positionId','permissions','explicitScopes','permissionScopes','scopes','amuLocalAccessMode',
     'personnelFieldPermissions','mustChangePassword'];
   const fingerprint = session => JSON.stringify(fields.map(key=>session[key]));
-  return fingerprint(previous) === fingerprint(current);
+  if (!previous.locationFunction) return fingerprint(previous) === fingerprint(current);
+  const rows = await application.authorizationRepositories.planningSettings.listSettings();
+  const access = portalLocationFunctions.readAssignments(rows).get(String(current.employeeNumber)) || {};
+  const scoped = portalLocationFunctions.actorForFeature(
+    current, access, previous.locationFunction, portalScopeProjectionSnapshot.locations,
+  );
+  return Boolean(scoped && fingerprint(previous) === fingerprint(scoped));
 }
 
 function initializeApplicationPersistence({ onProgress } = {}) {
@@ -5135,6 +5143,7 @@ function publicPortalUser(session) {
     grantedPermissions: session.grantedPermissions || [],
     deniedPermissions: session.deniedPermissions || [],
     scopes: session.scopes || [],
+    locationFunctions: locationFunctionsForSession(session),
     salesAnalytics: buildSalesAnalyticsProjection(session),
     salesHistory: buildSalesHistoryProjection(session),
     dataImport: buildDataImportProjection(session),
@@ -5152,7 +5161,28 @@ function publicPortalUser(session) {
 }
 
 function sessionHasGlobalScope(session) {
-  return !session || isLocalSystemSession(session) || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role);
+  return !session || isLocalSystemSession(session)
+    || (!session.locationFunction && GLOBAL_SCOPE_PORTAL_ROLES.has(session.role));
+}
+
+function locationFunctionsForSession(session) {
+  if (!session?.employeeNumber || session.isEmployee === false
+    || session.sessionKind === "organization" || isLocalSystemSession(session)) return {};
+  return portalLocationFunctionAssignments.get(String(session.employeeNumber)) || {};
+}
+
+function requireLocationFunctionActor(session, feature) {
+  const scoped = portalLocationFunctions.actorForFeature(
+    session, locationFunctionsForSession(session), feature, portalScopeProjectionSnapshot.locations,
+  );
+  if (!scoped) return null;
+  if (scoped.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  if (!scoped.scopes.length) {
+    throw httpError(403, "Für diese Funktion ist keine aktive Filiale freigegeben.", "PORTAL_SCOPE_DENIED");
+  }
+  return scoped;
 }
 
 function sessionCanReadWorkRules(session) {
@@ -5885,6 +5915,27 @@ function enforceAdminApiAccess(request, _response, next) {
     const status = getPortalStatus();
     if (!status.portalEnabled || request.path.startsWith("/portal/") || request.path.startsWith("/mobile/")) return next();
     const method = String(request.method || "GET").toUpperCase();
+    const locationFeature = portalLocationFunctions.planningFeatureForRoute(request.path, method);
+    const locationDirectory = method === "GET" && /^\/locations\/?$/i.test(request.path);
+    if (locationFeature || locationDirectory) {
+      const session = portalSessionFromRequest(request);
+      const scoped = locationFeature ? requireLocationFunctionActor(session, locationFeature) : null;
+      if (scoped) {
+        assertPortalCsrf(request);
+        if (!/^\/schedule\/search\/?$/i.test(request.path)) {
+          assertSessionContextScope(scoped, { ...request.query, ...request.body });
+        }
+        request.portalSession = scoped;
+        return next();
+      }
+      if (locationDirectory && Object.keys(locationFunctionsForSession(session)).length) {
+        if (session.mustChangePassword) {
+          throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+        }
+        request.portalSession = session;
+        return next();
+      }
+    }
     if (/^\/sales\/price-labels(?:\/|$)/.test(request.path)) {
       const session = salesPriceLabelsSession(request);
       if (!["GET", "HEAD", "OPTIONS"].includes(method) && !isLocalSystemSession(session)) assertPortalCsrf(request);
@@ -6280,6 +6331,8 @@ async function pastWeekEditingAllowedForActor(actor, settings = getSettings()) {
 
 function canManageScheduleManualLock(actor, locationId) {
   if (!actor || isLocalSystemSession(actor)) return true;
+  const access = locationFunctionsForSession(actor);
+  if (access.scheduleWrite) return access.scheduleWrite.includes(String(locationId));
   if (!actor.permissions?.includes("schedule:write")) return false;
   try {
     assertSessionContextScope(actor, { locationId });
@@ -18227,6 +18280,15 @@ async function getLocationsForSession(session, includeInactive = true) {
   });
 }
 
+function getLocationDirectoryForSession(session) {
+  const access = locationFunctionsForSession(session);
+  if (sessionHasGlobalScope(session) || !Object.keys(access).length) return getLocationsForSession(session, true);
+  const scopes = Object.values(access).flatMap(selection => portalLocationFunctions
+    .activeLocationIds(selection, portalScopeProjectionSnapshot.locations)
+    .map(locationId => ({ locationId, departmentId: null })));
+  return getLocationsForSession({ ...session, scopes: [...(session.scopes || []), ...scopes] }, true);
+}
+
 function normalizeLocationId(value) {
   const id = String(value || "").trim();
   if (!/^\d{2}$/.test(id)) {
@@ -21835,7 +21897,9 @@ async function crossLocationSchedulePayload(session, input = {}) {
     );
   }
   const allLocations = await getLocations(false);
-  const locations = publicCrossLocationScheduleLocations(allLocations, access);
+  const scheduleRead = locationFunctionsForSession(session).scheduleRead;
+  const locations = publicCrossLocationScheduleLocations(allLocations, access)
+    .filter(location => !scheduleRead || scheduleRead.includes(String(location.id)));
   const destinationLocation = allLocations.find((location) => (
     location.active
       && String(location.id || "") === String(access.organizationScope?.locationId || "")
@@ -32505,7 +32569,8 @@ const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
   commit: async (entry, scenario, preview, actor, request) => {
     const result = await persistenceProvider.transaction(async executor => {
       const repositories = createApplicationRepositories(executor);
-      const fresh = isLocalSystemSession(actor) || !actor ? actor : await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      const loaded = isLocalSystemSession(actor) || !actor ? actor : await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      const fresh = requireLocationFunctionActor(loaded, "scheduleWrite") || loaded;
       if (planningOptimizerAuthority(fresh) !== planningOptimizerAuthority(actor)) throw httpError(403, 'Anmeldung oder Berechtigungen haben sich geändert.', 'PORTAL_PERMISSION_DENIED');
       if (fresh?.mustChangePassword) throw httpError(428, 'Bitte zuerst das Startpasswort ändern.', 'PORTAL_PASSWORD_CHANGE_REQUIRED');
       assertPlanningAssistantPilot(fresh);
@@ -32538,7 +32603,9 @@ const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
 function planningOptimizerAuthority(actor) { return JSON.stringify([actor?.id, actor?.employeeNumber, actor?.accountId, actor?.permissions, actor?.scopes, actor?.role, actor?.mustChangePassword]); }
 async function planningOptimizerActor(request) {
   if (request.portalSession && !isLocalSystemSession(request.portalSession)) request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
-  const actor = requirePortalAnyPermissionOrLocal(request, ['schedule:write'], { csrf: true });
+  const actor = requireLocationFunctionActor(request.portalSession, "scheduleWrite")
+    || requirePortalAnyPermissionOrLocal(request, ['schedule:write'], { csrf: true });
+  if (actor.locationFunction) request.portalSession = actor;
   assertPlanningAssistantPilot(actor);
   planningAssistantPreferences.assertEnabled(getSettings());
   if (actor && !isLocalSystemSession(actor) && (!actor.permissions.includes('schedule:read') || !actor.permissions.includes('work_rules:read'))) {
@@ -32607,11 +32674,14 @@ app.get("/api/schedule/assistant", (_request, response, next) => {
   const result = await readPlanningAssistant(request.query.week, request.query, actor);
   const optimizer = await planningOptimizerService.health();
   if (!isLocalSystemSession(actor) && actor) {
-    const fresh = await loadPortalSessionFromRequest(request, { touch: false });
+    const loaded = await loadPortalSessionFromRequest(request, { touch: false });
+    const fresh = requireLocationFunctionActor(loaded, "scheduleRead") || loaded;
     if (!fresh || authority(fresh) !== before) throw httpError(403, "Die Anmeldung oder Berechtigungen haben sich geändert. Bitte erneut laden.", "PORTAL_PERMISSION_DENIED");
     assertSessionContextScope(fresh, result.assessment.context);
   }
-  const canOptimize = optimizer.available && (!actor || isLocalSystemSession(actor) || actor.permissions?.includes('schedule:write') && actor.permissions?.includes('work_rules:read'));
+  const writable = locationFunctionsForSession(actor).scheduleWrite;
+  const canWrite = writable ? writable.includes(result.assessment.context.locationId) : actor?.permissions?.includes("schedule:write");
+  const canOptimize = optimizer.available && (!actor || isLocalSystemSession(actor) || canWrite && actor.permissions?.includes("work_rules:read"));
   planningAssistantPreferences.assertEnabled(getSettings());
   result.assessment.optimization.available = Boolean(canOptimize);
   return { ...result, optimizer, canOptimize,
@@ -32771,7 +32841,8 @@ app.put("/api/schedule/manual-lock", async (request, response) => {
 });
 
 app.get("/api/schedule/search", async (request, response) => {
-  const session = requirePortalReadOrLocal(request, "schedule:read");
+  const session = request.portalSession?.locationFunction === "scheduleRead"
+    ? request.portalSession : requirePortalReadOrLocal(request, "schedule:read");
   response.set("Cache-Control", "private, no-store");
   response.json(await searchScheduleShifts(session, request.query || {}));
 });
@@ -32936,7 +33007,7 @@ app.delete("/api/schedule-note", async (request, response) => {
 });
 
 app.get("/api/locations", async (request, response) => {
-  response.json(await getLocationsForSession(request.portalSession, true));
+  response.json(await getLocationDirectoryForSession(request.portalSession));
 });
 
 app.post("/api/locations", async (request, response) => {
@@ -33006,7 +33077,9 @@ app.post("/api/locations", async (request, response) => {
 });
 
 app.put("/api/locations/:id", async (request, response) => {
-  const mutationActor = requirePortalAnyPermissionOrLocal(
+  const directoryActor = request.portalSession?.locationFunction === "locationSettings"
+    ? requirePortalSession(request) : null;
+  const mutationActor = directoryActor ? request.portalSession : requirePortalAnyPermissionOrLocal(
     request,
     ["locations:write", "locations:operational:write"],
     { csrf: true },
@@ -33055,7 +33128,7 @@ app.put("/api/locations/:id", async (request, response) => {
     costCenterId !== current.cost_center_id ? "costCenter" : "",
   ].filter(Boolean);
   if (!changedFields.length) {
-    response.json(await getLocationsForSession(request.portalSession, true));
+    response.json(await getLocationDirectoryForSession(directoryActor || mutationActor));
     return;
   }
   const update = {
@@ -33082,7 +33155,9 @@ app.put("/api/locations/:id", async (request, response) => {
       );
       assertLivePortalRoutePermission(liveActor, "locations:write");
       const liveSession = livePersonnelLearningAdministrationSession(liveActor);
-      assertSessionLocationAdministrationScope(liveSession, id);
+      assertSessionLocationAdministrationScope(
+        requireLocationFunctionActor(liveSession, "locationSettings") || liveSession, id,
+      );
       if (timeSettingsChanged) assertLivePortalRoutePermission(liveActor, "time:settings");
       if (costCenterId !== current.cost_center_id) {
         assertLivePortalRoutePermission(
@@ -33126,7 +33201,7 @@ app.put("/api/locations/:id", async (request, response) => {
       );
     });
   }
-  response.json(await getLocationsForSession(mutationActor, true));
+  response.json(await getLocationDirectoryForSession(directoryActor || mutationActor));
 });
 
 app.post("/api/departments", async (request, response) => {
@@ -34773,7 +34848,7 @@ function passkeyRequestGuard(request, { anonymous = false } = {}) {
 function assertPasskeyAccount(user, now = new Date()) {
   if (!user?.active || !user.employee_active || !user.password_hash || isReservedEmployeePrincipal(user.employee_number)
     || (user.locked_until && !(Date.parse(user.locked_until) <= now.getTime()))) throw passkeyProtocol.failure();
-  if (user.must_change_password || Number(user.password_policy_version) !== PORTAL_PASSWORD_POLICY_VERSION) {
+  if (user.must_change_password || !acceptsVerifiedPolicyVersion(user.password_policy_version)) {
     throw httpError(428, "Bitte zuerst mit Passwort anmelden und die erforderliche Kennwortaktualisierung abschließen.", "PASSKEY_PASSWORD_POLICY_REQUIRED");
   }
 }
@@ -34800,7 +34875,7 @@ async function passkeyContextFor(request, repositories, { accountId = null, oper
       if (account.must_change_password) throw httpError(428, "Bitte zuerst das Kennwort dieses Kontos aktualisieren.", "PASSKEY_PASSWORD_POLICY_REQUIRED");
     }
     enrollmentAllowed = Boolean(target.active && target.employee_active && target.password_hash && !target.must_change_password
-      && !account.must_change_password && Number(target.password_policy_version) === PORTAL_PASSWORD_POLICY_VERSION
+      && !account.must_change_password && acceptsVerifiedPolicyVersion(target.password_policy_version)
       && (!target.locked_until || Date.parse(target.locked_until) <= Date.now()));
     targetState = [account.active, account.must_change_password, target.locked_until, account.account_type, account.scopes_json, account.permissions_json];
     kind = "organization"; principalId = account.id;
@@ -41346,6 +41421,92 @@ require("./lib/portal-permission-defaults-routes").registerPortalPermissionDefau
   error: httpError,
 });
 
+async function assertLocationFunctionRightsTarget(actor, employeeNumber, repository) {
+  const [account, employee] = await Promise.all([
+    repository.getPortalUserAccountProjection(employeeNumber),
+    repository.getEmployeeForUpdate(employeeNumber),
+  ]);
+  if (!account?.active || !employee?.active) {
+    throw httpError(404, "Der aktive Portal-Zugang wurde nicht gefunden.");
+  }
+  const target = { configured: true, active: true, role: account.role, roleLocked: Boolean(account.role_locked) };
+  if (!actorCanManagePermissionGrants(actor, target)) {
+    throw httpError(403, "Für diesen Zugang dürfen keine Filialrechte geändert werden.", "PORTAL_ROLE_HIERARCHY_DENIED");
+  }
+}
+
+function requireLocationFunctionRightsAdmin(request) {
+  const actor = requireAdminHrOrLocal(request, "rights:write");
+  if (!isLocalSystemSession(actor) && !HR_DECISION_PORTAL_ROLES.has(actor.role)) {
+    throw httpError(403, "Filialrechte je Funktion werden von der Personalleitung verwaltet.", "PORTAL_PERMISSION_DENIED");
+  }
+  return actor;
+}
+
+function locationFunctionRightsPayload(access, locations) {
+  return {
+    access,
+    revision: portalLocationFunctions.revision(access),
+    locations: locations.map(location => ({ id: String(location.id), name: location.name })),
+  };
+}
+
+app.get("/api/portal/v1/rights/:employeeNumber/location-functions", async (request, response) => {
+  const actor = requireLocationFunctionRightsAdmin(request);
+  response.set("Cache-Control", "private, no-store");
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  await assertLocationFunctionRightsTarget(actor, employeeNumber, organizationPersonnelRepository);
+  const [rows, locations] = await Promise.all([
+    planningSettingsRepository.listSettings(),
+    organizationPersonnelRepository.listLocations(false),
+  ]);
+  const access = portalLocationFunctions.readAssignments(rows).get(employeeNumber) || {};
+  response.json(locationFunctionRightsPayload(access, locations));
+});
+
+app.put("/api/portal/v1/rights/:employeeNumber/location-functions", async (request, response) => {
+  const actor = requireLocationFunctionRightsAdmin(request);
+  response.set("Cache-Control", "private, no-store");
+  assertPortalCsrf(request);
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const result = await persistenceProvider.transaction(async executor => {
+    const repositories = createApplicationRepositories(executor);
+    const organization = repositories.organizationPersonnel;
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(actor, organization);
+    assertLivePortalRoutePermission(liveActor, "rights:write", { allowedRoles: HR_DECISION_PORTAL_ROLES });
+    if (liveActor.mustChangePassword) {
+      throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+    }
+    await assertLocationFunctionRightsTarget(liveActor, employeeNumber, organization);
+    const [rows, locations] = await Promise.all([
+      repositories.planningSettings.listSettings(),
+      organization.listLocations(false),
+    ]);
+    const assignments = portalLocationFunctions.readAssignments(rows);
+    const before = assignments.get(employeeNumber) || {};
+    if (request.body?.revision !== portalLocationFunctions.revision(before)) {
+      throw httpError(409, "Die Filialrechte wurden inzwischen geändert. Bitte neu laden.", "LOCATION_FUNCTION_RIGHTS_CHANGED");
+    }
+    let access;
+    try {
+      access = portalLocationFunctions.normalizeAccess(request.body?.access, new Set(locations.map(row => String(row.id))));
+    } catch (error) {
+      throw httpError(400, error.message, "LOCATION_FUNCTION_RIGHTS_INVALID");
+    }
+    if (Object.keys(access).length) assignments.set(employeeNumber, access);
+    else assignments.delete(employeeNumber);
+    await repositories.planningSettings.upsertSetting({
+      key: portalLocationFunctions.SETTING_KEY,
+      value: JSON.stringify(Object.fromEntries(assignments)),
+    });
+    await organization.insertAudit(portalActorId(liveActor), "portal.location-functions.update", "portal_user",
+      employeeNumber, JSON.stringify({ before, after: access }));
+    return locationFunctionRightsPayload(access, locations);
+  }, { isolation: "serializable" });
+  await refreshApplicationSettingsSnapshot();
+  response.json(result);
+});
+
 app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   const actor = requireRightsEditorOrLocal(request, "rights:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
@@ -44559,17 +44720,28 @@ async function branchOrderManagementLocation(session, input = {}) {
       "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
     );
   }
-  if (!isLocalSystemSession(session) && !HR_DECISION_PORTAL_ROLES.has(session.role)) {
+  if (session.locationFunction !== "branchOrders"
+    && !isLocalSystemSession(session) && !HR_DECISION_PORTAL_ROLES.has(session.role)) {
     throw httpError(
       403,
       "Die Filialbestell-Einstellungen stehen ausschließlich Personalleitung und höheren Rollen zur Verfügung.",
       "BRANCH_ORDER_MANAGEMENT_ROLE_DENIED",
     );
   }
-  const locationId = normalizeLocationId(input.locationId || session.homeLocationId || "");
+  const fallback = session.locationFunction === "branchOrders"
+    ? session.scopes.find(scope => scope.locationId === session.homeLocationId)?.locationId || session.scopes[0]?.locationId
+    : session.homeLocationId;
+  const locationId = normalizeLocationId(input.locationId || fallback || "");
   assertSessionContextScope(session, { locationId });
   await validateActiveLocationExists(locationId);
   return locationId;
+}
+
+function requireBranchOrderManagementSession(request) {
+  const session = requirePortalSession(request);
+  const scoped = requireLocationFunctionActor(session, "branchOrders");
+  if (scoped) request.portalSession = scoped;
+  return scoped || requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
 }
 
 async function branchPortalDisplaySettingsLocation(session, input = {}) {
@@ -44633,10 +44805,14 @@ function publicMobilePortalLocationDisplay(location) {
 
 async function branchOrderHistoryAccess(request, input = {}) {
   const session = requirePortalSession(request);
-  if (session.permissions?.includes(BRANCH_ORDER_MANAGE_PERMISSION)) {
+  const access = locationFunctionsForSession(session);
+  const scoped = access.branchOrders?.length ? requireLocationFunctionActor(session, "branchOrders") : null;
+  if (scoped) request.portalSession = scoped;
+  if (scoped || (!Object.hasOwn(access, "branchOrders") && session.permissions?.includes(BRANCH_ORDER_MANAGE_PERMISSION))) {
+    const actor = scoped || session;
     return {
-      session,
-      locationId: await branchOrderManagementLocation(session, input),
+      session: actor,
+      locationId: await branchOrderManagementLocation(actor, input),
       audience: "management",
       selectedEmployeeNumber: "",
     };
@@ -44870,7 +45046,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
 });
 
 app.get("/api/portal/v1/branch-orders/settings", async (request, response) => {
-  const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
+  const session = requireBranchOrderManagementSession(request);
   const locationId = await branchOrderManagementLocation(session, request.query || {});
   try {
     const configuration = await branchOrderOperations.settingsSnapshot(locationId);
@@ -44886,7 +45062,7 @@ app.get("/api/portal/v1/branch-orders/settings", async (request, response) => {
 });
 
 app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
-  const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
+  const session = requireBranchOrderManagementSession(request);
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {
@@ -48751,7 +48927,7 @@ app.post("/api/portal/v1/loans/:loanId/management/reopen", async (request, respo
 });
 
 app.post("/api/portal/v1/branch-orders/:orderId/delivery-confirmation", async (request, response) => {
-  const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
+  const session = requireBranchOrderManagementSession(request);
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {

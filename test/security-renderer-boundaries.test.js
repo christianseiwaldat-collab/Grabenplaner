@@ -141,15 +141,21 @@ test('real time presence and day review renderers keep unexpected state and CSS 
 test('real department and delegation renderers preserve unusual identifiers as data attributes', async () => {
   const id = '123" onclick="unsafe';
   const elements = { timeTrackingLocation: { value: '1' }, timeTrackingDepartment: { innerHTML: '' },
+    departmentLocation: { value: '1' }, locationList: { innerHTML: '' },
     delegationList: { innerHTML: '' }, delegationLocation: { innerHTML: '' }, delegationSettingsCard: { classList: { toggle() {} } } };
-  const ctx = context({ elements, state: { locations: [{ id: '1', name: 'Synthetic', departments: [{ id, name: 'Synthetic' }] }] },
+  const ctx = context({ elements, state: { editingLocationId: '1', locations: [{ id: '1', name: 'Synthetic', departments: [{ id, name: 'Synthetic' }] }] },
+    planningDayKeys: [],
     api: async () => ({ delegations: [{ id, location_name: 'Synthetic', date_from: '2026-10-18', date_to: '2026-10-19' }] }),
     refreshDelegationEmployees() {}, formatDate: value => value,
   });
-  load(ctx, 'refreshTimePresenceDepartments'); load(ctx, 'loadApprovalDelegations');
-  ctx.refreshTimePresenceDepartments(); await ctx.loadApprovalDelegations();
+  for (const name of ['refreshTimePresenceDepartments', 'loadApprovalDelegations',
+    'locationFunctionAccess', 'locationFunctionAllows', 'renderLocations']) load(ctx, name);
+  ctx.refreshTimePresenceDepartments(); await ctx.loadApprovalDelegations(); ctx.renderLocations();
   const options = nodes(parseDocument(elements.timeTrackingDepartment.innerHTML), node => node.name === 'option');
   assert.equal(options[1].attribs.value, id); assert.equal(options[1].attribs.onclick, undefined);
+  const departmentButton = nodes(parseDocument(elements.locationList.innerHTML), node => node.attribs?.['data-edit-department'])[0];
+  assert.equal(departmentButton.attribs['data-edit-department'], id);
+  assert.equal(departmentButton.attribs.onclick, undefined);
   const rows = nodes(parseDocument(elements.delegationList.innerHTML), node => node.attribs?.class === 'delegation-row');
   assert.equal(rows[0].attribs['data-delegation-id'], id); assert.equal(rows[0].attribs.onclick, undefined);
 });

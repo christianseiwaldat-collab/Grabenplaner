@@ -87,7 +87,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" data-gp-print-fallback type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.105 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.106 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -2500,7 +2500,7 @@
                 <span class="settings-accordion-copy"><strong>Branding</strong><small>Firmenauftritt und Standortzuordnungen verwalten.</small></span>
                 <span class="settings-accordion-chevron" aria-hidden="true">›</span>
               </summary>
-              <div class="settings-accordion-body settings-accordion-grid">
+              <div class="settings-accordion-body settings-accordion-stack">
                 <div class="settings-card">
                   <div class="card-heading"><div class="card-icon">Logo</div><div><h2>Branding für Oberfläche und PDFs</h2><p>Firmenname, Logo und Admin-Kontakt für Oberfläche und PDF-Ausgabe.</p></div></div>
                   <div class="branding-settings-grid">
@@ -3294,7 +3294,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.105 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.106 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -4227,6 +4227,12 @@
         <div class="rights-profile-summary"><h2 id="rightsEditorTitle" tabindex="-1">Rechte bearbeiten</h2><p id="rightsEditorSummary"></p></div>
         <div class="rights-editor-legend" aria-label="Bedeutung der Rechtezustände"><span><i class="role-right-dot"></i> Grundrecht der Rolle</span><span><i class="additional-right-dot"></i> Individuell hinzugefügt</span><span><i class="revoked-right-dot"></i> Individuell entzogen</span><span><i class="unassigned-right-dot"></i> Nicht vergeben</span><span><i class="locked-right-dot"></i> Für diesen Zugang nicht änderbar</span></div>
         </div>
+        <details class="rights-editor-scope" id="rightsLocationFunctions" hidden>
+          <summary>Rechte je Funktion und Filiale</summary>
+          <fieldset id="rightsLocationFunctionsFields" aria-label="Filialrechte" disabled></fieldset>
+          <p id="rightsLocationFunctionsStatus" role="status"></p>
+          <button type="button" class="secondary-button" id="saveRightsLocationFunctionsButton" disabled>Filialrechte speichern</button>
+        </details>
         <div class="rights-editor-permissions" id="rightsEditorPermissions"></div>
         <fieldset class="rights-editor-scope hidden" id="rightsEditorScope">
           <legend>Verantwortungsbereich</legend>
