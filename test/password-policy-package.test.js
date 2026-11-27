@@ -88,7 +88,7 @@ test("the actual package guard accepts the LF corpus without loading the applica
 test("the actual package guard rejects a CRLF-converted common corpus without normalizing it", t => {
   const f = fixture(t);
   const altered = Buffer.from(fs.readFileSync(f.common, "ascii").replace(/\n/g, "\r\n"), "ascii");
-  assert.equal(altered.length, 198000);
+  assert.equal(altered.length, 396000);
   fs.writeFileSync(f.common, altered);
   rejected(f.source);
   assert.equal(hash(fs.readFileSync(f.common)), hash(altered));
@@ -141,7 +141,7 @@ $sourceCommon = Join-Path $sourceRoot 'lib/password-policy/common-sha256.txt'
 $buildRoot = ${quote(path.join(f.parent, "copied-crlf"))}
 ${copy}
 $copiedCommon = Join-Path $buildRoot 'lib/password-policy/common-sha256.txt'
-if ([IO.File]::ReadAllBytes($copiedCommon).Length -ne 198000) { throw 'CRLF fixture was not copied unchanged.' }
+if ([IO.File]::ReadAllBytes($copiedCommon).Length -ne 396000) { throw 'CRLF fixture was not copied unchanged.' }
 $phase = 'copied CRLF rejection'
 Expect-CorpusRejection -Root $buildRoot
 @{ copiedLf = $true; zipRoundtrip = $true; roundtripTamperRejected = $true; copiedCrLfRejected = $true } | ConvertTo-Json -Compress

@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { POLICY_VERSION, MIN_CODE_POINTS } = require('../lib/portal-password-policy');
 
 const childProvider = process.env.GP_SECURITY_P2_HTTP_CHILD;
 const GOOD_PASSWORD = 'Synthetic-Login-Concurrency-2026!';
@@ -174,17 +175,17 @@ if (!childProvider) {
       }
       async function sessionRow(id) { return (await query('SELECT * FROM portal_sessions WHERE employee_number=? AND revoked_at IS NULL',[id]))[0]; }
       if (process.env.GP_SECURITY_P2_OPERATION_MODE !== 'server') {
-        await t.test('local, LAN and production configurations use the same 15-codepoint policy with unchanged legacy verification',async()=>{
+        await t.test('local, LAN and production use the same eight-codepoint policy with legacy verification',async()=>{
           const id='syn-p2-mode'; await seedPersonal(id,'old123');
           const entered=await login(id,'old123','browser','198.51.100.110');assert.equal(entered.status,200,JSON.stringify(entered.body));
           if (productionConfiguration) {
             assert.equal(process.env.NODE_ENV,'production');assert.equal(entered.body.status.deploymentKind,'production');
             assert.equal(entered.body.status.operationMode,'server');assert.equal(entered.body.user.mustChangePassword,true);
           }
-          assert.equal(entered.body.status.passwordMinLength,15);const auth=credentials(entered);
-          assert.equal((await change(auth,'old123','qV7^pR3&kT8!zN')).status,400);
-          const changed=await change(auth,'old123','qV7^pR3&kT8!zNm');assert.equal(changed.status,200,JSON.stringify(changed.body));
-          assert.equal((await login(id,'qV7^pR3&kT8!zNm','browser','198.51.100.110')).status,200);
+          assert.equal(entered.body.status.passwordMinLength,MIN_CODE_POINTS);const auth=credentials(entered);
+          assert.equal((await change(auth,'old123','qV7^pR3')).status,400);
+          const changed=await change(auth,'old123','qV7^pR3&');assert.equal(changed.status,200,JSON.stringify(changed.body));
+          assert.equal((await login(id,'qV7^pR3&','browser','198.51.100.110')).status,200);
         });
         console.log('HTTP_P2_VERIFIED '+JSON.stringify({provider:childProvider,mode:process.env.GP_SECURITY_P2_OPERATION_MODE,groups:1,syntheticOnly:true}));
         return;
@@ -197,25 +198,26 @@ if (!childProvider) {
         const old=credentials(entered), before=await sessionRow(id);
         assert.equal((await request('/api/portal/v1/me/schedule',{auth:old})).status,428);
         assert.equal((await change(old,'old123','short')).status,400);
-        for(const [candidate,code] of [['123456789012345','PORTAL_PASSWORD_COMMON'],['abcdefghijklmnopqrstuvwxyz','PORTAL_PASSWORD_COMPROMISED'],[{},'PORTAL_PASSWORD_TYPE_INVALID']]) {
+        for(const [candidate,code] of [['123456789012345','PORTAL_PASSWORD_SPECIAL_REQUIRED'],['abcdefghijklmnopqrstuvwxyz','PORTAL_PASSWORD_DIGIT_REQUIRED'],[{},'PORTAL_PASSWORD_TYPE_INVALID']]) {
           const rejected=await change(old,'old123',candidate);assert.equal(rejected.status,400);assert.equal(rejected.body.code,code);
         }
-        const changed=await change(old,'old123',GOOD_PASSWORD+'-legacy'); assert.equal(changed.status,200,JSON.stringify(changed.body));
+        const newPassword='qV7^pR3&';
+        const changed=await change(old,'old123',newPassword); assert.equal(changed.status,200,JSON.stringify(changed.body));
         const fresh=credentials(changed); assert.notEqual(fresh.cookie,old.cookie); assert.notEqual(fresh.csrf,old.csrf);
         assert.equal(changed.body.user.mustChangePassword,false);
         const after=await sessionRow(id); assert.notEqual(after.id,before.id); assert.equal(after.authenticated_at,before.authenticated_at);
         assert.equal(after.absolute_expires_at,before.absolute_expires_at);
         assert.equal((await info(old)).body.authenticated,false); assert.equal((await info(fresh)).body.authenticated,true);
-        assert.equal((await change(fresh,GOOD_PASSWORD+'-legacy',GOOD_PASSWORD+'-invalid',old.csrf)).status,403);
+        assert.equal((await change(fresh,newPassword,GOOD_PASSWORD+'-invalid',old.csrf)).status,403);
         assert.equal((await info(fresh)).cookies.length,0,'ordinary response must not reissue old cookie');
         const record=(await query('SELECT password_policy_version,must_change_password FROM portal_users WHERE employee_number=?',[id]))[0];
-        assert.equal(Number(record.password_policy_version),1); assert.equal(Number(record.must_change_password),0); completed++;
+        assert.equal(Number(record.password_policy_version),POLICY_VERSION); assert.equal(Number(record.must_change_password),0); completed++;
       });
       await t.test('suitable legacy passwords qualify, existing forced-change remains, weak organization uses managed reset',async()=>{
         for(const force of [0,1]) { const id='syn-p2-suitable-'+force; await seedPersonal(id,GOOD_PASSWORD,'employee',force);
           const response=await login(id,GOOD_PASSWORD,'browser','198.51.100.'+(93+force)); assert.equal(response.status,200,JSON.stringify(response.body));
           assert.equal(response.body.user.mustChangePassword,Boolean(force));
-          assert.equal(Number((await query('SELECT password_policy_version FROM portal_users WHERE employee_number=?',[id]))[0].password_policy_version),1);
+          assert.equal(Number((await query('SELECT password_policy_version FROM portal_users WHERE employee_number=?',[id]))[0].password_policy_version),POLICY_VERSION);
         }
         const org='syn-p2-org'; await seed(org,true); await query('UPDATE portal_organization_accounts SET password_hash=? WHERE id=?',[passwordHash('old123'),org]);
         const weak=await login(org,'old123','browser','198.51.100.95'); assert.equal(weak.status,428,JSON.stringify(weak.body));
@@ -265,7 +267,7 @@ if (!childProvider) {
             const winningPassword=adminWins?adminPassword:selfPassword;
             assert.equal(await subject.verifyPortalPassword(winningPassword,stored.password_hash),true);
             assert.equal(await subject.verifyPortalPassword(adminWins?selfPassword:adminPassword,stored.password_hash),false);
-            assert.equal(Number(stored.must_change_password),Number(adminWins));assert.equal(Number(stored.password_policy_version),1);
+            assert.equal(Number(stored.must_change_password),Number(adminWins));assert.equal(Number(stored.password_policy_version),POLICY_VERSION);
             assert.ok((await query('SELECT revoked_at FROM portal_password_reset_tokens WHERE id=?',[resetId]))[0].revoked_at);
             assert.equal((await info(auth)).body.authenticated,false);
             const active=Number((await query('SELECT COUNT(*) count FROM portal_sessions WHERE employee_number=? AND revoked_at IS NULL',[id]))[0].count);
@@ -310,8 +312,8 @@ if (!childProvider) {
       });
       await t.test('Unicode code points and exact raw spaces survive password set and subsequent login',async()=>{
         const id='syn-p2-unicode';await seedPersonal(id);const entered=await login(id,GOOD_PASSWORD,'browser','198.51.100.108');const auth=credentials(entered);
-        assert.equal((await change(auth,GOOD_PASSWORD,'🦉'.repeat(14))).status,400);
-        const exact='  '+ '🦉🌲🫧🛶🪶'.repeat(13)+'  ';
+        assert.equal((await change(auth,GOOD_PASSWORD,'🦉'.repeat(6)+'٣')).status,400);
+        const exact='  '+ '🦉🌲🫧🛶🪶'.repeat(13)+'٣  ';
         const changed=await change(auth,GOOD_PASSWORD,exact);assert.equal(changed.status,200,JSON.stringify(changed.body));
         assert.equal((await login(id,exact.trim(),'browser','198.51.100.108')).status,401);
         assert.equal((await login(id,exact,'browser','198.51.100.108')).status,200);completed++;
@@ -354,11 +356,12 @@ if (!childProvider) {
         await query('INSERT INTO personal_notification_contacts(employee_number,email_target_fingerprint,email_verified_at) VALUES(?,?,?)',[id,fingerprint,new Date().toISOString()]);
         await query('INSERT INTO portal_password_reset_tokens(id,employee_number,token_hash,email_fingerprint,expires_at) VALUES(?,?,?,?,?)',
           ['syn-p2-reset',id,crypto.createHash('sha256').update(token).digest('hex'),fingerprint,new Date(Date.now()+3600000).toISOString()]);
+        const newPassword='kT8!zN5&';
         const reset=await request('/api/portal/v1/auth/password-reset/confirm',{method:'POST',auth,ip:'198.51.100.114',
-          body:{token,newPassword:GOOD_PASSWORD+'-reset',repeatPassword:GOOD_PASSWORD+'-reset'}});
+          body:{token,newPassword,repeatPassword:newPassword}});
         assert.equal(reset.status,200,JSON.stringify(reset.body));assert.equal((await info(auth)).body.authenticated,false);
-        assert.equal(Number((await query('SELECT password_policy_version FROM portal_users WHERE employee_number=?',[id]))[0].password_policy_version),1);
-        assert.equal((await login(id,GOOD_PASSWORD+'-reset','browser','198.51.100.115')).status,200);
+        assert.equal(Number((await query('SELECT password_policy_version FROM portal_users WHERE employee_number=?',[id]))[0].password_policy_version),POLICY_VERSION);
+        assert.equal((await login(id,newPassword,'browser','198.51.100.115')).status,200);
         const replay=await request('/api/portal/v1/auth/password-reset/confirm',{method:'POST',ip:'198.51.100.116',
           body:{token,newPassword:GOOD_PASSWORD+'-reset-again',repeatPassword:GOOD_PASSWORD+'-reset-again'}});
         assert.equal(replay.status,410);completed++;
@@ -470,11 +473,12 @@ if (!childProvider) {
         const disabled=await update({active:false});assert.equal(disabled.status,200,JSON.stringify(disabled.body));
         assert.equal((await info(auth)).body.authenticated,false);assert.equal((await mobileInfo(mobile.body.tokenSet.accessToken)).status,401);
         assert.equal((await login(id,'old123','browser','198.51.100.137')).status,401);
-        const restored=await update({active:true,password:GOOD_PASSWORD+'-reactivated',mustChangePassword:true});assert.equal(restored.status,200,JSON.stringify(restored.body));
+        const temporaryPassword='zW6+H2!s';
+        const restored=await update({active:true,password:temporaryPassword,mustChangePassword:true});assert.equal(restored.status,200,JSON.stringify(restored.body));
         assert.equal((await info(auth)).body.authenticated,false);assert.equal((await mobileInfo(mobile.body.tokenSet.accessToken)).status,401);
         assert.equal((await login(id,'old123','browser','198.51.100.137')).status,401);
-        const fresh=await login(id,GOOD_PASSWORD+'-reactivated','browser','198.51.100.137');assert.equal(fresh.status,200);assert.equal(fresh.body.user.mustChangePassword,true);
-        const changed=await change(credentials(fresh),GOOD_PASSWORD+'-reactivated',GOOD_PASSWORD+'-reactivation-final');assert.equal(changed.status,200,JSON.stringify(changed.body));
+        const fresh=await login(id,temporaryPassword,'browser','198.51.100.137');assert.equal(fresh.status,200);assert.equal(fresh.body.user.mustChangePassword,true);
+        const changed=await change(credentials(fresh),temporaryPassword,GOOD_PASSWORD+'-reactivation-final');assert.equal(changed.status,200,JSON.stringify(changed.body));
         assert.equal(changed.body.user.mustChangePassword,false);
         const terminal='syn-p2-terminal';await seed(terminal,true);await query("UPDATE portal_organization_accounts SET account_type='terminal',password_hash=? WHERE id=?",[passwordHash('old123'),terminal]);
         const weak=await login(terminal,'old123','browser','198.51.100.139');assert.equal(weak.status,428);assert.equal(weak.body.code,'PORTAL_ORGANIZATION_PASSWORD_POLICY_REQUIRED');assert.equal(weak.cookies.length,0);

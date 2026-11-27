@@ -17,10 +17,11 @@ function fixture(t, { common = [], breached = [] } = {}) {
   const manifest = JSON.parse(fs.readFileSync(path.join(DATA, 'manifest.json'), 'utf8'));
   for (const [key, supplied] of [['common', common], ['breached', breached]]) {
     const values = [...supplied];
-    while (values.length < 3000) values.push(`Synthetic-${key}-fixture-${values.length}`);
+    const count = key === 'common' ? manifest.artifacts.common.count : 3000;
+    while (values.length < count) values.push(`Synthetic-${key}-fixture-${values.length}`);
     const hashes = values.map(value => digest(value)).sort(Buffer.compare);
     const bytes = key === 'common' ? Buffer.from(hashes.map(value => value.toString('hex')).join('\n') + '\n') : Buffer.concat(hashes);
-    manifest.artifacts[key].count = 3000;
+    manifest.artifacts[key].count = count;
     manifest.artifacts[key].bytes = bytes.length;
     manifest.artifacts[key].sha256 = digest(bytes).toString('hex');
     fs.writeFileSync(path.join(directory, manifest.artifacts[key].file), bytes);
@@ -30,14 +31,14 @@ function fixture(t, { common = [], breached = [] } = {}) {
 }
 
 test('bundled metadata describes one offline policy with real common and separate breach data', () => {
-  assert.deepEqual(policy.metadata(), { policyVersion: 1, corpusVersion: 'seclists-60e43f4d-p15-v1',
-    minLength: 15, maxLength: 256, minCodePoints: 15, maxCodePoints: 256, maxUtf8Bytes: 1024, available: true });
-  assert.equal(policy.POLICY_VERSION, 1);
+  assert.deepEqual(policy.metadata(), { policyVersion: 2, corpusVersion: 'seclists-60e43f4d-p8-v2',
+    minLength: 8, maxLength: 256, minCodePoints: 8, maxCodePoints: 256, maxUtf8Bytes: 1024,
+    requiresDigit: true, requiresSpecialCharacter: true, available: true });
+  assert.equal(policy.POLICY_VERSION, 2);
   const manifest = JSON.parse(fs.readFileSync(path.join(DATA, 'manifest.json'), 'utf8'));
-  assert.equal(manifest.artifacts.common.count, 3000);
-  assert.equal(manifest.commonSelection.finalSourceRow, 790039);
-  assert.equal(manifest.commonSelection.metrics.policyCompatibleRows, 141033);
-  assert.equal(manifest.artifacts.breached.count, 400992);
+  assert.equal(manifest.artifacts.common.count, 6000);
+  assert.deepEqual(manifest.commonSelection.finalSourceRows, { legacy: 790039, short: 1000466 });
+  assert.equal(manifest.artifacts.breached.count, 794471);
   assert.equal(manifest.breachedSelection.metrics.invalidUtf8Rows, 218);
 });
 
@@ -45,9 +46,16 @@ test('real public source fixtures independently exercise common and breached rej
   // Public dictionary fixtures, not GP account credentials. Both exceed the 15-code-point minimum.
   assert.equal(policy.assessExistingPassword('123456789012345').reason, 'common');
   assert.equal(policy.assessExistingPassword('abcdefghijklmnopqrstuvwxyz').reason, 'breached');
-  assert.throws(() => policy.assertNewPassword('abcdefghijklmnopqrstuvwxyz'),
-    error => error.status === 400 && error.code === 'PORTAL_PASSWORD_COMPROMISED');
   assert.equal(policy.assertNewPassword(SAFE).accepted, true);
+});
+
+test('structurally valid eight-character passwords still use the common and breached checks', t => {
+  const shortCommon = 'K@uH!49x';
+  const shortBreached = 'd?78TR.y';
+  const { directory } = fixture(t, { common: [shortCommon], breached: [shortBreached] });
+  const isolated = policy.createPasswordPolicy({ dataDirectory: directory });
+  assert.throws(() => isolated.assertNewPassword(shortCommon), { code: 'PORTAL_PASSWORD_COMMON' });
+  assert.throws(() => isolated.assertNewPassword(shortBreached), { code: 'PORTAL_PASSWORD_COMPROMISED' });
 });
 
 test('values must be strings without implicit conversion', () => {
@@ -58,22 +66,30 @@ test('values must be strings without implicit conversion', () => {
 });
 
 test('length means Unicode code points instead of UTF-16 units or grapheme clusters', () => {
-  assert.equal(policy.assessExistingPassword('🧭'.repeat(14)).reason, 'too_short');
-  assert.equal(policy.assertNewPassword('🧭'.repeat(15)).accepted, true);
-  assert.equal(policy.assessExistingPassword('e\u0301'.repeat(7)).reason, 'too_short');
-  assert.equal(policy.assertNewPassword('e\u0301'.repeat(8)).accepted, true);
-  assert.equal(policy.assessExistingPassword('Qz?'.repeat(4) + 'xy').reason, 'too_short');
-  assert.equal(policy.assertNewPassword('Qz?'.repeat(5)).accepted, true);
+  assert.equal(policy.assessExistingPassword('🧭'.repeat(6) + '٣').reason, 'too_short');
+  assert.equal(policy.assertNewPassword('🧭'.repeat(7) + '٣').accepted, true);
+  assert.equal(policy.assessExistingPassword('e\u0301'.repeat(2) + '3!?').reason, 'too_short');
+  assert.equal(policy.assertNewPassword('e\u0301'.repeat(3) + '3?').accepted, true);
+});
+
+test('new passwords require a digit and a special character, while earlier verified passwords still qualify', () => {
+  assert.throws(() => policy.assertNewPassword('Kieselmond unter Segelwolken?'), { code: 'PORTAL_PASSWORD_DIGIT_REQUIRED' });
+  assert.throws(() => policy.assertNewPassword('Kieselmond unter Segelwolken 8'), { code: 'PORTAL_PASSWORD_SPECIAL_REQUIRED' });
+  assert.equal(policy.assessExistingPassword('Kieselmond unter Segelwolken').accepted, true);
+  assert.equal(policy.assessExistingPassword('Kieselmond').reason, 'digit');
+  assert.equal(policy.acceptsVerifiedPolicyVersion(1), true);
+  assert.equal(policy.acceptsVerifiedPolicyVersion(2), true);
+  assert.equal(policy.acceptsVerifiedPolicyVersion(0), false);
 });
 
 test('well-formed Unicode and upper limits are enforced before expensive processing', () => {
   for (const value of [SAFE + '\ud800', '\udfff' + SAFE, '\ud800\ud800' + SAFE]) {
     assert.equal(policy.assessExistingPassword(value).reason, 'unicode');
   }
-  for (const value of ['🧭'.repeat(64), '🧭'.repeat(256), 'Qz?'.repeat(85) + '!']) {
+  for (const value of ['🧭'.repeat(63) + '5', '🧭'.repeat(255) + '𝟛', 'Qz?'.repeat(85) + '3']) {
     assert.equal(policy.assertNewPassword(value).accepted, true);
   }
-  assert.equal(Buffer.byteLength('🧭'.repeat(256), 'utf8'), 1024);
+  assert.equal(Buffer.byteLength('🧭'.repeat(255) + '𝟛', 'utf8'), 1024);
   for (const value of ['🧭'.repeat(257), 'Q'.repeat(257), 'Q'.repeat(1024 * 1024)]) {
     assert.equal(policy.assessExistingPassword(value).reason, 'too_long');
   }
@@ -104,7 +120,7 @@ test('bounded full context candidates are blocked but unrelated passphrases cont
 test('missing files fail closed without throwing during existing-password assessment', () => {
   const missing = policy.createPasswordPolicy({ dataDirectory: path.join(os.tmpdir(), 'gp-missing-password-corpus-does-not-exist') });
   assert.equal(missing.metadata().available, false);
-  assert.deepEqual(missing.assessExistingPassword(SAFE), { accepted: false, reason: 'unavailable', policyVersion: 1, corpusVersion: null });
+  assert.deepEqual(missing.assessExistingPassword(SAFE), { accepted: false, reason: 'unavailable', policyVersion: 2, corpusVersion: null });
   assert.throws(() => missing.assertNewPassword(SAFE), error => error.status === 503 && error.code === 'PORTAL_PASSWORD_POLICY_UNAVAILABLE');
 });
 
@@ -122,7 +138,7 @@ test('changed or missing data is rejected, with no silent empty-list fallback', 
 test('a matching checksum does not excuse wrong policy, insufficient records, or unsorted hashes', t => {
   const { directory, manifest } = fixture(t);
   const manifestFile = path.join(directory, 'manifest.json');
-  for (const change of [m => { m.policyVersion = 2; }, m => { m.minimumCodePoints = 6; },
+  for (const change of [m => { m.policyVersion = 1; }, m => { m.minimumCodePoints = 6; },
     m => { m.artifacts.common.count = 2999; }, m => { m.artifacts.breached.count = 0; },
     m => { m.artifacts.breached.file = '../outside.bin'; }]) {
     const altered = structuredClone(manifest); change(altered);

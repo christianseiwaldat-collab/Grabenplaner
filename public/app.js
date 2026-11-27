@@ -25,6 +25,7 @@ let personalActionsWindow = null, personalActionsOpener = null;
 let rightsWorkspace = null, rightsWorkspaceActor = '', rightsLoadController = null, rightsLoadGeneration = 0;
 let rightsSettingsWindows = null, permissionDefaultsUI = null;
 let rightsEditorGeneration = 0, rightsEditorSaveContext = null, rightsEditorSnapshot = null;
+let locationFunctionRightsDraft = null;
 let gpDefinitionsWorkspace = null, privateWorkspaceReturnRoute = null;
 let planningAssistantWorkspace = null;
 let systemUtilizationWorkspace = null;
@@ -1015,10 +1016,13 @@ function isManuallyWeekLocked() {
 }
 
 function isWeekLocked() {
-  return isAutomaticallyWeekLocked() || isManuallyWeekLocked();
+  return isAutomaticallyWeekLocked() || isManuallyWeekLocked() || !locationFunctionAllows("scheduleWrite", state.locationId);
 }
 
 function scheduleEditingLockExplanation() {
+  if (!locationFunctionAllows("scheduleWrite", state.locationId)) {
+    return "Für den Dienstplan dieser Filiale hast du Leserechte.";
+  }
   if (isManuallyWeekLocked()) {
     return "Der Dienstplan wurde manuell gesperrt. Einträge und Änderungen sind bis zur manuellen Freigabe nicht möglich.";
   }
@@ -1256,6 +1260,32 @@ function escapeHtmlAttribute(value) {
 
 function activeLocations() {
   return (state.locations || []).filter((location) => location.active);
+}
+
+function locationFunctionAccess() {
+  return state.portalStatus?.portalEnabled === false ? {} : state.portalSession?.user?.locationFunctions || {};
+}
+
+function locationFunctionAllows(feature, locationId) {
+  const selection = locationFunctionAccess()[feature];
+  return selection === undefined || selection === "all" || selection.includes(String(locationId || ""));
+}
+
+function locationsForFunction(feature, locations = activeLocations()) {
+  const access = locationFunctionAccess();
+  const selection = access[feature];
+  if (selection === "all") return locations;
+  if (Array.isArray(selection)) return locations.filter(location => selection.includes(String(location.id)));
+  const user = state.portalSession?.user;
+  if (!Object.keys(access).length || ["developer", "it_admin", "admin", "hr"].includes(user?.role)) return locations;
+  const allowed = new Set((user?.scopes || []).map(scope => String(scope.locationId)));
+  return locations.filter(location => allowed.has(String(location.id)));
+}
+
+function planningContextQuery(feature, includeDepartment = true) {
+  const locations = locationsForFunction(feature);
+  if (locations.some(location => location.id === state.locationId)) return contextQuery(includeDepartment);
+  return locations[0] ? `&location=${encodeURIComponent(locations[0].id)}` : contextQuery(includeDepartment);
 }
 
 function departmentsForLocation(locationId, includeInactive = false) {
@@ -2072,6 +2102,10 @@ function canAccessTeamManagement() {
     .some(permission => permissions.includes(permission));
 }
 
+function canOpenTeamWorkspace() {
+  return canAccessTeamManagement() || Boolean(locationFunctionAccess().locationSettings?.length);
+}
+
 function canOpenBranchWebgl() {
   return canAccessTeamManagement() && activeLocations().some(location => /grabenweg/i.test(location.name || ""));
 }
@@ -2324,6 +2358,9 @@ function canReadManagerRequests() {
 
 function canWriteApprovedAbsenceEntries() {
   if (!state.portalStatus?.portalEnabled) return true;
+  if (state.currentView === "vacations" && locationFunctionAccess().vacationPlanning !== undefined) {
+    return locationFunctionAllows("vacationPlanning", state.locationId);
+  }
   const permissions = state.portalSession?.user?.permissions || [];
   return permissions.includes("absence_entries:write") || permissions.includes("vacation:approve");
 }
@@ -2381,6 +2418,8 @@ function canManageBranchLoanOverview() {
 function canManageBranchOrders() {
   if (state.portalStatus?.installationFeatures?.branchOrders === false) return false;
   if (!state.portalStatus?.portalEnabled) return true;
+  const assigned = locationFunctionAccess().branchOrders;
+  if (assigned) return assigned.length > 0;
   return ["hr", "admin", "developer"].includes(state.portalSession?.user?.role)
     && state.portalSession?.user?.permissions?.includes("branch_orders:manage") === true;
 }
@@ -2938,7 +2977,8 @@ function applyRoleVisibility() {
   const employeeWriteAccess = !lanActive || permissions.includes("employees:write");
   const employeeDisplayWriteAccess = !lanActive || permissions.includes("employees:display:write");
   const locationFullWriteAccess = !lanActive || permissions.includes("locations:write");
-  const locationOperationalWriteAccess = permissions.includes("locations:operational:write");
+  const locationOperationalWriteAccess = permissions.includes("locations:operational:write")
+    || Boolean(locationFunctionAccess().locationSettings?.length);
   const locationBaseWriteAccess = locationFullWriteAccess || locationOperationalWriteAccess;
   const departmentWriteAccess = !lanActive || permissions.includes("departments:write");
   const locationWriteAccess = locationBaseWriteAccess || departmentWriteAccess;
@@ -3062,7 +3102,7 @@ function applyRoleVisibility() {
   elements.addRetentionRuleButton?.classList.toggle("hidden", !retentionManageAccess);
   elements.addRetentionHoldButton?.classList.toggle("hidden", !retentionManageAccess);
   elements.retentionPreviewCard?.classList.toggle("hidden", !retentionManageAccess);
-  document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
+  document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !canOpenTeamWorkspace()));
   document.querySelectorAll('[data-view="branchWebgl"]').forEach((button) => button.classList.toggle("hidden", !canOpenBranchWebgl()));
   if (state.currentView === "branchWebgl" && !canOpenBranchWebgl()) setView("startDashboard");
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
@@ -3148,6 +3188,7 @@ function applyRoleVisibility() {
   elements.systemExitButton?.classList.toggle("logout-mode", serverActive);
   if (elements.systemExitButton) elements.systemExitButton.querySelector("span").textContent = serverActive ? "Logout" : "Beenden";
   elements.updateCheckButton?.classList.toggle("hidden", !updateAccess);
+  document.querySelector('[data-personnel-tab="employees"]')?.classList.toggle("hidden", !employeeReadAccess);
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
   reconcileManagedTabs("personnel");
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
@@ -3421,7 +3462,7 @@ function applyRoleVisibility() {
   }
   if (personnelModuleAccess) renderPersonnelDashboard();
   if (!personnelModuleAccess && state.currentView === "personnelAdministration") setView("startDashboard");
-  if (!employeeReadAccess && state.currentView === "personnel") setView("startDashboard");
+  if (!canOpenTeamWorkspace() && state.currentView === "personnel") setView("startDashboard");
   if (!visibleManagedTabButtons("settings").length && state.currentView === "settings") setView("startDashboard");
   if (!requestReadAccess && state.currentView === "requests") setView("startDashboard");
   if (!timeReadAccess && state.currentView === "timeTracking") setView("startDashboard");
@@ -3775,11 +3816,12 @@ function scheduleAdminLoginBrandingPreview() {
 let loadAllGeneration = 0;
 let planningPeriodController = null;
 
-function applyLoadedSchedule(schedule) {
+function applyLoadedSchedule(schedule, { updateContext = true } = {}) {
   state.data = schedule;
   state.allowPastWeekEditing = schedule.settings?.allow_past_week_editing === "1";
-  state.locations = schedule.locations || state.locations;
+  if (!Object.keys(locationFunctionAccess()).length) state.locations = schedule.locations || state.locations;
   state.weekStart = schedule.weekStart;
+  if (!updateContext) return;
   state.locationId = schedule.context?.locationId || state.locationId;
   state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
 }
@@ -3830,20 +3872,25 @@ async function loadAll({ restoreContext = true, applyInitialView = false, reuseP
     setDefaultContext(state.locations);
     if (restoreContext) restoreRememberedOverallContext(state.currentView, state.locations);
     if (applyInitialView) applyRequestedView({ loadContext: false });
-    const scheduleContext = contextQuery(true);
-    const vacationContext = contextQuery(state.portalSession?.user?.role === "department_manager");
-    const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false;
+    const scheduleContext = planningContextQuery("scheduleRead");
+    const vacationContext = planningContextQuery("vacationPlanning", state.portalSession?.user?.role === "department_manager");
+    const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false
+      && locationFunctionAccess().vacationPlanning?.length !== 0;
     const scheduleUrl = `/api/schedule?week=${state.weekStart}${scheduleContext}`;
     const scheduleEnrichmentUrl = `/api/schedule/enrichment?week=${state.weekStart}${scheduleContext}`;
     const settingsRead = settingsConfirmationReadToken();
-    const schedule = await api(`${scheduleUrl}&fast=1`);
+    const schedule = locationFunctionAccess().scheduleRead?.length === 0 ? null : await api(`${scheduleUrl}&fast=1`);
     if (!isCurrent() || settingsRead.key !== settingsSaveKey("main")) return;
-    applyLoadedSchedule(schedule);
-    if (schedule.settings) acknowledgeSettingsRead(settingsRead, { schedule: true });
+    if (schedule) {
+      applyLoadedSchedule(schedule, { updateContext: !Object.keys(locationFunctionAccess()).length || state.currentView === "planning" });
+      if (schedule.settings) acknowledgeSettingsRead(settingsRead, { schedule: true });
+    } else {
+      state.data = null;
+    }
     render({ period: "schedule" });
     const positionsRequest = api("/api/positions");
     const roleDataRequest = api("/api/portal/v1/roles").catch(() => ({ roles: [], catalog: [] }));
-    void enrichLoadedSchedule(scheduleEnrichmentUrl, {
+    if (schedule) void enrichLoadedSchedule(scheduleEnrichmentUrl, {
       generation,
       session,
       expectedWeekStart: state.weekStart,
@@ -3920,8 +3967,8 @@ async function loadPlanningPeriod(kind = "schedule", { errorPrefix = "" } = {}) 
   const departmentId = state.departmentId;
   const vacation = kind === "vacation";
   const url = vacation
-    ? `/api/vacations?year=${state.vacationYear}${contextQuery(session?.user?.role === "department_manager")}`
-    : `/api/schedule?week=${state.weekStart}${contextQuery(true)}`;
+    ? `/api/vacations?year=${state.vacationYear}${planningContextQuery("vacationPlanning", session?.user?.role === "department_manager")}`
+    : `/api/schedule?week=${state.weekStart}${planningContextQuery("scheduleRead")}`;
   const settingsRead = settingsConfirmationReadToken();
   try {
     const data = await api(vacation ? url : `${url}&fast=1`, { signal: controller.signal });
@@ -3931,7 +3978,7 @@ async function loadPlanningPeriod(kind = "schedule", { errorPrefix = "" } = {}) 
     if (vacation) {
       state.vacationData = data;
       state.vacationYear = data.year;
-      state.locations = data.locations || state.locations;
+      if (!Object.keys(locationFunctionAccess()).length) state.locations = data.locations || state.locations;
     } else {
       applyLoadedSchedule(data);
     }
@@ -3984,17 +4031,19 @@ function render({ period = null } = {}) {
   }
   applyShellBranding(hasManagementBrandingAccess() ? {} : state.data?.settings || {});
   renderContextNavigation();
-  renderHeader();
-  renderCrossLocationSchedule();
-  renderStaffAssignmentRequestReviewAccess();
-  renderSummary();
-  renderBranchSupervisionAssessment();
-  renderWorkRuleAssessment();
-  if (!planningAssistantWorkspace && window.GpPlanningAssistant) planningAssistantWorkspace = window.GpPlanningAssistant.mount(document.getElementById('planningAssistantPanel'), { api, onApplied: () => loadPlanningPeriod('schedule') });
-  planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
-  renderTimeline();
-  renderRemarks();
-  renderHoursOverview();
+  if (state.data) {
+    renderHeader();
+    renderCrossLocationSchedule();
+    renderStaffAssignmentRequestReviewAccess();
+    renderSummary();
+    renderBranchSupervisionAssessment();
+    renderWorkRuleAssessment();
+    if (!planningAssistantWorkspace && window.GpPlanningAssistant) planningAssistantWorkspace = window.GpPlanningAssistant.mount(document.getElementById('planningAssistantPanel'), { api, onApplied: () => loadPlanningPeriod('schedule') });
+    planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
+    renderTimeline();
+    renderRemarks();
+    renderHoursOverview();
+  }
   if (period === "schedule") return;
   renderStartDashboard();
   renderFilialDashboard();
@@ -4330,6 +4379,7 @@ function branchOrdersManagementLocations() {
   const locations = activeLocations();
   if (state.portalStatus?.portalEnabled !== true) return locations;
   const user = state.portalSession?.user || {};
+  if (locationFunctionAccess().branchOrders) return locationsForFunction("branchOrders", locations);
   if (user.role === "developer") return locations;
   const allowedLocationIds = new Set([
     user.homeLocationId,
@@ -5469,8 +5519,11 @@ function applyNavigationGroupState(key, visible = true) {
 function renderContextNavigation() {
   const routeChanged = sidebarNavigationGroups.sync(JSON.stringify(currentAdministrationRoute()), state.currentView);
   const activePath = sidebarNavigationGroups.navigationPath(state.currentView);
-  const locations = activeLocations();
+  const planningLocations = locationsForFunction("scheduleRead");
+  const vacationLocations = locationsForFunction("vacationPlanning");
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
+  const departmentPlanningOnly = departmentOnly && locationFunctionAccess().scheduleRead === undefined;
+  const departmentVacationOnly = departmentOnly && locationFunctionAccess().vacationPlanning === undefined;
   const filialViewActive = activePath.includes("filialManagement");
   elements.filialManagementNav?.classList.toggle("contains-active", filialViewActive);
   applyNavigationGroupState("filialManagement", true);
@@ -5479,7 +5532,7 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
   setNavigationCurrent(elements.loanManagementNavButton, state.currentView === "loans");
   setNavigationCurrent(elements.branchOrdersManagementNavButton, state.currentView === "branchOrders");
-  const planningContexts = locations.flatMap((location) => departmentOnly
+  const planningContexts = planningLocations.flatMap((location) => departmentPlanningOnly
     ? (location.departments || []).map((department) => ({ locationId: location.id, departmentId: String(department.id), locationName: location.name, planLabel: department.name }))
     : [{ locationId: location.id, departmentId: "", locationName: location.name, planLabel: "Gesamtplan" }]);
   const showPlanningChildren = planningContexts.length > 1;
@@ -5490,12 +5543,12 @@ function renderContextNavigation() {
     <button type="button" class="nav-child nav-planning-context ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? 'aria-current="page"' : ""} data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}" title="${escapeHtml(`${item.locationName} · ${item.planLabel}`)}"><strong>${escapeHtml(item.locationName)}</strong><small>${escapeHtml(item.planLabel)}</small></button>
   `).join("") : "";
 
-  const showVacationChildren = locations.length > 1;
+  const showVacationChildren = vacationLocations.length > 1;
   setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations" && !showVacationChildren);
   elements.vacationsNavButton?.classList.toggle("contains-active", state.currentView === "vacations" && showVacationChildren);
   applyNavigationGroupState("vacations", showVacationChildren);
-  elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
-    <button type="button" class="nav-child ${state.currentView === "vacations" && location.id === state.locationId ? "active" : ""}" ${state.currentView === "vacations" && location.id === state.locationId ? 'aria-current="page"' : ""} data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
+  elements.vacationNavChildren.innerHTML = showVacationChildren ? vacationLocations.map((location) => `
+    <button type="button" class="nav-child ${state.currentView === "vacations" && location.id === state.locationId ? "active" : ""}" ${state.currentView === "vacations" && location.id === state.locationId ? 'aria-current="page"' : ""} data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentVacationOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
   `).join("") : "";
 
   const personnelModuleVisible = !elements.personnelAdministrationNav?.classList.contains("hidden");
@@ -5708,6 +5761,7 @@ function renderHeader() {
   document.querySelector("#weekJumpDate").value = state.weekStart;
   const automaticallyLocked = isAutomaticallyWeekLocked();
   const manuallyLocked = isManuallyWeekLocked();
+  const readOnly = !locationFunctionAllows("scheduleWrite", state.locationId);
   elements.weekLockNotice.classList.toggle("hidden", !automaticallyLocked);
   renderManualScheduleLockControl();
   const hasNote = Boolean(state.data.scheduleNote?.note_text);
@@ -5717,9 +5771,9 @@ function renderHeader() {
   ["autoPlanButton", "optionsButton", "resetWeekButton", "scheduleNoteButton"].forEach((id) => {
     const button = document.querySelector(`#${id}`);
     if (button) {
-      button.disabled = automaticallyLocked;
-      button.setAttribute("aria-disabled", String(automaticallyLocked || manuallyLocked));
-      button.title = automaticallyLocked || manuallyLocked
+      button.disabled = automaticallyLocked || readOnly;
+      button.setAttribute("aria-disabled", String(automaticallyLocked || manuallyLocked || readOnly));
+      button.title = automaticallyLocked || manuallyLocked || readOnly
         ? scheduleEditingLockExplanation()
         : "";
     }
@@ -8137,7 +8191,7 @@ function renderServerDiagnostics(status, technical = null) {
       <summary>Technische Details anzeigen</summary>
       <div class="diagnostic-grid">
         <span><small>HTTPS-Pflicht</small><strong>${technical.httpsRequired ? "aktiv" : "nicht erforderlich"}</strong></span>
-        <span><small>Passwortminimum</small><strong>${Number(technical.passwordMinLength || 6)} Zeichen</strong></span>
+        <span><small>Passwortminimum</small><strong>${Number(technical.passwordMinLength || 8)} Zeichen</strong></span>
         <span><small>Datenbank</small><strong>PostgreSQL · gemeinsames Core-/Sales-Paar</strong></span>
         <span><small>Integrität</small><strong>${escapeHtml(technical.database?.integrity || "unbekannt")}</strong></span>
         <span><small>Migration</small><strong>${escapeHtml(technical.database?.migration?.id || "–")}</strong></span>
@@ -22151,7 +22205,7 @@ function startDashboardWorkspaceActorKey() {
   const user = state.portalSession?.user;
   return JSON.stringify([state.portalSession?.authenticated === true, user?.employeeNumber, user?.accountId,
     user?.sessionKind, user?.isEmployee, user?.role, user?.mustChangePassword, user?.active,
-    user?.permissions, user?.scopes, user?.salesAnalytics, user?.salesHistory]);
+    user?.permissions, user?.scopes, user?.locationFunctions, user?.salesAnalytics, user?.salesHistory]);
 }
 
 function startDashboardWorkspaceFieldAllowed(id) {
@@ -22427,14 +22481,18 @@ function canReadStartDashboardSchedule() {
   return Boolean(state.portalStatus)
     && state.portalStatus.installationFeatures?.schedule !== false
     && (!state.portalStatus?.portalEnabled
-      || state.portalSession?.user?.permissions?.includes("schedule:read") === true);
+      || (locationFunctionAccess().scheduleRead
+        ? locationFunctionAccess().scheduleRead.length > 0
+        : state.portalSession?.user?.permissions?.includes("schedule:read") === true));
 }
 
 function canReadStartDashboardVacations() {
   return Boolean(state.portalStatus)
     && state.portalStatus.installationFeatures?.vacation !== false
     && (!state.portalStatus?.portalEnabled
-      || state.portalSession?.user?.permissions?.includes("vacation:read") === true);
+      || (locationFunctionAccess().vacationPlanning
+        ? locationFunctionAccess().vacationPlanning.length > 0
+        : state.portalSession?.user?.permissions?.includes("vacation:read") === true));
 }
 
 function startDashboardCardAccessible(cardId) {
@@ -23130,7 +23188,7 @@ function defaultScheduleSearchQuery() {
 }
 
 function scheduleSearchLocationOptions() {
-  return activeLocations().map((location) => ({
+  return locationsForFunction("scheduleRead").map((location) => ({
     id: String(location.id),
     name: String(location.name || location.id),
   }));
@@ -23140,14 +23198,15 @@ function scheduleSearchDepartmentOptions(locationId) {
   const serverOptions = Array.isArray(state.scheduleSearchData?.filters?.departments)
     ? state.scheduleSearchData.filters.departments
     : [];
-  const localOptions = activeLocations().flatMap((location) => (
+  const locations = locationsForFunction("scheduleRead");
+  const localOptions = locations.flatMap((location) => (
     departmentsForLocation(location.id).map((department) => ({
       id: department.id,
       name: department.name,
       locationId: location.id,
     }))
   ));
-  const locationsById = new Map(activeLocations().map((location) => [String(location.id), location]));
+  const locationsById = new Map(locations.map((location) => [String(location.id), location]));
   const byId = new Map();
   for (const department of [...localOptions, ...serverOptions]) {
     const id = String(department?.id || "");
@@ -23913,6 +23972,7 @@ function canEditEmployeeWindow() {
 
 function canEditLocationWindow() {
   return canWriteLocationsFully() || canManageTimeTrackingSettings()
+    || Boolean(locationFunctionAccess().locationSettings?.length)
     || state.portalSession?.user?.permissions?.includes("locations:operational:write") === true;
 }
 
@@ -24131,8 +24191,9 @@ function renderLocations() {
   const locations = state.locations || [];
   const permissions = state.portalSession?.user?.permissions || [];
   const localAccess = !state.portalStatus?.portalEnabled;
+  const locationSettingsScope = locationFunctionAccess().locationSettings;
   const canEditLocations = localAccess || permissions.includes("locations:write")
-    || permissions.includes("locations:operational:write");
+    || permissions.includes("locations:operational:write") || Boolean(locationSettingsScope?.length);
   const canEditDepartments = localAccess || permissions.includes("departments:write");
   elements.departmentLocation.innerHTML = locations.map((location) =>
     `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
@@ -24141,11 +24202,19 @@ function renderLocations() {
   if (!state.editingLocationId) setLocationDayFields(currentLocation()?.day_settings || locations[0]?.day_settings || {});
   elements.locationList.innerHTML = locations.length ? locations.map((location) => {
     const departments = location.departments || [];
-    const openingSummary = planningDayKeys.filter((day) => location.day_settings?.[day]?.open !== false).map((day) => `${preferredDayLabels[day]?.slice(0, 2) || (day === "saturday" ? "Sa" : day.slice(0, 2))} ${location.day_settings?.[day]?.start || "–"}–${location.day_settings?.[day]?.end || "–"}`).join(" · ");
+    const openingSummary = planningDayKeys.flatMap(day => {
+      const hours = location.day_settings?.[day];
+      if (!hours || hours.open === false) return [];
+      const label = preferredDayLabels[day]?.slice(0, 2) || day.slice(0, 2);
+      const interval = hours.lunchEnabled && hours.lunchStart && hours.lunchEnd
+        ? `${hours.start}–${hours.lunchStart}, ${hours.lunchEnd}–${hours.end}`
+        : `${hours.start || "–"}–${hours.end || "–"}`;
+      return [`${label} ${interval}`];
+    }).join(" · ");
     return `<article class="location-card">
       <div class="location-card-head">
         <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${location.active ? "Aktiv" : "Inaktiv"} · ${departments.length} Abteilung(en) · Mindestbesetzung Filiale: ${Number(location.min_staff || 0)} · Zeiterfassung ${location.time_tracking_enabled ? "aktiv" : "aus"}</small><small>Kostenstelle: ${escapeHtml([location.cost_center_code ?? location.costCenterCode, location.cost_center_name ?? location.costCenterName].filter(Boolean).join(" · ") || "noch nicht zugeordnet")} · ${escapeHtml(openingSummary)}</small></div>
-        ${canEditLocations ? `<button type="button" class="edit-button" data-edit-location="${escapeHtml(location.id)}">Filiale bearbeiten</button>` : ""}
+        ${canEditLocations && locationFunctionAllows("locationSettings", location.id) ? `<button type="button" class="edit-button" data-edit-location="${escapeHtml(location.id)}">Filiale bearbeiten</button>` : ""}
       </div>
       <div class="department-list">${
         departments.length ? departments.map((department) => `
@@ -26132,6 +26201,117 @@ function enforceRightsEditorPermissionDependencies(changedInput = null, announce
   if (announce && announcement) rightsEditorAnnounce(announcement);
 }
 
+const locationFunctionRightsColumns = [
+  ["scheduleRead", "Dienstplan"],
+  ["vacationPlanning", "Urlaubsplanung"],
+  ["branchOrders", "Filialbestellungen"],
+  ["locationSettings", "Standorteinstellungen"],
+];
+
+function locationFunctionRightsCurrent(draft) {
+  return draft === locationFunctionRightsDraft && draft.generation === rightsEditorGeneration
+    && draft.actor === rightsWorkspaceActorKey() && canUseRightsWorkspace();
+}
+
+function renderLocationFunctionRightsFields(fields, { access, locations }) {
+  const headers = locationFunctionRightsColumns.map(([feature, title]) => {
+    const mode = access[feature] === "all" ? "all" : Array.isArray(access[feature]) ? "selection" : "inherit";
+    return `<th scope="col">${title}
+      <select data-location-function-mode="${feature}" aria-label="${title} Geltungsbereich">
+        <option value="inherit" ${mode === "inherit" ? "selected" : ""}>Bestehende Rechte</option>
+        <option value="selection" ${mode === "selection" ? "selected" : ""}>Filialauswahl</option>
+        ${feature === "vacationPlanning" ? `<option value="all" ${mode === "all" ? "selected" : ""}>Alle Filialen</option>` : ""}
+      </select></th>`;
+  }).join("");
+  const rows = locations.map(location => {
+    const id = escapeHtml(location.id);
+    const name = escapeHtml(`${location.id} · ${location.name}`);
+    const schedule = access.scheduleWrite?.includes(location.id) ? "write"
+      : access.scheduleRead?.includes(location.id) ? "read" : "";
+    const cells = locationFunctionRightsColumns.slice(1).map(([feature, title]) =>
+      `<td><input type="checkbox" data-location-function="${feature}" value="${id}"
+        aria-label="${title} für ${name}" ${access[feature]?.includes(location.id) ? "checked" : ""} /></td>`,
+    ).join("");
+    return `<tr><th scope="row">${name}</th><td>
+      <select data-location-function="scheduleRead" data-location-id="${id}" aria-label="Dienstplan für ${name}">
+        <option value="">Kein Zugriff</option>
+        <option value="read" ${schedule === "read" ? "selected" : ""}>Lesen</option>
+        <option value="write" ${schedule === "write" ? "selected" : ""}>Bearbeiten</option>
+      </select></td>${cells}</tr>`;
+  }).join("");
+  fields.innerHTML = `<div class="location-function-rights-table" role="region" aria-label="Filialrechte nach Funktion" tabindex="0">
+    <table><thead><tr><th scope="col">Filiale</th>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  fields.onchange = () => {
+    for (const mode of fields.querySelectorAll("[data-location-function-mode]")) {
+      for (const input of fields.querySelectorAll(`[data-location-function="${mode.dataset.locationFunctionMode}"]`)) {
+        input.disabled = mode.value !== "selection";
+        if (input.type === "checkbox" && mode.value === "all") input.checked = true;
+      }
+    }
+  };
+  fields.onchange();
+}
+
+async function openLocationFunctionRights(user, generation, actor) {
+  const section = document.getElementById("rightsLocationFunctions");
+  const fields = document.getElementById("rightsLocationFunctionsFields");
+  const status = document.getElementById("rightsLocationFunctionsStatus");
+  const save = document.getElementById("saveRightsLocationFunctionsButton");
+  if (!section || !fields || !status || !save) return;
+  const editor = state.portalSession?.user;
+  const allowed = user.manageable && (!state.portalStatus?.portalEnabled
+    || (["developer", "admin", "hr"].includes(editor?.role) && editor.permissions?.includes("rights:write")));
+  locationFunctionRightsDraft = null;
+  section.hidden = !allowed;
+  section.open = false;
+  fields.replaceChildren();
+  fields.disabled = save.disabled = true;
+  save.onclick = null;
+  if (!allowed) return;
+  const draft = { generation, actor, url: `/api/portal/v1/rights/${encodeURIComponent(user.employeeNumber)}/location-functions` };
+  locationFunctionRightsDraft = draft;
+  status.textContent = "Filialrechte werden geladen …";
+  try {
+    const result = await api(draft.url);
+    if (!locationFunctionRightsCurrent(draft)) return;
+    draft.revision = result.revision;
+    renderLocationFunctionRightsFields(fields, result);
+    fields.disabled = save.disabled = false;
+    status.textContent = "Eine Filialauswahl gilt für alle Abteilungen der ausgewählten Filialen.";
+  } catch (error) {
+    if (locationFunctionRightsCurrent(draft)) status.textContent = error.message;
+    return;
+  }
+  save.onclick = async () => {
+    if (!locationFunctionRightsCurrent(draft) || save.disabled) return;
+    const access = {};
+    for (const mode of fields.querySelectorAll("[data-location-function-mode]")) {
+      const feature = mode.dataset.locationFunctionMode;
+      if (mode.value === "inherit") continue;
+      const inputs = [...fields.querySelectorAll(`[data-location-function="${feature}"]`)];
+      if (feature === "scheduleRead") {
+        access.scheduleRead = inputs.filter(input => input.value).map(input => input.dataset.locationId);
+        access.scheduleWrite = inputs.filter(input => input.value === "write").map(input => input.dataset.locationId);
+      } else {
+        access[feature] = mode.value === "all" ? "all" : inputs.filter(input => input.checked).map(input => input.value);
+      }
+    }
+    fields.disabled = save.disabled = true;
+    try {
+      const result = await api(draft.url, {
+        method: "PUT", body: JSON.stringify({ access, revision: draft.revision }),
+      });
+      if (!locationFunctionRightsCurrent(draft)) return;
+      draft.revision = result.revision;
+      status.textContent = "Filialrechte gespeichert.";
+    } catch (error) {
+      if (locationFunctionRightsCurrent(draft)) status.textContent = error.message;
+    } finally {
+      if (locationFunctionRightsCurrent(draft)) fields.disabled = save.disabled = false;
+    }
+  };
+}
+
 function openRightsEditor(employeeNumber) {
   const result = state.rightsManagement || {};
   const user = (result.users || []).find((entry) => entry.employeeNumber === employeeNumber);
@@ -26207,6 +26387,7 @@ function openRightsEditor(employeeNumber) {
           : "Als Filialleitung können Sie Grundrechte dieser Abteilungsleitung entziehen oder wiederherstellen. Zusatzrechte, Rollen und Geltungsbereiche bleiben unverändert."
       : "Aktivierte Rollenrechte bleiben wirksam; abgewählte Rollenrechte werden persönlich entzogen. Änderungen gelten sofort.";
   refreshRightsEditorScope();
+  void openLocationFunctionRights(user, generation, actor);
   void rightsWorkspace?.showProfile(state.rightsEditorReturnFocus, user).then(() => {
     if (generation !== rightsEditorGeneration || actor !== rightsWorkspaceActorKey() || !elements.rightsEditorModal.open) return;
     window.requestAnimationFrame(() => elements.rightsEditorTitle?.focus());
@@ -38831,11 +39012,12 @@ function setView(view) {
   }
   if (!pageViewElement(view)) view = "startDashboard";
   const features = state.portalStatus?.installationFeatures || {};
-  if ((view === "vacations" && features.vacation === false)
+  if ((view === "vacations" && (features.vacation === false || locationFunctionAccess().vacationPlanning?.length === 0))
+    || (view === "planning" && locationFunctionAccess().scheduleRead?.length === 0)
     || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
-    || (view === "personnel" && !canAccessTeamManagement())
+    || (view === "personnel" && !canOpenTeamWorkspace())
     || (view === "branchWebgl" && !canOpenBranchWebgl())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
@@ -38883,6 +39065,12 @@ function setView(view) {
       resetAdminCredentialVisibility(elements.manualDriveBackupDeletePassword);
     }
     elements.manualDriveBackupDeleteDialog?.close();
+  }
+  if (Object.keys(locationFunctionAccess()).length && ["planning", "vacations"].includes(view)) {
+    const locations = locationsForFunction(view === "planning" ? "scheduleRead" : "vacationPlanning");
+    if (locations.length && !locations.some(location => location.id === state.locationId)) {
+      setDefaultContext(locations);
+    }
   }
   if (view === 'personnel' && state.personnelTab === 'employees') resumeEmployeeProfile('team');
   if (view === "requests") ensureAccessibleManagerRequestTab();
@@ -39250,7 +39438,7 @@ function setSettingsTab(tab) {
 }
 
 function setPersonnelTab(tab) {
-  if (!canAccessTeamManagement()) return;
+  if (!canOpenTeamWorkspace()) return;
   const buttons = visibleManagedTabButtons("personnel");
   tab = buttons.some(button => button.dataset.personnelTab === tab) ? tab : buttons[0]?.dataset.personnelTab || "";
   if (tab !== "employees" && employeeProfileIsOpen() && state.employeeProfileHost === "team") {

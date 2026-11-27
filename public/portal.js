@@ -476,7 +476,7 @@ let portalDocumentPrint=null, portalDocumentOwner='', loanConfirmationPrintBridg
 function portalDocumentActorKey() {
   const user = portalUser();
   return portalState.session?.authenticated ? JSON.stringify([user?.employeeNumber, user?.accountId, user?.sessionKind, user?.accountType,
-    user?.isEmployee, user?.role, user?.active, user?.permissions, user?.scopes, user?.mustChangePassword, user?.homeLocationId]) : '';
+    user?.isEmployee, user?.role, user?.active, user?.permissions, user?.scopes, user?.locationFunctions, user?.mustChangePassword, user?.homeLocationId]) : '';
 }
 
 function capturePortalContext(canUse = () => true) {
@@ -911,6 +911,9 @@ function branchVacationCapabilityEnabled(user = portalUser()) {
 }
 
 function branchOrderManagementEnabled(user = portalUser()) {
+  if (Array.isArray(user?.locationFunctions?.branchOrders)) {
+    return !isOrganizationAccount(user) && user.locationFunctions.branchOrders.length > 0;
+  }
   return !isOrganizationAccount(user)
     && ["hr", "admin", "developer"].includes(user?.role)
     && (user?.permissions || []).includes("branch_orders:manage");

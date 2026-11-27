@@ -248,7 +248,7 @@ test("PDF-Vorschauen dürfen nur gleichursprünglich eingebettet werden", async 
 });
 
 test("vorbereitete Passwort-Hashes verwenden scrypt, Salz und Versionskennung", async () => {
-  const password = "EinSicheresTestpasswort!";
+  const password = "EinSicheresTestpasswort!27";
   const hashA = await hashPortalPassword(password);
   const hashB = await hashPortalPassword(password);
   assert.match(hashA, /^scrypt-v1\$/);
