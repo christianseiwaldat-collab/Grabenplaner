@@ -3,6 +3,7 @@
 const test=require("node:test"),assert=require("node:assert/strict");
 const {ensureSqliteSessionSecuritySchema,COLUMNS}=require("../lib/persistence/sqlite/operations/session-security-schema");
 const migration=require("../lib/persistence/postgresql/core/session-security");
+const LEGACY_HASH_FIXTURE = "legacy-scrypt-v1-preserved";
 const BASE=[
  "CREATE TABLE portal_users(employee_number TEXT PRIMARY KEY,password_hash TEXT NOT NULL)",
  "CREATE TABLE portal_organization_accounts(id TEXT PRIMARY KEY,password_hash TEXT NOT NULL)",
@@ -11,7 +12,6 @@ const BASE=[
  "CREATE TABLE mobile_sessions(id TEXT PRIMARY KEY,revoked_at TEXT,revoked_reason TEXT,updated_at TEXT)",
  "CREATE TABLE portal_password_reset_tokens(id TEXT PRIMARY KEY,revoked_at TEXT,used_at TEXT)",
  "CREATE TABLE schema_migrations(id TEXT PRIMARY KEY,app_version TEXT NOT NULL)",
- "INSERT INTO portal_users VALUES('personal','legacy-scrypt-v1-preserved')",
  "INSERT INTO portal_organization_accounts VALUES('branch','legacy-org-hash-preserved')",
  "INSERT INTO portal_sessions VALUES('browser',NULL)",
  "INSERT INTO portal_organization_sessions VALUES('organization',NULL)",
@@ -39,6 +39,7 @@ test("PostgreSQL native DDL rolls back failure and revokes legacy rows without c
   await client.query("CREATE SCHEMA "+schema);owned=true;
   await client.query("SET LOCAL search_path="+schema+",pg_catalog");
   for(const sql of BASE)await client.query(sql);
+  await client.query("INSERT INTO portal_users VALUES($1,$2)", ["personal", LEGACY_HASH_FIXTURE]);
   await client.query("SAVEPOINT before_upgrade");
   for(const sql of migration.statements.slice(0,8))await client.query(translate(sql));
   await assert.rejects(client.query("SELECT 1/0"),error=>error.code==="22012");
@@ -47,7 +48,7 @@ test("PostgreSQL native DDL rolls back failure and revokes legacy rows without c
   assert.equal((await client.query("SELECT count(*) n FROM information_schema.columns WHERE table_schema=$1 AND column_name='authenticated_at'",[schema])).rows[0].n,"0");
   for(const sql of migration.statements)await client.query(translate(sql));
   for(const table of ["portal_sessions","portal_organization_sessions","mobile_sessions","portal_password_reset_tokens"])assert.ok((await client.query("SELECT revoked_at FROM "+table)).rows[0].revoked_at);
-  assert.equal((await client.query("SELECT password_hash,password_policy_version FROM portal_users")).rows[0].password_hash,"legacy-scrypt-v1-preserved");
+  assert.equal((await client.query("SELECT password_hash,password_policy_version FROM portal_users")).rows[0].password_hash, LEGACY_HASH_FIXTURE);
   assert.equal((await client.query("SELECT password_policy_version FROM portal_users")).rows[0].password_policy_version,0);
   assert.equal((await client.query("SELECT authenticated_at FROM portal_sessions")).rows[0].authenticated_at,null);
   await client.query("COMMIT");

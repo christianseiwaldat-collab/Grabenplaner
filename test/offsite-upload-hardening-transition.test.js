@@ -3,8 +3,9 @@ const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const helper = require("../server-tools/linux/lib/offsite-upload-hardening-compat.js");
-const { classify } = require("../server-tools/linux/lib/offsite-update-compat.js");
+const { classify, fingerprint } = require("../server-tools/linux/lib/offsite-update-compat.js");
 const ROOT = path.resolve(__dirname, ".."), MODULE = path.join(ROOT, "server-tools/linux/offsite");
+const INSTALLER = "install-grabenplaner-offsite.sh";
 const digest = file => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 const rootOnly = process.platform === "linux" && process.getuid() === 0;
 function contract(root) {
@@ -14,15 +15,52 @@ function contract(root) {
 const binding = { format: "grabenplaner-offsite-provider-binding", schemaVersion: 1, providerId: "google_drive", remoteName: "synthetic",
   backend: "drive", authentication: "dedicated_oauth", endpoint: null, region: null, scope: "drive.file", configSha256: "a".repeat(64),
   policySha256: "b".repeat(64), repositoryLayout: "google-drive-direct-safe-path-v1", storageRoot: null };
-function fixture(t) {
+function replacedHash(receipt, artifact, sha256) {
+  const files = receipt.files.map(item => item.path === artifact ? { ...item, sha256 } : item);
+  return { ...receipt, fingerprint: fingerprint(new Map(files.map(item => [item.path, item.sha256]))), files };
+}
+function envelope(receipt) {
+  return { offsiteModule: { schemaVersion: 1, moduleVersion: 13, activationPolicy: "explicit-root-setup", fingerprint: receipt.fingerprint,
+    installerSha256: receipt.files.find(item => item.path === INSTALLER).sha256,
+    managedArtifacts: receipt.files.map(item => "server-tools/linux/offsite/" + item.path) } };
+}
+function publishedRebindBytes() {
+  const result = spawnSync("git", ["-c", "safe.directory=" + ROOT, "-c", "core.fsmonitor=false", "show",
+    "dbe3d998f6e6a96d6078376e50125db233caaa6c:server-tools/linux/offsite/" + helper.REBIND.artifact],
+  { cwd: ROOT, timeout: 10000 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr.toString("utf8"));
+  assert.equal(crypto.createHash("sha256").update(result.stdout).digest("hex"), helper.REBIND.oldSha);
+  return result.stdout;
+}
+function addPublishedInstallerVariant(directory) {
+  const file = path.join(directory, INSTALLER);
+  assert.equal(digest(file), helper.REBIND.installer);
+  const source = fs.readFileSync(file, "utf8"), anchor = '\nsetup_complete=1\nassurance_trigger="offsite-config-changed"';
+  assert.equal(source.split(anchor).length, 2);
+  fs.writeFileSync(file, source.replace(anchor, "\nsetup_complete=1\n" + [
+    'if [[ -f "$OFFSITE_APP_ROOT/server-tools/linux/install-manual-drive-control.sh" && ! -L "$OFFSITE_APP_ROOT/server-tools/linux/install-manual-drive-control.sh" ]]; then',
+    '  if ! /bin/bash "$OFFSITE_APP_ROOT/server-tools/linux/install-manual-drive-control.sh"; then',
+    "    offsite_warn 'Die manuelle Google-Drive-Sicherungssteuerung bleibt bis zur sicheren Einrichtung nicht verfuegbar.'",
+    "  fi",
+    "fi",
+    'assurance_trigger="offsite-config-changed"',
+  ].join("\n")));
+  assert.equal(digest(file), helper.REBIND.release105Installer);
+}
+function fixture(t, { kind = "upload", alternateInstaller = null } = {}) {
   // Real root-owned fixture; no production app, state, credentials or repository.
   const root = fs.mkdtempSync("/root/gp-offsite-upload-refresh-test-"); fs.chmodSync(root, 0o700);
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const old = path.join(root, "module"), candidate = path.join(root, "candidate"), receipt = path.join(root, "receipt.json");
   for (const target of [old, candidate]) fs.cpSync(MODULE, target, { recursive: true });
-  fs.copyFileSync(path.join(__dirname, "fixtures/offsite-upload-module13-predecessor.sh"), path.join(old, helper.ARTIFACT));
-  // A checkout-owned predecessor can retain its owner when copied over this file.
-  fs.chownSync(path.join(old, helper.ARTIFACT), 0, 0);
+  const rebind = publishedRebindBytes();
+  fs.writeFileSync(path.join(old, helper.REBIND.artifact), rebind);
+  if (kind === "upload") {
+    fs.writeFileSync(path.join(candidate, helper.REBIND.artifact), rebind);
+    fs.copyFileSync(path.join(__dirname, "fixtures/offsite-upload-module13-predecessor.sh"), path.join(old, helper.ARTIFACT));
+  }
+  if (alternateInstaller) addPublishedInstallerVariant(alternateInstaller === "installed" ? old : candidate);
   function protect(directory) {
     fs.chownSync(directory, 0, 0); fs.chmodSync(directory, 0o755);
     for (const item of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -33,22 +71,34 @@ function fixture(t) {
   }
   protect(old); protect(candidate);
   const before = contract(old), after = contract(candidate);
-  assert.equal(before.fingerprint, helper.OLD_FINGERPRINT);
+  const reviewed = kind === "upload" ? helper.OLD_FINGERPRINT : helper.REBIND.before;
+  assert.equal(replacedHash(before, INSTALLER, helper.REBIND.installer).fingerprint, reviewed);
+  if (kind === "rebind") assert.equal(replacedHash(after, INSTALLER, helper.REBIND.installer).fingerprint, helper.REBIND.after);
   fs.writeFileSync(receipt, JSON.stringify({ ...before, providerBinding: binding }) + "\n", { mode: 0o600 });
   const app = path.join(root, "app-manifest.json"), nextApp = path.join(root, "candidate-manifest.json");
   fs.writeFileSync(app, '{"version":"0.92.100-beta"}\n', { mode: 0o644 });
   fs.writeFileSync(nextApp, '{"version":"0.92.101-beta"}\n', { mode: 0o644 });
-  const prepare = () => helper.prepare(old, candidate, receipt, after.fingerprint, app, nextApp, "c".repeat(64)).transaction;
+  const prepare = () => helper.prepare(old, candidate, receipt, after.fingerprint, app, nextApp, "c".repeat(64), kind).transaction;
   return { root, old, candidate, receipt, before, after, app, nextApp, prepare };
 }
 test("generic same-version fingerprint gate remains closed for the new upload", () => {
-  const candidate = contract(MODULE);
-  const before = { ...candidate, fingerprint: helper.OLD_FINGERPRINT, files: candidate.files.map(item => item.path === helper.ARTIFACT ? { ...item, sha256: helper.OLD_UPLOAD } : item) };
-  const envelope = { offsiteModule: { schemaVersion: 1, moduleVersion: 13, activationPolicy: "explicit-root-setup", fingerprint: candidate.fingerprint,
-    installerSha256: candidate.files.find(item => item.path === "install-grabenplaner-offsite.sh").sha256,
-    managedArtifacts: candidate.files.map(item => `server-tools/linux/offsite/${item.path}`) } };
-  assert.equal(classify(envelope, before), "migration-required:13->13");
-  assert.equal(classify(envelope, candidate), "compatible");
+  const candidate = replacedHash(contract(MODULE), helper.REBIND.artifact, helper.REBIND.oldSha);
+  assert.equal(candidate.fingerprint, helper.REBIND.before);
+  const before = replacedHash(candidate, helper.ARTIFACT, helper.OLD_UPLOAD);
+  assert.equal(before.fingerprint, helper.OLD_FINGERPRINT);
+  assert.equal(classify(envelope(candidate), before), "migration-required:13->13");
+  assert.equal(classify(envelope(candidate), candidate), "compatible");
+});
+test("the old updater accepts the new rebind only after the exact module refresh", () => {
+  const base = contract(MODULE);
+  assert.equal(base.fingerprint, helper.REBIND.after);
+  for (const installer of [helper.REBIND.installer, helper.REBIND.release105Installer]) {
+    const after = replacedHash(base, INSTALLER, installer);
+    const before = replacedHash(after, helper.REBIND.artifact, helper.REBIND.oldSha);
+    const compatibility = installer === helper.REBIND.installer ? "compatible" : "compatible-installer-only";
+    assert.equal(classify(envelope(base), before), "migration-required:13->13");
+    assert.equal(classify(envelope(base), after), compatibility);
+  }
 });
 test("explicit coordinator binds the candidate driver, retains installed verifier authority and actual nonblocking locks", () => {
   const source = fs.readFileSync(path.join(ROOT, "server-tools/linux/refresh-grabenplaner-offsite-upload.sh"), "utf8");
@@ -62,8 +112,12 @@ test("explicit coordinator binds the candidate driver, retains installed verifie
   assert.match(source, /gp_sha256 "\$driver".*\$driver_sha/);
   assert.match(source, /gp_sha256 "\$candidate\/grabenplaner-server-manifest\.json".*\$candidate_manifest_sha/);
   const firstPrivate = source.indexOf("\nprivate_workspace_preflight\n"), scan = source.indexOf("\nclamscan --recursive");
-  const fencedPrivate = source.indexOf("\nprivate_workspace_preflight\n", firstPrivate + 1), prepare = source.indexOf('prepared="$(root_node "$helper" prepare');
+  const fencedPrivate = source.indexOf("\nprivate_workspace_preflight\n", firstPrivate + 1), prepare = source.indexOf('prepared="$(root_node "$helper" "$prepare_action"');
+  assert.match(source, /--rebind\) verify_action=verify-rebind; prepare_action=prepare-rebind/);
+  const verify = source.indexOf('root_node "$helper" "$verify_action"');
+  const apply = source.indexOf('root_node "$helper" apply');
   assert.ok(firstPrivate > 0 && firstPrivate < scan && fencedPrivate > scan && fencedPrivate < prepare);
+  assert.ok(firstPrivate < verify && verify < scan && prepare < apply);
   assert.match(source, /flock --nonblock "\$descriptor"/);
   assert.doesNotMatch(source, /offsite_acquire_(assurance|repository)_lock/);
   assert.match(source, /--verification auto/);
@@ -213,4 +267,64 @@ test("service-group app reads do not relax write, link, owner, module or private
   fs.chownSync(f.nextApp, 0, 1000);
   assert.throws(installed.prepare, /UPLOAD_REFRESH_PERMISSIONS/); fs.chownSync(f.nextApp, 0, 0);
   assert.equal(contract(f.old).fingerprint, helper.OLD_FINGERPRINT);
+});
+
+for (const alternateInstaller of [null, "installed", "candidate"]) {
+  test("rebind refresh preserves the module binding and installer " + (alternateInstaller || "with matching installer bytes"), { skip: !rootOnly }, t => {
+    const f = fixture(t, { kind: "rebind", alternateInstaller });
+    const entry = path.join(ROOT, "server-tools/linux/lib/offsite-upload-hardening-compat.js");
+    const initialReceipt = fs.readFileSync(f.receipt), installerSha = digest(path.join(f.old, INSTALLER));
+    const expected = replacedHash(f.after, INSTALLER, installerSha);
+    const before = classify(envelope(f.after), f.before);
+    assert.equal(before, "migration-required:13->13");
+    const args = [f.old, f.candidate, f.receipt, f.after.fingerprint];
+    const verified = spawnSync(process.execPath, [entry, "verify-rebind", ...args], { encoding: "utf8" });
+    assert.equal(verified.status, 0, verified.stderr);
+    assert.deepEqual(JSON.parse(verified.stdout).changed, [helper.REBIND.artifact]);
+    const prepared = spawnSync(process.execPath, [entry, "prepare-rebind", ...args, f.app, f.nextApp, "c".repeat(64)], { encoding: "utf8" });
+    assert.equal(prepared.status, 0, prepared.stderr);
+    const tx = JSON.parse(prepared.stdout).transaction;
+    assert.match(path.basename(tx), /^\.offsite-rebind-refresh-/);
+    assert.equal(helper.apply(tx).fingerprint, expected.fingerprint);
+    const receipt = JSON.parse(fs.readFileSync(f.receipt, "utf8"));
+    assert.equal(classify(envelope(f.after), receipt), alternateInstaller ? "compatible-installer-only" : "compatible");
+    assert.deepEqual(receipt.providerBinding, binding);
+    assert.equal(digest(path.join(f.old, INSTALLER)), installerSha);
+    assert.equal(digest(path.join(f.old, helper.REBIND.artifact)), helper.REBIND.newSha);
+
+    assert.equal(helper.rollback(tx).fingerprint, f.before.fingerprint);
+    assert.deepEqual(fs.readFileSync(f.receipt), initialReceipt);
+    assert.equal(digest(path.join(f.old, helper.REBIND.artifact)), helper.REBIND.oldSha);
+    assert.equal(classify(envelope(f.before), JSON.parse(fs.readFileSync(f.receipt, "utf8"))), "compatible");
+  });
+}
+
+test("rebind interruption restores the old binding and a committed app retains the new binding", { skip: !rootOnly }, t => {
+  const f = fixture(t, { kind: "rebind" }), tx = f.prepare();
+  const journalFile = path.join(tx, "journal.json"), journal = JSON.parse(fs.readFileSync(journalFile, "utf8"));
+  journal.state = "applying";
+  fs.writeFileSync(journalFile, JSON.stringify(journal));
+  fs.copyFileSync(path.join(tx, "new-rebind"), path.join(f.old, helper.REBIND.artifact));
+  assert.equal(helper.rollback(tx).fingerprint, f.before.fingerprint);
+  const second = f.prepare();
+  helper.apply(second);
+  fs.copyFileSync(f.nextApp, f.app);
+  assert.throws(() => helper.rollback(second), /UPLOAD_REFRESH_APP_COMMITTED_OR_UNKNOWN/);
+  assert.equal(helper.finish(second).fingerprint, f.after.fingerprint);
+  assert.equal(helper.finish(second).state, "committed");
+});
+
+test("rebind refuses the pre-upload module, additional deltas and unpublished installer bytes", { skip: !rootOnly }, t => {
+  const historical = fixture(t);
+  assert.throws(() => helper.verify(historical.old, historical.candidate, historical.receipt, helper.REBIND.after, "rebind"),
+    /UPLOAD_REFRESH_PREDECESSOR/);
+  const f = fixture(t, { kind: "rebind" });
+  for (const relative of ["grabenplaner-offsite-check.sh", INSTALLER, helper.REBIND.artifact]) {
+    const target = path.join(f.candidate, relative), original = fs.readFileSync(target);
+    fs.appendFileSync(target, "\n# unreviewed delta\n");
+    assert.throws(() => helper.verify(f.old, f.candidate, f.receipt, contract(f.candidate).fingerprint, "rebind"),
+      /UPLOAD_REFRESH_CANDIDATE/);
+    fs.writeFileSync(target, original);
+  }
+  assert.equal(digest(path.join(f.old, helper.REBIND.artifact)), helper.REBIND.oldSha);
 });

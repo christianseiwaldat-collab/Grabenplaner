@@ -1,7 +1,8 @@
 "use strict";
 const test = require("node:test"), assert = require("node:assert/strict"), crypto = require("node:crypto");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), { spawn } = require("node:child_process");
-const enabled = process.env.GP_PASSKEYS_UPGRADE_FIXTURE === "before-passkeys-v1";
+const fixtureSeed = require("../test-support/postgresql-migration/passkeys-fixture-seed");
+const enabled = process.env.GP_PASSKEYS_UPGRADE_FIXTURE === fixtureSeed.UPGRADE_FIXTURE_ID;
 
 test("native old-checkpoint upgrade, transactional rollback, repeat chain and restored lost-key invalidation", {
   // The complete native backup/restore plus both full migration repeat chains
@@ -42,7 +43,6 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
   process.once("exit", emergencyStop); process.once("SIGTERM", terminated);
   const binaryRoot = "/usr/lib/postgresql/18/bin", domain = "gp_migration_core", port = 55489;
   const principal = "syn-passkey-upgrade-" + crypto.randomBytes(8).toString("hex"), orgId = crypto.randomUUID();
-  const fixtureSeed = require("../test-support/postgresql-migration/passkeys-fixture-seed");
   // The same historical application-data ownership boundary as withCoreFixture.
   // Infrastructure ledgers are deliberately absent and survive fixture cleanup.
   const inventory = require("../test-support/postgresql-migration-doc-fixtures/block-1-inventory.json");

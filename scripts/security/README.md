@@ -114,10 +114,9 @@ Ausgelassene Dateien, Regeln, Analysefehler und Zeitabbrüche bleiben blockieren
 Fingerprint, tatsächlichem Datei-/Gitblob-SHA256, Begründung, Verantwortlichkeit,
 Prüfdatum und Ablaufdatum. Keine Advisory-Ausnahmen sind genehmigt. P0/P1 sind
 auf höchstens 14, P2/P3 auf höchstens 30 Kalendertage begrenzt. Die am
-26.11.2026 erneut geprüften Testdaten und Shellsyntax-Treffer sind auf 14 Tage
-begrenzt. Die beobachteten LF- und CRLF-Varianten einzelner Dateien sind mit
-eigenen Rohhashes erfasst. Neue oder verschobene Treffer, neue historische
-Commits und Inhaltsdrift erfordern eine erneute Prüfung.
+26.11.2026 erneut geprüften Testdaten und Shellsyntax-Treffer aus der
+Git-Historie sind auf 14 Tage begrenzt. Neue oder verschobene Treffer, neue
+historische Commits und Inhaltsdrift erfordern eine erneute Prüfung.
 
 SAST verwendet getrennt `sast-dispositions.json`. Eine Entscheidung gilt nur
 für einen konkret geprüften Fehlalarm: kanonische Upstream-Regel-ID, relativer

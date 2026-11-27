@@ -5,7 +5,7 @@ umask 077
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 readonly PATH
 unset NODE_OPTIONS NODE_PATH NODE_EXTRA_CA_CERTS NODE_ICU_DATA NODE_V8_COVERAGE NODE_REDIRECT_WARNINGS NODE_TLS_REJECT_UNAUTHORIZED BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS OPENSSL_CONF OPENSSL_MODULES LD_PRELOAD LD_LIBRARY_PATH
-# Explicit module13 upload-only refresh. Never called automatically by the generic updater.
+# Explicit refresh of a reviewed Offsite 13 artifact before the regular App update.
 SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
 for trusted in "$SCRIPT_PATH" "$SCRIPT_DIR/lib/common.sh" "$SCRIPT_DIR/lib/offsite-upload-hardening-compat.js" "$SCRIPT_DIR/lib/private-workspace-preflight.py"; do
@@ -24,6 +24,8 @@ source "$SCRIPT_DIR/lib/common.sh"
 readonly APP=/opt/grabenplaner/app MODULE=/opt/grabenplaner-offsite/module RECEIPT=/etc/grabenplaner/offsite/installed-contract.json
 readonly MANIFEST="$APP/grabenplaner-server-manifest.json"
 package_arg='' candidate_arg='' sha='' node_arg='' pnpm_arg='' recovery='' health_timeout=1500
+verify_action=verify
+prepare_action=prepare
 while (($#)); do
   case "$1" in
     --package) package_arg="${2:?}"; shift 2 ;;
@@ -32,11 +34,13 @@ while (($#)); do
     --node) node_arg="${2:?}"; shift 2 ;;
     --pnpm) pnpm_arg="${2:?}"; shift 2 ;;
     --health-timeout) health_timeout="${2:?}"; shift 2 ;;
+    --rebind) verify_action=verify-rebind; prepare_action=prepare-rebind; shift ;;
     --recover) recovery="${2:?}"; shift 2 ;;
     --help|-h)
-      printf '%s\n' 'sudo refresh-grabenplaner-offsite-upload.sh --package /root/server.zip --sha256 HEX --candidate-root /root/sealed-package [--node /absolute/node] [--pnpm /absolute/pnpm]'
+      printf '%s\n' 'sudo refresh-grabenplaner-offsite-upload.sh --package /root/server.zip --sha256 HEX --candidate-root /root/sealed-package [--rebind] [--node /absolute/node] [--pnpm /absolute/pnpm]'
+      printf '%s\n' 'Mit --rebind wird der separat gepruefte rclone-Neuanbindungs-Uebergang ausgewaehlt.'
       printf '%s\n' 'Der Kandidat muss vorher isoliert entpackt und root-eigen versiegelt sein. Keine Lockerung des normalen Update-Gates.'
-      printf '%s\n' 'Unterbrochener Lauf: derselbe root-geschuetzte Einstieg --recover /opt/grabenplaner-offsite/.offsite-upload-refresh-UUID'
+      printf '%s\n' 'Unterbrochener Lauf: derselbe root-geschuetzte Einstieg --recover /opt/grabenplaner-offsite/.offsite-upload-refresh-UUID oder .offsite-rebind-refresh-UUID'
       exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -124,7 +128,7 @@ trap cleanup EXIT
 trap 'interrupted=1; exit 143' TERM
 trap 'interrupted=1; exit 130' INT
 if [[ -n "$recovery" ]]; then
-  [[ -z "$package_arg" && -z "$candidate_arg" && -z "$sha" ]] || gp_die '--recover erlaubt keine neuen Paketparameter.'
+  [[ -z "$package_arg" && -z "$candidate_arg" && -z "$sha" && "$prepare_action" == prepare ]] || gp_die '--recover waehlt den Uebergang anhand des geschuetzten Nachweises.'
   transaction="$(gp_existing_directory "$recovery" 'Transaktionsnachweis')"
   [[ "$(dirname -- "$transaction")" == /opt/grabenplaner-offsite ]] || gp_die 'Falscher Wiederaufnahmepfad.'
   gp_acquire_maintenance_lock
@@ -150,9 +154,11 @@ for relative in refresh-grabenplaner-offsite-upload.sh lib/common.sh lib/offsite
   cmp --silent -- "$SCRIPT_DIR/$relative" "$candidate/server-tools/linux/$relative" || gp_die 'Der Wartungseinstieg ist nicht exakt paketgebunden.'
 done
 private_workspace_preflight
-clamscan --recursive --infected --no-summary -- "$candidate" >/dev/null || gp_die 'ClamAV hat den Kandidaten abgelehnt.'
 manifest="$(root_node "$APP/server-tools/linux/lib/verify-package.js" "$candidate")" || gp_die 'Paketmanifest und Einzeldateien sind ungueltig.'
 fingerprint="$(root_node -e 'const v=JSON.parse(process.argv[1]);if(v.runtimeContract?.deploymentSchemaVersion!==6||v.offsiteModule?.moduleVersion!==13)process.exit(1);process.stdout.write(v.offsiteModule.fingerprint)' "$manifest")" || gp_die 'Nur Core6/Offsite13 wird unterstuetzt.'
+root_node "$helper" "$verify_action" "$MODULE" "$candidate/server-tools/linux/offsite" "$RECEIPT" "$fingerprint" >/dev/null \
+  || gp_die 'Der ausgewaehlte Offsite-Uebergang entspricht nicht den geprueften Fingerabdruecken.'
+clamscan --recursive --infected --no-summary -- "$candidate" >/dev/null || gp_die 'ClamAV hat den Kandidaten abgelehnt.'
 # Installed verifier authority is retained; only the package-bound update driver advances.
 root_node "$APP/server-tools/linux/lib/verify-package.js" --runtime-contract "$APP" >/dev/null || gp_die 'Der installierte Core-Vertrag ist nicht gueltig.'
 driver="$candidate/server-tools/linux/update-grabenplaner-server.sh"
@@ -161,7 +167,7 @@ candidate_manifest_sha="$(gp_sha256 "$candidate/grabenplaner-server-manifest.jso
 bash "$SCRIPT_DIR/preflight-grabenplaner-deploy.sh" "${preflight_args[@]}" >/dev/null || gp_die 'Der verpflichtende read-only Deploy-Vorabcheck ist nicht gruen.'
 gp_acquire_maintenance_lock
 private_workspace_preflight
-prepared="$(root_node "$helper" prepare "$MODULE" "$candidate/server-tools/linux/offsite" "$RECEIPT" "$fingerprint" "$MANIFEST" "$candidate/grabenplaner-server-manifest.json" "$sha")" || gp_die 'Nur der exakt gepruefte Upload-Refresh ist erlaubt.'
+prepared="$(root_node "$helper" "$prepare_action" "$MODULE" "$candidate/server-tools/linux/offsite" "$RECEIPT" "$fingerprint" "$MANIFEST" "$candidate/grabenplaner-server-manifest.json" "$sha")" || gp_die 'Der gepruefte Offsite-Uebergang ist nicht mehr anwendbar.'
 transaction="$(root_node -e 'process.stdout.write(JSON.parse(process.argv[1]).transaction)' "$prepared")"
 states=()
 for timer in "${timers[@]}"; do
@@ -196,4 +202,4 @@ if root_node "$helper" finish "$transaction" >"$transaction/final-result.json"; 
 else gp_die 'Die exakte App-Uebernahme wurde nicht bestaetigt.'; fi
 root_node "$APP/server-tools/linux/lib/verify-package.js" --runtime-contract "$APP" >/dev/null || gp_die 'Der uebernommene Laufzeitvertrag ist ungueltig; Timer bleiben pausiert.'
 restore_timers || gp_die 'Die urspruenglichen Timerzustaende fehlen; Nachweise bleiben erhalten.'
-gp_info "Upload-Refresh und normaler App-Updater abgeschlossen. Privater Nachweis: $transaction"
+gp_info "Offsite-Uebergang und normaler App-Updater abgeschlossen. Privater Nachweis: $transaction"

@@ -205,10 +205,10 @@ test("hardening stays separate from the current core runtime and binds its exact
   // fixture above retains its original bytes and receipt contract.
   assert.equal(result.fingerprint, "f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc");
   // Initial Offsite13 adoption uses the fenced Core5/12 -> Core6/13 transition;
-  // the exact upload refresh has its own root-bound predecessor transaction.
+  // the exact upload and rclone rebind refreshes use root-bound transactions.
   // A receipt edit cannot authorize either module or provider change.
   assert.equal(result.offsiteModule.moduleVersion, 13);
-  assert.equal(result.offsiteModule.fingerprint, "5e3b928c04730081de555553286530b4380a4119a2b54eaf809676745e3a235b");
+  assert.equal(result.offsiteModule.fingerprint, "8933ef3ca3a9b660a7f07f44eda9cabd59e4c45d01900f2df180f81f5819f6ae");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
