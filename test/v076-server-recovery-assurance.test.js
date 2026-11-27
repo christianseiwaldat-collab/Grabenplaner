@@ -13,6 +13,10 @@ test("assurance diagnostics await the isolated reader without changing the main 
   assert.match(server, /recoveryAssuranceStatusReader\.read\(options\)/);
   const diagnosticCall = server.match(/const recoveryAssurance = ([\s\S]{0,300}?);/)?.[1] || "";
   assert.match(diagnosticCall, /^await readRecoveryAssuranceStatus\(\{\s*configured: offsiteConfigured,\s*\.\.\.\(recoverySchedulerObservation \? \{ schedulerObservation: recoverySchedulerObservation \} : \{\}\)\s*\}\)$/);
+  const schedulerRead = server.slice(server.indexOf("let recoverySchedulerObservation;"), server.indexOf("const recoveryAssurance = await readRecoveryAssuranceStatus("));
+  assert.match(schedulerRead, /await systemCenterControlCache\.read\(\)/);
+  assert.match(schedulerRead, /scheduler\?\.evidenceTrusted && scheduler\.timerInstalled && scheduler\.timerEnabled && scheduler\.nextElapse/);
+  assert.match(schedulerRead, /observedAt: scheduler\.checkedAt, nextRunAt: scheduler\.nextElapse/);
   assert.match(server, /await readRecoveryAssuranceStatus\(\{ configured: serverModeActive, reportId: match\[1\] \}\)/);
   assert.match(server, /await recoveryAssuranceStatusReader\.close\(\)/);
   assert.match(server, /id: "recovery-assurance"/);

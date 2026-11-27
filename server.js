@@ -24151,13 +24151,12 @@ async function serverDiagnostics() {
   let recoverySchedulerObservation;
   if (offsiteConfigured && process.platform === "linux") {
     try {
-      // The protected broker measures the real timer; browser input and a
-      // previously cached status cannot establish a new recovery deadline.
-      const schedules = await readMaintenanceSchedules({ timeoutMs: 1500 });
-      const task = schedules.tasks.find(item => item.id === "complete-backup");
-      if (schedules.available && task?.installed && typeof task.nextRunAt === "string") recoverySchedulerObservation = {
-        observedAt: schedules.checkedAt, nextRunAt: task.nextRunAt,
-        active: task.active, enabled: task.enabled, evidenceTrusted: true,
+      // The recovery broker verifies the timer directly. Its timerEnabled
+      // value requires both an enabled and an active systemd timer.
+      const { scheduler } = await systemCenterControlCache.read();
+      if (scheduler?.evidenceTrusted && scheduler.timerInstalled && scheduler.timerEnabled && scheduler.nextElapse) recoverySchedulerObservation = {
+        observedAt: scheduler.checkedAt, nextRunAt: scheduler.nextElapse,
+        active: true, enabled: true, evidenceTrusted: true,
       };
     } catch { /* The history remains readable; the pending deadline stays unverified. */ }
   }

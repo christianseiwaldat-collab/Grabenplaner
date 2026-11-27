@@ -696,6 +696,15 @@ NODE
   flock --nonblock 9 || gp_die "Die eigene Wartungssperre fuer den Nachtlaufaufschub fehlt."
   deploy_deferral_generation="$(root_node "$deploy_deferral_helper" begin "$$" "${sha256_arg,,}")" \
     || gp_die "Der begrenzte Nachtlaufaufschub konnte nicht belegt werden."
+  # Use the slot bound to this deployment. A resumed deferral can retain an
+  # earlier slot than the timer's next occurrence.
+  deploy_assurance_scheduled_epoch_ms="$(root_node - "$deploy_deferral_helper" <<'NODE'
+const deferral = require(process.argv[2]).readDeployDeferral();
+const due = Date.parse(deferral.dueAt);
+if (deferral.evidenceTrusted !== true || deferral.activeDeploy !== true || !/^[1-9]\d{12}$/.test(String(due))) process.exit(1);
+process.stdout.write(String(due));
+NODE
+)" || gp_die 'Der belegte Nachttermin konnte nicht aus dem eigenen Aufschub gelesen werden.'
   # Direct Node child: close all inherited maintenance descriptors before exec.
   root_node "$deploy_deferral_helper" heartbeat "$$" "$deploy_deferral_generation" 5>&- 6>&- 7>&- 8>&- 9>&- &
   deploy_deferral_pid=$!
@@ -718,7 +727,7 @@ finish_deploy_deferral() {
 }
 
 pause_deploy_timers() {
-  local timer unit next_elapse active_state schedule_state scheduled_seconds
+  local timer unit next_elapse active_state schedule_state
   for timer in "${deploy_blocking_timer_units[@]}"; do
     gp_systemd_unit_exists "$timer" || continue
     if systemctl is-active --quiet "$timer"; then
@@ -733,12 +742,6 @@ pause_deploy_timers() {
       if systemctl is-active --quiet "$timer"; then deploy_timer_was_active[$timer]=1; fi
       if systemctl is-enabled --quiet "$timer"; then deploy_timer_was_enabled[$timer]=1; fi
       next_elapse="$(systemctl show --property=NextElapseUSecRealtime --value "$timer" 2>/dev/null || true)"
-      if [[ "$timer" == grabenplaner-offsite-assurance.timer ]]; then
-        # Keep the original due slot across our own timer pause. Only parse
-        # systemctl output; never use candidate-provided scheduling claims.
-        scheduled_seconds="$(date --date="$next_elapse" +%s 2>/dev/null || true)"
-        if [[ "$scheduled_seconds" =~ ^[0-9]{10}$ ]]; then deploy_assurance_scheduled_epoch_ms="${scheduled_seconds}000"; fi
-      fi
       schedule_state="inaktiv"
       if [[ "${deploy_timer_was_active[$timer]}" == 1 ]]; then schedule_state="aktiv"; fi
       gp_info "Deploy-Preflight: $timer ist $schedule_state${next_elapse:+; naechster Lauf $next_elapse}."
@@ -1694,9 +1697,13 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transiti
     source "$offsite_common"
     offsite_acquire_assurance_lock
     offsite_assert_runtime_binaries
-    offsite_record_assurance_queue update-queued app-updated "$candidate_version"
+    offsite_record_assurance_queue update-queued app-updated "$candidate_version" || exit 1
     if [[ "$deploy_mode" == short || "$deploy_mode" == owned ]]; then
-      root_node "$app_dir/server-tools/linux/lib/deploy-recovery-queue.js" record "$deploy_assurance_scheduled_epoch_ms"
+      if [[ -z "$deploy_assurance_scheduled_epoch_ms" ]]; then
+        gp_warn 'Fuer den signierten Update-Eintrag ist kein bestaetigter Nachttermin verfuegbar.'
+      elif ! root_node "$app_dir/server-tools/linux/lib/deploy-recovery-queue.js" record "$deploy_assurance_scheduled_epoch_ms"; then
+        gp_warn 'Der bestaetigte Nachttermin konnte dem signierten Update-Eintrag nicht zugeordnet werden.'
+      fi
     fi
   ); then
     gp_warn "Das erfolgreiche App-Update konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."

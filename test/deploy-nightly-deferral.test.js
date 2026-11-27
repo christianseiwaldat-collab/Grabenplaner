@@ -131,6 +131,36 @@ function shell(t, script) {
   fs.writeFileSync(path.join(root, "run.sh"), "set -Eeuo pipefail\n" + script);
   return spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 10000 });
 }
+test("the Offsite refresh leaves the nightly timer available to the updater", { skip: !fs.existsSync(bash) }, t => {
+  const refresh = fs.readFileSync(path.resolve(__dirname, "../server-tools/linux/refresh-grabenplaner-offsite-upload.sh"), "utf8").replaceAll("\r", "");
+  const start = refresh.indexOf("\ntimer_fence=1\n");
+  const end = refresh.indexOf("\n# Never wait behind a running old Assurance", start);
+  assert.ok(start > 0 && end > start);
+  const result = shell(t, `
+timers=(grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
+systemctl() { printf '%s %s\\n' "$1" "$2"; }
+${refresh.slice(start, end)}
+`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.stdout.trim().split(/\r?\n/), [
+    "stop grabenplaner-offsite-upload.timer", "stop grabenplaner-offsite-check.timer", "stop grabenplaner-offsite-restore-test.timer",
+  ]);
+});
+test("the updater uses the original active deferral slot for pending recovery", t => {
+  const program = updaterSource().match(/deploy_assurance_scheduled_epoch_ms="\$\(root_node - "\$deploy_deferral_helper" <<'NODE'\n([\s\S]*?)\nNODE\n\)"/);
+  assert.ok(program);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-pending-slot-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const helper = path.join(root, "deferral.cjs");
+  const status = D.classify(fixture({ scheduler: { ...fixture().scheduler, nextElapse: stamp(due + 86400000) } }),
+    { now: due + 1000, ownerAlive: true });
+  for (const evidence of [status, { ...status, activeDeploy: false }, { ...status, evidenceTrusted: false }, { ...status, dueAt: null }]) {
+    fs.writeFileSync(helper, `exports.readDeployDeferral = () => (${JSON.stringify(evidence)});\n`);
+    const result = spawnSync(process.execPath, ["-", helper], { input: program[1], encoding: "utf8", timeout: 10000 });
+    assert.equal(result.status, evidence === status ? 0 : 1, result.stderr);
+    assert.equal(result.stdout, evidence === status ? String(due) : "");
+  }
+});
 for (const [trigger, wait, expected] of [["scheduled-nightly", "108", 108], ["scheduled-nightly", "normal", 14400], ["app-updated", "0", 14400], ["scheduled-nightly", "0", null]]) {
   test(`maintenance wait ${trigger}/${wait} keeps assurance lock unheld while waiting`, { skip: !fs.existsSync(bash) }, t => {
     const assurance = assuranceSource();

@@ -181,7 +181,12 @@ try{fs.writeFileSync(fd,JSON.stringify(v)+'\n');fs.fsyncSync(fd);}finally{fs.clo
 const d=fs.openSync(require('node:path').dirname(p),fs.constants.O_RDONLY|fs.constants.O_DIRECTORY);try{fs.fsyncSync(d);}finally{fs.closeSync(d);}
 NODE
 timer_fence=1
-for timer in "${timers[@]}"; do systemctl stop "$timer"; done
+# The assurance entry point is unchanged by this artifact refresh and waits
+# for our maintenance lock. The updater needs its live timer to bind the slot.
+for timer in "${timers[@]}"; do
+  [[ "$timer" == grabenplaner-offsite-assurance.timer ]] && continue
+  systemctl stop "$timer"
+done
 # Never wait behind a running old Assurance while holding maintenance FD9.
 for lock in /run/grabenplaner-offsite/assurance.lock /run/grabenplaner-offsite/repository.lock; do
   [[ -f "$lock" && ! -L "$lock" ]] || gp_die 'Eine Offsite-Sperre fehlt oder ist unsicher.'
