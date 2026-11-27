@@ -316,7 +316,7 @@ test("rebind interruption restores the old binding and a committed app retains t
 
 test("rebind refuses the pre-upload module, additional deltas and unpublished installer bytes", { skip: !rootOnly }, t => {
   const historical = fixture(t);
-  assert.throws(() => helper.verify(historical.old, historical.candidate, historical.receipt, historical.after.fingerprint, "rebind"),
+  assert.throws(() => helper.verify(historical.old, historical.candidate, historical.receipt, helper.REBIND.after, "rebind"),
     /UPLOAD_REFRESH_PREDECESSOR/);
   const f = fixture(t, { kind: "rebind" });
   for (const relative of ["grabenplaner-offsite-check.sh", INSTALLER, helper.REBIND.artifact]) {
