@@ -15,8 +15,6 @@ from sast_dispositions import canonical_rule_id, finding_identity, apply_disposi
 from runtime_assets import load_runtime_assets, merge_runtime_sbom, check_runtime_sca_result
 
 HERE = Path(__file__).resolve().parent
-HISTORICAL_SECRET_POSITION = ('line', 'endLine', 'startColumn', 'endColumn')
-HISTORICAL_SECRET_IDENTITY = ('commit', 'rule', 'path', *HISTORICAL_SECRET_POSITION, 'sourceSha256')
 
 
 def sha(path):
@@ -58,59 +56,6 @@ def remaining_findings(scanner, findings, exceptions):
         and e['sourceSha256']==finding['sourceSha256'] for e in exceptions)]
 
 
-def gitleaks_inputs_sha256(tool, configuration):
-    scope = {'tool': tool, 'configurationSha256': sha(configuration)}
-    return hashlib.sha256(json.dumps(scope, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-
-
-def historical_secret_identity(finding):
-    return tuple(finding[field] for field in HISTORICAL_SECRET_IDENTITY)
-
-
-def validate_historical_secret_reviews(section, inputs_sha256, today=None):
-    if section is None:
-        return {}
-    today = today or dt.date.today()
-    if (not isinstance(section, dict) or set(section) != {'scannerInputsSha256', 'findings'}
-            or section['scannerInputsSha256'] != inputs_sha256 or not isinstance(section['findings'], list)):
-        raise ValueError('Historical Gitleaks reviews require the reviewed scanner and rule configuration')
-    reviews = {}
-    fields = {*HISTORICAL_SECRET_IDENTITY, 'owner', 'reason', 'reviewedOn'}
-    for row in section['findings']:
-        if not isinstance(row, dict) or set(row) != fields:
-            raise ValueError('Historical Gitleaks review requires an exact source location and review evidence')
-        if (row['rule'] != 'generic-api-key' or not re.fullmatch(r'[a-f0-9]{40}', row['commit'])
-                or not re.fullmatch(r'[a-f0-9]{64}', row['sourceSha256'])
-                or not re.fullmatch(r'[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*', row['path'])
-                or any(part in ('.', '..') for part in row['path'].split('/'))):
-            raise ValueError('Invalid historical Gitleaks source identity')
-        line, end_line, start_column, end_column = (row[field] for field in HISTORICAL_SECRET_POSITION)
-        if (any(type(n) is not int or n < 1 for n in (line, end_line, start_column, end_column))
-                or (end_line, end_column) < (line, start_column)):
-            raise ValueError('Invalid historical Gitleaks source coordinates')
-        if not row['owner'].strip() or len(row['reason'].strip()) < 20 or dt.date.fromisoformat(row['reviewedOn']) > today:
-            raise ValueError('Historical Gitleaks review requires dated ownership and reasoning')
-        identity = historical_secret_identity(row)
-        if identity in reviews:
-            raise ValueError('Duplicate historical Gitleaks review')
-        reviews[identity] = row
-    return reviews
-
-
-def review_historical_secrets(findings, reviews):
-    unmatched = dict(reviews)
-    reviewed, unreviewed = [], []
-    for finding in findings:
-        row = unmatched.pop(historical_secret_identity(finding), None) if finding['mode'] == 'git' else None
-        if row is None:
-            unreviewed.append(finding)
-            continue
-        reviewed.append({**finding, **{key: row[key] for key in ('owner', 'reason', 'reviewedOn')}})
-    if unmatched:
-        raise ValueError('Historical Gitleaks review does not match a finding in the complete history scan')
-    return reviewed, unreviewed
-
-
 def secret_finding(item, mode, stage, root):
     if item.get('Secret') not in ('REDACTED',''):
         raise ValueError('Unredacted secret scanner report')
@@ -134,7 +79,6 @@ def secret_finding(item, mode, stage, root):
     fingerprint=hashlib.sha256(json.dumps(identity,separators=(',',':')).encode()).hexdigest()
     return {'mode':mode,'rule':item['RuleID'],'path':relative,'line':item['StartLine'],
             'endLine':item['EndLine'],'commit':commit,'fingerprint':fingerprint,
-            'startColumn':item.get('StartColumn'),'endColumn':item.get('EndColumn'),
             'sourceSha256':hashlib.sha256(content).hexdigest()}
 
 
@@ -312,12 +256,7 @@ def verified_patch_remediations(findings, verification, registrations, today=Non
 class Gate:
     def __init__(self, args):
         self.args=args;self.root=Path(args.root).resolve();self.output=Path(args.output).resolve();self.output.mkdir(parents=True,exist_ok=True)
-        self.tools = Path(args.tools).resolve()
-        self.config = read(HERE/'tools.json')
-        policy = read(HERE/'exceptions.json')
-        self.exceptions = validate_exceptions(policy)
-        self.historical_secret_reviews = policy.get('historicalSecretReviews')
-        self.commands = []
+        self.tools=Path(args.tools).resolve();self.config=read(HERE/'tools.json');self.exceptions=validate_exceptions(read(HERE/'exceptions.json'));self.commands=[]
 
     def command(self,args,label,acceptable=(0,),cwd=None,timeout=1800):
         env={**os.environ,'SEMGREP_SEND_METRICS':'off','SEMGREP_ENABLE_VERSION_CHECK':'0','PYTHONUTF8':'1','SYFT_CHECK_FOR_APP_UPDATE':'false'}
@@ -433,9 +372,6 @@ class Gate:
                 'blockingFindings':disposition['blockingFindings']+registry['blockingFindings']+runtime_findings}
 
     def secrets(self):
-        configuration = HERE/'gitleaks.toml'
-        inputs_sha256 = gitleaks_inputs_sha256(self.config['tools']['gitleaks'], configuration)
-        reviews = validate_historical_secret_reviews(self.historical_secret_reviews, inputs_sha256)
         entries=source_files(self.root);stage=self.output/'secrets-source';stage_sources(self.root,stage,entries);write(self.output/'secrets-targets.json',entries)
         ignore=self.output/'empty.gitleaksignore';ignore.write_text('')
         all_findings=[]
@@ -443,20 +379,13 @@ class Gate:
         if shallow!='false':raise ValueError('Secrets history requires a complete checkout')
         for mode,target in [('dir',stage),('git',self.root)]:
             result_path=self.output/('secrets-'+mode+'.json')
-            args=[self.tool('gitleaks'),mode,target,'--config',configuration,'--gitleaks-ignore-path',ignore,'--ignore-gitleaks-allow','--redact=100','--no-banner','--no-color','--max-target-megabytes','0','--report-format','json','--report-path',result_path]
+            args=[self.tool('gitleaks'),mode,target,'--config',HERE/'gitleaks.toml','--gitleaks-ignore-path',ignore,'--ignore-gitleaks-allow','--redact=100','--no-banner','--no-color','--max-target-megabytes','0','--report-format','json','--report-path',result_path]
             if mode=='git':args+=['--log-opts=--all --full-history --no-renames']
             run=self.command(args,'gitleaks-'+mode,(0,1),timeout=3600);items=read(result_path)
             if not isinstance(items,list) or (run.returncode==1)!=bool(items):raise ValueError('Incomplete secrets scan result')
             for item in items:
                 all_findings.append(secret_finding(item,mode,stage,self.root))
-        reviewed, unreviewed = review_historical_secrets(all_findings, reviews)
-        return {
-            'scannedWorktreeFiles': len(entries),
-            'history': 'All locally fetched refs, complete Git checkout; source working tree also scanned. No test/docs/history path allowlist.',
-            'findings': all_findings,
-            'reviewedHistoricalFalsePositives': reviewed,
-            'blockingFindings': remaining_findings('secrets', unreviewed, self.exceptions),
-        }
+        return {'scannedWorktreeFiles':len(entries),'history':'All locally fetched refs, complete Git checkout; source working tree also scanned. No test/docs/history path allowlist.','findings':all_findings,'blockingFindings':remaining_findings('secrets',all_findings,self.exceptions)}
 
     def sbom(self):
         path=self.output/'sbom.cdx.json'
