@@ -26,7 +26,7 @@ function fixture(fail = "") {
 }
 test("explicit restore invalidation covers every copied authenticator in one verified transaction and never changes a password", async () => {
   const f = fixture(), result = await f.run(); assert.equal(result.passwordsChanged, false);
-  assert.equal(result.scope, restore.SCOPE); assert.equal(f.events.at(-1), "COMMIT"); assert.equal(f.state.changed, 7);
+  assert.equal(result.scope, restore.SCOPE); assert.equal(f.events.at(-1), "COMMIT"); assert.equal(f.state.changed, 8);
   assert.deepEqual(Object.keys(result.revoked), restore.statements.map(([name]) => name));
   assert.equal(f.events[0], "environment"); assert.match(f.events[1], /^BEGIN ISOLATION LEVEL SERIALIZABLE/);
   assert(f.events.indexOf("schema") < f.events.findIndex(sql => sql.startsWith("UPDATE ")));

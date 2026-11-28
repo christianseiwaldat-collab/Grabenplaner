@@ -32,8 +32,8 @@
         <p>Mit Personalnummer oder Zugangskennung und Passwort.</p>
         <label><span>Zugangskennung</span><input id="loginPersonnelNumber" name="username" autocomplete="username" placeholder="Personalnummer oder Kontokennung" required disabled /></label>
         <label><span>Passwort</span><span class="password-field"><input id="loginPassword" name="password" type="password" autocomplete="current-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-        <button class="login-forgot-password" id="forgotPasswordButton" type="button">Passwort vergessen?</button>
-        <p class="message error hidden" id="loginError"></p>
+        <button class="login-forgot-password" id="forgotPasswordButton" type="button">Passwort zurücksetzen</button>
+        <p class="message error hidden" id="loginError" role="alert"></p>
         <button class="primary" type="submit">Anmelden</button>
         <button id="portalPasskeyLogin" data-gp-passkey-login type="button" hidden>Mit Passkey anmelden</button>
       </form>
@@ -655,8 +655,14 @@
     <dialog id="passwordResetRequestDialog" aria-labelledby="passwordResetRequestTitle">
       <form id="passwordResetRequestForm">
         <div class="dialog-heading"><div><span class="eyebrow">Zugang</span><h2 id="passwordResetRequestTitle">Passwort zurücksetzen</h2></div><button type="button" data-close-password-reset-request aria-label="Dialog schließen">×</button></div>
-        <p>Gib die in deinen geschützten Personalstammdaten hinterlegte und bereits bestätigte E-Mail-Adresse ein.</p>
-        <label><span>E-Mail-Adresse</span><input id="passwordResetEmail" type="email" maxlength="320" autocomplete="email" required /></label>
+        <label><span>Zugangsart</span><select id="passwordResetKind"><option value="employee">Persönlicher Zugang</option><option value="branch">Filialkonto</option></select></label>
+        <div id="passwordResetPersonalFields">
+          <label><span>Bestätigte persönliche E-Mail-Adresse</span><input id="passwordResetEmail" type="email" maxlength="320" autocomplete="email" required /></label>
+        </div>
+        <div id="passwordResetBranchFields" class="hidden">
+          <label><span>Kennung des Filialkontos</span><input id="passwordResetBranchLogin" maxlength="40" autocomplete="username" disabled /></label>
+          <p class="form-note">Der Rücksetzlink wird an die für dieses Filialkonto hinterlegte E-Mail-Adresse gesendet.</p>
+        </div>
         <p class="form-note">Aus Datenschutzgründen ist die Rückmeldung immer gleich – unabhängig davon, ob ein passender Zugang gefunden wurde.</p>
         <p class="message hidden" id="passwordResetRequestMessage" role="status" aria-live="polite"></p>
         <div class="dialog-actions"><button type="button" data-close-password-reset-request>Abbrechen</button><button class="primary" id="passwordResetRequestSubmit" type="submit">Link anfordern</button></div>

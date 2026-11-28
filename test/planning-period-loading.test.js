@@ -24,7 +24,12 @@ function fixture() {
     applyRequestedView(options) { assert.equal(options.loadContext, false); state.currentView = "planning"; state.locationId = "05"; },
     canReadManagerRequests: () => false, canReadLoanManagement: () => false, canManageBranchOrders: () => false,
   });
-  vm.runInContext("let loadAllGeneration=0; let planningPeriodController=null; const settingsSaveStatuses=new Map(),settingsSaveStatusHosts=new Map(); let settingsSaveActor=null,settingsSavePrimary=null,settingsSaveCandidateSource=null,settingsSaveEpoch=0,settingsSavePrimaryEpoch=0,settingsConfirmedDraft=null,settingsConfirmedRevision=0; globalThis.confirmedDraft=()=>settingsConfirmedDraft;\n" + ["isLocalStartDashboardWorkspace","startDashboardWorkspaceActorKey","settingsPdfDraftScope","syncSettingsSaveScopes","settingsSaveKey","rememberSettingsConfirmation","settingsConfirmationReadToken","acknowledgeSettingsRead","applyLoadedSchedule", "enrichLoadedSchedule", "loadAll", "loadPlanningPeriod", "planningContextNeedsReload", "loadPlanningView"].map(extract).join("\n"), f);
+  const functions = ["activeLocations", "locationFunctionAccess", "locationsForFunction", "planningContextQuery",
+    "isLocalStartDashboardWorkspace", "startDashboardWorkspaceActorKey", "settingsPdfDraftScope", "syncSettingsSaveScopes",
+    "settingsSaveKey", "rememberSettingsConfirmation", "settingsConfirmationReadToken", "acknowledgeSettingsRead",
+    "applyLoadedSchedule", "enrichLoadedSchedule", "loadAll", "loadPlanningPeriod", "planningContextNeedsReload", "loadPlanningView"];
+  vm.runInContext("let loadAllGeneration=0; let planningPeriodController=null; const settingsSaveStatuses=new Map(),settingsSaveStatusHosts=new Map(); let settingsSaveActor=null,settingsSavePrimary=null,settingsSaveCandidateSource=null,settingsSaveEpoch=0,settingsSavePrimaryEpoch=0,settingsConfirmedDraft=null,settingsConfirmedRevision=0; globalThis.confirmedDraft=()=>settingsConfirmedDraft;\n"
+    + functions.map(extract).join("\n"), f);
   return { f, state, calls, errors, renders };
 }
 const schedule = (week = "2032-07-05") => ({ weekStart: week, settings: { allow_past_week_editing: "0" }, context: { locationId: "18", departmentId: null } });

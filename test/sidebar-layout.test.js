@@ -216,6 +216,7 @@ test("Sidebar fills the visible viewport with GP zoom, a changing banner and a n
 test("Logistik opens its child path and marks only Einkauf / Lieferstände as the current page", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const functions = source.slice(source.indexOf("function navigationGroups()"), source.indexOf("function schedulePdfDesignCatalog("));
+  const locationFunctions = source.slice(source.indexOf("function locationFunctionAccess()"), source.indexOf("function planningContextQuery("));
   const nodes = new Map();
   function node(id) {
     if (!nodes.has(id)) {
@@ -236,7 +237,7 @@ test("Logistik opens its child path and marks only Einkauf / Lieferstände as th
     document: { getElementById: node, querySelector: selector => selector === ".main-nav" ? null : node(selector) },
     requestAnimationFrame: callback => callback(),
   };
-  vm.createContext(context); vm.runInContext(functions, context);
+  vm.createContext(context); vm.runInContext(locationFunctions + functions, context);
   context.renderContextNavigation();
   assert.equal(node("logisticsNavButton").attributes["aria-current"], undefined);
   assert.equal(node("logisticsNavButton").classes.has("active"), false);

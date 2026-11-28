@@ -43,6 +43,9 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
   process.once("exit", emergencyStop); process.once("SIGTERM", terminated);
   const binaryRoot = "/usr/lib/postgresql/18/bin", domain = "gp_migration_core", port = 55489;
   const principal = "syn-passkey-upgrade-" + crypto.randomBytes(8).toString("hex"), orgId = crypto.randomUUID();
+  const branchResetKey = require("../lib/branch-account-password-reset").SETTING_PREFIX + orgId;
+  const branchRecovery = { email: "branch-recovery@example.test", requests: [Date.now()] };
+  const branchPending = { hash: crypto.randomBytes(32).toString("hex"), expiresAt: Date.now() + 1800000 };
   // The same historical application-data ownership boundary as withCoreFixture.
   // Infrastructure ledgers are deliberately absent and survive fixture cleanup.
   const inventory = require("../test-support/postgresql-migration-doc-fixtures/block-1-inventory.json");
@@ -95,7 +98,8 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
     'organizationSessions',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM gp.portal_organization_sessions s),
     'mobile',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM gp.mobile_sessions s),
     'reset',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM gp.portal_password_reset_tokens s),
-    'passwords',(SELECT jsonb_agg(jsonb_build_array(employee_number,password_hash) ORDER BY employee_number) FROM gp.portal_users)) value`)).rows[0].value;
+    'branchReset',(SELECT value::jsonb FROM gp.portal_settings WHERE key=$1),
+    'passwords',(SELECT jsonb_agg(jsonb_build_array(employee_number,password_hash) ORDER BY employee_number) FROM gp.portal_users)) value`, [branchResetKey])).rows[0].value;
   try {
     await owner.connect(); await E.verifyEnvironment(owner, { purpose: "migrator" });
     phase("source-connected");
@@ -178,6 +182,8 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
     await owner.query("INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at) VALUES($1,$2,$3,$4,$5,$4)", [crypto.randomUUID(), principal, hash("browser"), expires, authenticationNow]);
     await owner.query("INSERT INTO gp.portal_organization_sessions(id,account_id,token_hash,expires_at,authenticated_at,absolute_expires_at) VALUES($1,$2,$3,$4,$5,$4)", [crypto.randomUUID(), orgId, hash("organization-browser"), expires, authenticationNow]);
     await owner.query("INSERT INTO gp.portal_password_reset_tokens(id,employee_number,token_hash,email_fingerprint,expires_at) VALUES($1,$2,$3,$3,$4)", [crypto.randomUUID(), principal, hash("reset"), expires]);
+    await owner.query("INSERT INTO gp.portal_settings(key,value,updated_at) VALUES($1,$2,$3)",
+      [branchResetKey, JSON.stringify({ ...branchRecovery, pending: branchPending }), authenticationNow]);
     await owner.query("INSERT INTO gp.mobile_sessions(id,employee_number,access_token_hash,access_expires_at,refresh_token_hash,refresh_expires_at,installation_id_hash,platform) VALUES($1,$2,$3,$4,$5,$4,$6,'android')", [crypto.randomUUID(), principal, hash("access"), expires, hash("refresh"), hash("installation")]);
     await owner.query("COMMIT");
     phase("authentication-state-seeded");
@@ -219,6 +225,7 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
     await cloneMigrator.query("INSERT INTO gp.passkey_subjects(id,principal_kind,employee_number,user_handle,auth_revision,created_at,updated_at) VALUES($1,'employee',$2,$3,9007199254740991,$4,$4)", [poisonId, overflowPrincipal, crypto.randomBytes(32), now]);
     await cloneMigrator.query("COMMIT");
     const beforeFailure = await state(cloneMigrator);
+    assert.deepEqual(beforeFailure.branchReset, { ...branchRecovery, pending: branchPending });
     phase("restore-failure-injection-seeded");
     await assert.rejects(RESTORE.invalidateRestoredAuthentication(cloneMigrator, { scope: RESTORE.SCOPE }), error => error.code === "23514");
     assert.deepEqual(await state(cloneMigrator), beforeFailure, "native CHECK failure rolls back sessions, tokens and every prior update");
@@ -229,6 +236,8 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
     phase("restored-authentication-invalidated");
     assert.equal(result.passwordsChanged, false); assert.equal(result.revoked.passkeyCredentials, 2); assert.equal(result.revoked.passkeyChallenges, 2);
     assert.equal(result.revoked.employeeSessions, 1); assert.equal(result.revoked.organizationSessions, 1); assert.equal(result.revoked.mobileSessions, 1); assert.equal(result.revoked.passwordResetTokens, 1);
+    assert.equal(result.revoked.branchPasswordResetTokens, 1);
+    assert.deepEqual((await state(cloneMigrator)).branchReset, branchRecovery);
     assert((await cloneRepo.credential(key.credentialId)).revokedAt); assert.equal((await cloneRepo.listCredentials({ subjectId: personal.id })).length, 0);
     for (const challenge of [bound, anonymous]) assert.equal(await cloneRepo.consumeChallenge({ id: challenge.id, purpose: challenge.purpose, bindingHash: challenge.bindingHash, now: new Date().toISOString() }), null);
     for (const module of ["xoffi-snapshots", "vocational-school", "session-security", "passkeys"]) assert.equal((await require("../lib/persistence/postgresql/core/" + module).migrate(cloneMigrator)).applied, false);

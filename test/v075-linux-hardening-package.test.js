@@ -205,20 +205,26 @@ test("hardening stays separate from the current core runtime and binds its exact
   // fixture above retains its original bytes and receipt contract.
   assert.equal(result.fingerprint, "f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc");
   // Initial Offsite13 adoption uses the fenced Core5/12 -> Core6/13 transition;
-  // the exact upload refresh has its own root-bound predecessor transaction.
+  // the exact upload and rebind refreshes have their own root-bound predecessor transactions.
   // A receipt edit cannot authorize either module or provider change.
   assert.equal(result.offsiteModule.moduleVersion, 13);
-  assert.equal(result.offsiteModule.fingerprint, "21f31991ebeededd6b1c13d559b30132bf69f5a4d296879f264384959a0496b4");
-  // The new optional socket setup changes only the installer. The installed
-  // module's 42 operational files and the generic fingerprint gate stay fixed.
+  assert.equal(result.offsiteModule.fingerprint, "e81f2c77fd610414bcda88babc2054dcf24d7c0186586894d59dbb6b19b5b45b");
   const offsite = spawnSync(process.execPath, [path.join(root, "server-tools/linux/offsite/lib/offsite-contract.js"), "contract", path.join(root, "server-tools/linux/offsite")], { encoding: "utf8" });
   assert.equal(offsite.status, 0, offsite.stderr);
-  const original = JSON.parse(offsite.stdout);
-  original.files = original.files.map(item => item.path === "install-grabenplaner-offsite.sh" ? { ...item, sha256: "cd7bc215f517d5781287796b9ea8cf66906569d0a498c831439f5ced25a5ae0e" } : item);
+  const installed = JSON.parse(offsite.stdout);
+  const { REBIND } = require("../server-tools/linux/lib/offsite-upload-hardening-compat");
   const { classify, fingerprint } = require("../server-tools/linux/lib/offsite-update-compat");
-  original.fingerprint = fingerprint(new Map(original.files.map(item => [item.path, item.sha256])));
-  assert.equal(original.fingerprint, "5e3b928c04730081de555553286530b4380a4119a2b54eaf809676745e3a235b");
-  assert.equal(classify(result, original), "compatible-installer-only");
+  const withInstalledArtifacts = replacements => {
+    const files = installed.files.map(item => ({ ...item, sha256: replacements[item.path] || item.sha256 }));
+    return { ...installed, files, fingerprint: fingerprint(new Map(files.map(item => [item.path, item.sha256]))) };
+  };
+  const installer = { "install-grabenplaner-offsite.sh": REBIND.installer };
+  const predecessor = withInstalledArtifacts({ ...installer, [REBIND.artifact]: REBIND.oldSha });
+  assert.equal(predecessor.fingerprint, REBIND.before);
+  assert.equal(classify(result, predecessor), "migration-required:13->13");
+  const refreshed = withInstalledArtifacts(installer);
+  assert.equal(refreshed.fingerprint, REBIND.after);
+  assert.equal(classify(result, refreshed), "compatible-installer-only");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 

@@ -12,7 +12,7 @@ const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
 
 test("Standorte nutzen ein responsives Zweispaltenraster mit neutralem Leerzustand", () => {
   assert.match(styles, /\.location-list\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-  assert.match(styles, /@media \(max-width:1180px\)[\s\S]*\.location-list\s*\{\s*grid-template-columns:1fr/);
+  assert.match(styles, /@media \(max-width:1180px\)\s*\{\s*\.location-list\s*\{\s*grid-template-columns:minmax\(0,1fr\)/);
   assert.match(styles, /data-active-page-theme="dark"\] #personnelView \.location-card \.empty-options\s*\{[^}]*background:#1d2925/);
 });
 

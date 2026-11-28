@@ -150,7 +150,15 @@ if (!childProvider) {
             await failureGate.pending;
             assert.equal((await state(scenario.id, scenario.organization)).failed_login_attempts, 0, 'No verifier has been allowed to update its stale account snapshot yet');
             failureGate.release();
-            for (const result of await Promise.all(failed)) assert.equal(result.status, 401, JSON.stringify(result.body));
+            const results = await Promise.all(failed);
+            for (const result of results) {
+              if (scenario.organization && result.status === 429) {
+                assert.match(result.body.error, /zu vieler fehlgeschlagener Anmeldungen/);
+              } else {
+                assert.equal(result.status, 401, JSON.stringify(result.body));
+              }
+            }
+            if (scenario.organization) assert.ok(results.some(result => result.status === 429));
             const locked = await state(scenario.id, scenario.organization);
             assert.equal(locked.failed_login_attempts, 5);
             assert.ok(new Date(locked.locked_until).getTime() > Date.now(), 'Account must be locked by the database threshold');
@@ -174,6 +182,21 @@ if (!childProvider) {
         });
       }
       assert.equal(verifiedCases, cases.length, 'Every account/channel race must pass before reporting verification');
+      await t.test('branch login explains the fifth failure and permits a password after 30 minutes', async () => {
+        const id = 'syn-http-branch-lock-duration', ip = '198.51.100.60';
+        await seed(id, true);
+        for (let i = 0; i < 4; i++) assert.equal((await login(id, BAD_PASSWORD, 'browser', ip)).status, 401);
+        const start = Date.now();
+        const blocked = await login(id, BAD_PASSWORD, 'browser', ip);
+        assert.equal(blocked.status, 429, JSON.stringify(blocked.body));
+        assert.match(blocked.body.error, /zu vieler fehlgeschlagener Anmeldungen.*Ein neuer Passwortversuch ist ab/);
+        const end = Date.parse((await state(id, true)).locked_until);
+        assert.ok(end >= start + 30 * 60_000 && end <= Date.now() + 30 * 60_000);
+        await query('UPDATE portal_organization_accounts SET locked_until=? WHERE id=?',
+          [new Date(Date.now() - 1000).toISOString(), id]);
+        assert.equal((await login(id, GOOD_PASSWORD, 'browser', ip)).status, 200);
+        assert.deepEqual(await state(id, true), { failed_login_attempts: 0, locked_until: null });
+      });
       await t.test('valid personal/organization/mobile logins clear failures and browser password change remains usable', async () => {
         for (const [index, channel] of ['browser', 'mobile', 'organization'].entries()) {
           const id = 'syn-http-success-' + channel, ip = '198.51.100.' + (40 + index);

@@ -870,6 +870,7 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionSearch", "positionListStatus", "positionTableHead", "positionList", "positionDeleteModal", "positionDeleteForm", "positionDeleteModalTitle", "positionDeleteModalCopy", "positionDeleteWarning", "positionDeleteWarningTitle", "positionDeleteWarningText", "positionDeleteName", "positionDeleteActiveCount", "positionDeleteHistoryCount", "positionDeleteMessage", "confirmPositionDeleteButton", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "adminAccessModeLabel", "accessSettings", "portalUserAccessCard", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
+    "organizationAccountRecoveryEmail", "organizationAccountRecoveryEmailRow",
     "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountLearningDashboardRow", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountArticles", "organizationAccountArticlesRow", "organizationAccountReceipts", "organizationAccountReceiptsRow", "organizationAccountTimeOff", "organizationAccountTimeOffRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorHomeScopeOptions", "rightsEditorLocationChoices", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "systemCenterUtilization", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
@@ -25708,6 +25709,8 @@ function organizationAccountLocationOptions(selected = "") {
 function syncOrganizationAccountPermissionControls() {
   if (!elements.organizationAccountType) return;
   const branchAccount = elements.organizationAccountType.value === "branch";
+  elements.organizationAccountRecoveryEmailRow?.classList.toggle("hidden", !branchAccount);
+  if (elements.organizationAccountRecoveryEmail) elements.organizationAccountRecoveryEmail.disabled = !branchAccount;
   [
     elements.organizationAccountLoanOverview,
     elements.organizationAccountScheduleView,
@@ -25748,6 +25751,7 @@ function resetOrganizationAccountForm() {
     state.locationId || state.locations[0]?.id || "",
   );
   elements.organizationAccountPassword.value = "";
+  if (elements.organizationAccountRecoveryEmail) elements.organizationAccountRecoveryEmail.value = "";
   resetAdminCredentialVisibility(elements.organizationAccountPassword);
   window.GrabenplanerPasswordPolicy?.validate(elements.organizationAccountPassword);
   elements.organizationAccountLoanOverview.checked = true;
@@ -25780,10 +25784,12 @@ function renderOrganizationAccounts() {
       account.permissions?.includes("branch_articles:read") ? "Artikelsuche" : "",
       account.permissions?.includes("branch_receipts:read") ? "Belegsuche" : "",
     ].filter(Boolean).join(" · ");
+    const lockReason = account.accountType === "branch" && account.failedLoginAttempts > 0
+      ? " · zu viele fehlgeschlagene Anmeldungen" : "";
     const status = !account.active
       ? "Inaktiv"
       : account.locked
-        ? `Gesperrt bis ${new Date(account.lockedUntil).toLocaleString("de-AT")}`
+        ? `Gesperrt bis ${new Date(account.lockedUntil).toLocaleString("de-AT")}${lockReason}`
         : account.passwordConfigured ? "Anmeldung bereit" : "Noch kein Passwort";
     return `<article class="organization-account-row" data-organization-account="${escapeHtmlAttribute(account.id)}">
       <div class="organization-account-copy">
@@ -25832,6 +25838,7 @@ function editOrganizationAccount(accountId) {
     account.scopes?.[0]?.locationId || state.locations[0]?.id || "",
   );
   elements.organizationAccountPassword.value = "";
+  if (elements.organizationAccountRecoveryEmail) elements.organizationAccountRecoveryEmail.value = account.recoveryEmail || "";
   resetAdminCredentialVisibility(elements.organizationAccountPassword);
   elements.organizationAccountLoanOverview.checked = account.permissions?.includes("loans:overview:read") === true;
   elements.organizationAccountScheduleView.checked = account.permissions?.includes("schedule:location:view") === true;
@@ -25866,6 +25873,9 @@ async function saveOrganizationAccount(event) {
     accountType: elements.organizationAccountType.value,
     active: elements.organizationAccountActive.checked,
     password: elements.organizationAccountPassword.value,
+    ...(elements.organizationAccountRecoveryEmail && {
+      recoveryEmail: elements.organizationAccountRecoveryEmail.value.trim(),
+    }),
     permissions,
     scopes: [{ locationId: elements.organizationAccountLocation.value }],
   };

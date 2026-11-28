@@ -653,6 +653,7 @@ const { createSecurityAuditStore } = require("./lib/security-audit-store");
 const { isPrivacyOrganizationSettingKey, publicSettingsRows } = require("./lib/privacy-organization-settings");
 const portalLocationFunctions = require("./lib/portal-location-functions");
 const { isSystemNotificationReceiptSettingKey } = require("./lib/system-notification-receipt-settings");
+const branchPasswordReset = require("./lib/branch-account-password-reset");
 const notificationReceiptModule = require("./lib/system-notification-receipt-store");
 const {
   OFFICIAL_LEAVE_SOURCES,
@@ -34400,9 +34401,29 @@ async function qualifyEmployeeLoginPassword(repository, user, password, now) {
   return assessment;
 }
 
-async function requireVerifiedLogin(repository, user, organization, mobile, now) {
+function branchAccountLockError(lockedUntil, now) {
+  const retryAfter = Math.ceil((Date.parse(lockedUntil) - now.getTime()) / 1000);
+  if (!(retryAfter > 0)) return null;
+  const availableAt = new Intl.DateTimeFormat("de-AT", {
+    timeZone: "Europe/Vienna", dateStyle: "short", timeStyle: "medium",
+  }).format(new Date(lockedUntil));
+  const error = httpError(429,
+    "Das Filialkonto ist wegen zu vieler fehlgeschlagener Anmeldungen gesperrt. "
+    + "Ein neuer Passwortversuch ist ab " + availableAt + " Uhr möglich. "
+    + "Du kannst das Passwort über „Passwort zurücksetzen“ neu vergeben.",
+    "PORTAL_ACCOUNT_LOCKED");
+  error.retryAfter = retryAfter;
+  return error;
+}
+
+async function requireVerifiedLogin(repository, user, organization, mobile, now, branchAccount = false) {
   const result = await acceptVerifiedLogin(repository, { user, organization, now });
   if (result === "locked") {
+    if (branchAccount) {
+      const current = await repository.getOrganizationLogin({ loginName: user.employee_number });
+      const lock = branchAccountLockError(current?.locked_until, now);
+      if (lock) throw lock;
+    }
     throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.",
       mobile ? "MOBILE_ACCOUNT_LOCKED" : "PORTAL_ACCOUNT_LOCKED");
   }
@@ -34778,12 +34799,16 @@ app.post("/api/portal/v1/auth/branding", async (request, response) => {
 app.post("/api/portal/v1/auth/password-reset/request", (request, response) => {
   const resetRequest = {
     email: String(request.body?.email || "").trim(),
+    branchLoginName: typeof request.body?.branchLoginName === "string" ? request.body.branchLoginName.trim() : null,
     ipKey: loginRateKey(request),
   };
-  response.status(202).json(passwordResetGenericPayload());
+  response.status(202).json(passwordResetGenericPayload(resetRequest.branchLoginName !== null));
   if (!getPortalStatus().portalEnabled) return;
   setImmediate(() => {
-    void requestPersonalPasswordReset(resetRequest).catch(() => {
+    const work = resetRequest.branchLoginName === null
+      ? requestPersonalPasswordReset(resetRequest)
+      : requestBranchPasswordReset(resetRequest);
+    void work.catch(() => {
       // The public response must not reveal account, verification or provider state.
     });
   });
@@ -34791,7 +34816,7 @@ app.post("/api/portal/v1/auth/password-reset/request", (request, response) => {
 
 app.post("/api/portal/v1/auth/password-reset/confirm", async (request, response) => {
   if (!getPortalStatus().portalEnabled) return sendPortalInactive(request, response);
-  await completePersonalPasswordReset(request);
+  await completePortalPasswordReset(request);
   clearPortalCookies(request, response);
   response.json({ ok: true });
 });
@@ -35048,8 +35073,12 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
     user = await portalAccessRepository.getOrganizationLogin({ loginName });
     if (user) sessionKind = "organization";
   }
+  const branchAccount = sessionKind === "organization"
+    && (await organizationPersonnelRepository.getOrganizationAccount(user.account_id))?.account_type === "branch";
   const now = new Date();
   if (user?.locked_until && new Date(user.locked_until) > now) {
+    const lock = branchAccount ? branchAccountLockError(user.locked_until, now) : null;
+    if (lock) throw lock;
     throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.", "PORTAL_ACCOUNT_LOCKED");
   }
   const passwordMatches = await verifyPortalPassword(request.body.password, user?.password_hash || DUMMY_PORTAL_PASSWORD_HASH);
@@ -35057,7 +35086,7 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   if (!valid) {
     registerFailedLogin(request);
     if (user) {
-      const failure = loginFailureParameters(user, getPortalSettings());
+      const failure = loginFailureParameters(user, branchAccount ? branchPasswordReset.LOGIN_POLICY : getPortalSettings());
       if (sessionKind === "organization") {
         await portalAccessRepository.updateOrganizationLoginFailure(failure);
       } else {
@@ -35071,6 +35100,11 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
       sessionKind === "organization" && user ? user.account_id : loginName,
       `ip=${loginRateKey(request)}`,
     ));
+    if (branchAccount) {
+      const current = await portalAccessRepository.getOrganizationLogin({ loginName });
+      const lock = branchAccountLockError(current?.locked_until, new Date());
+      if (lock) throw lock;
+    }
     throw httpError(401, "Zugangskennung oder Passwort ist nicht korrekt.", "PORTAL_LOGIN_FAILED");
   }
   const rawToken = crypto.randomBytes(32).toString("base64url");
@@ -35078,7 +35112,7 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   const lifetime = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
     const repository = repositories.portalAccess;
     const acceptedAt = new Date();
-    await requireVerifiedLogin(repository, user, sessionKind === "organization", false, acceptedAt);
+    await requireVerifiedLogin(repository, user, sessionKind === "organization", false, acceptedAt, branchAccount);
     const principal = sessionKind === 'employee'
       ? await repository.getReportPrincipal({ employeeNumber: user.employee_number, businessDate: viennaTodayIso(acceptedAt) }) : null;
     if (sessionKind === 'employee' && !principal) throw httpError(401, 'Der Zugang wurde geändert. Bitte erneut anmelden.', 'PORTAL_LOGIN_CHANGED');
@@ -43952,6 +43986,15 @@ async function normalizedOrganizationAccountInput(body = {}, { existing = null }
   if (!["branch", "terminal"].includes(accountType)) {
     throw httpError(400, "Der Kontotyp ist ungÃ¼ltig.", "PORTAL_ORGANIZATION_TYPE_INVALID");
   }
+  let recoveryEmail = accountType === "terminal" ? "" : undefined;
+  if (accountType === "branch" && Object.hasOwn(body, "recoveryEmail")) {
+    const rawEmail = typeof body.recoveryEmail === "string" ? body.recoveryEmail.trim() : null;
+    recoveryEmail = branchPasswordReset.normalizeRecoveryEmail(rawEmail);
+    if (rawEmail !== "" && !recoveryEmail) {
+      throw httpError(400, "Bitte eine gültige Rücksetz-E-Mail-Adresse eintragen.",
+        "PORTAL_ORGANIZATION_RECOVERY_EMAIL_INVALID");
+    }
+  }
   if (!Array.isArray(body.permissions)) {
     throw httpError(400, "Bitte die erlaubten Filialfunktionen auswÃ¤hlen.", "PORTAL_ORGANIZATION_PERMISSIONS_INVALID");
   }
@@ -43984,6 +44027,7 @@ async function normalizedOrganizationAccountInput(body = {}, { existing = null }
     loginName,
     displayName,
     accountType,
+    recoveryEmail,
     active: body.active !== false,
     permissions,
     scopes,
@@ -44019,15 +44063,20 @@ function publicOrganizationAccount(row) {
   };
 }
 
-async function organizationAccountsForAdmin() {
-  return (await organizationPersonnelRepository.listOrganizationAccounts())
-    .map(publicOrganizationAccount);
+async function organizationAccountsForAdmin({ includeRecoveryEmail = false } = {}) {
+  const accounts = (await organizationPersonnelRepository.listOrganizationAccounts()).map(publicOrganizationAccount);
+  if (!includeRecoveryEmail) return accounts;
+  const recovery = branchPasswordReset.recoverySettings(await planningSettingsRepository.listPortalSettings());
+  return accounts.map(account => ({
+    ...account,
+    recoveryEmail: account.accountType === "branch" ? recovery.get(account.id)?.email || "" : "",
+  }));
 }
 
 app.get("/api/portal/v1/organization-accounts", async (request, response) => {
   requireAdminHrOrLocal(request, "users:write");
   response.json({
-    accounts: await organizationAccountsForAdmin(),
+    accounts: await organizationAccountsForAdmin({ includeRecoveryEmail: true }),
     permissionCatalog: organizationAccountPermissionCatalog,
     accountTypes: [
       { id: "branch", label: "Filialkonto" },
@@ -44048,7 +44097,8 @@ app.post("/api/portal/v1/organization-accounts", async (request, response) => {
   const passwordHash = password ? await hashPortalPassword(password, { loginName: input.loginName, displayName: input.displayName }) : "";
   const accountId = crypto.randomUUID();
   const actorId = portalActorId(actor);
-  await organizationPersonnelRepository.transaction(async (organization) => {
+  await persistenceProvider.transaction(async (executor) => {
+    const { organizationPersonnel: organization, planningSettings } = createApplicationRepositories(executor);
     await organization.insertOrganizationAccount({
       accountId,
       loginName: input.loginName,
@@ -44069,6 +44119,9 @@ app.post("/api/portal/v1/organization-accounts", async (request, response) => {
     for (const scope of input.scopes) {
       await organization.insertOrganizationAccountScope(accountId, scope.locationId, actorId);
     }
+    if (input.recoveryEmail) {
+      await branchPasswordReset.setRecoveryEmail(planningSettings, accountId, input.recoveryEmail);
+    }
     await organization.insertAudit(actorId, "portal.organization-account.create",
       "portal_organization_account", accountId, JSON.stringify({
       loginName: input.loginName,
@@ -44077,12 +44130,13 @@ app.post("/api/portal/v1/organization-accounts", async (request, response) => {
       permissions: input.permissions,
       scopes: input.scopes,
       passwordConfigured: Boolean(password),
+      recoveryEmailConfigured: Boolean(input.recoveryEmail),
     }));
   });
-  const stored = await organizationPersonnelRepository.getOrganizationAccount(accountId);
+  const accounts = await organizationAccountsForAdmin({ includeRecoveryEmail: true });
   response.status(201).json({
-    account: publicOrganizationAccount(stored),
-    accounts: await organizationAccountsForAdmin(),
+    account: accounts.find(account => account.id === accountId),
+    accounts,
   });
 });
 
@@ -44093,15 +44147,19 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
   if (!existing) throw httpError(404, "Das Filial- oder Terminalkonto wurde nicht gefunden.");
   const input = await normalizedOrganizationAccountInput(request.body || {}, { existing });
   const password = request.body?.password ?? "";
-  const passwordHash = password ? await hashPortalPassword(password, { loginName: input.loginName || existing.login_name, displayName: input.displayName }) : existing.password_hash;
+  const passwordHash = password ? await hashPortalPassword(password, { loginName: input.loginName, displayName: input.displayName }) : null;
   const actorId = portalActorId(actor);
-  const before = publicOrganizationAccount(existing);
-  await organizationPersonnelRepository.transaction(async (organization) => {
+  await runLoginTransaction(persistenceProvider, createApplicationRepositories, async ({
+    organizationPersonnel: organization, planningSettings,
+  }) => {
+    const current = await organization.getOrganizationAccount(accountId);
+    if (!current) throw httpError(404, "Das Filial- oder Terminalkonto wurde nicht gefunden.");
+    const before = publicOrganizationAccount(current);
     await organization.updateOrganizationAccount({
       accountId,
       displayName: input.displayName,
       accountType: input.accountType,
-      passwordHash,
+      passwordHash: passwordHash ?? current.password_hash,
       active: input.active,
       passwordChanged: Boolean(password),
       passwordPolicyVersion: password ? PORTAL_PASSWORD_POLICY_VERSION : 0,
@@ -44115,6 +44173,7 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
     for (const scope of input.scopes) {
       await organization.insertOrganizationAccountScope(accountId, scope.locationId, actorId);
     }
+    await branchPasswordReset.setRecoveryEmail(planningSettings, accountId, input.recoveryEmail, { revoke: true });
     await organization.revokeOrganizationSessions(accountId);
     if (password || !input.active) await organization.revokePasskeys("organization", accountId);
     await organization.insertAudit(actorId, "portal.organization-account.update",
@@ -44136,10 +44195,10 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
       passwordReset: Boolean(password),
     }));
   });
-  const stored = await organizationPersonnelRepository.getOrganizationAccount(accountId);
+  const accounts = await organizationAccountsForAdmin({ includeRecoveryEmail: true });
   response.json({
-    account: publicOrganizationAccount(stored),
-    accounts: await organizationAccountsForAdmin(),
+    account: accounts.find(account => account.id === accountId),
+    accounts,
   });
 });
 
@@ -44155,7 +44214,7 @@ app.post("/api/portal/v1/organization-accounts/:accountId/unlock", async (reques
     await organization.insertAudit(actorId, "portal.organization-account.unlock",
       "portal_organization_account", accountId);
   });
-  response.json({ accounts: await organizationAccountsForAdmin() });
+  response.json({ accounts: await organizationAccountsForAdmin({ includeRecoveryEmail: true }) });
 });
 
 function branchAccountPasswordManager(request, { mutation = false } = {}) {
@@ -46901,10 +46960,12 @@ function canonicalPasswordResetEmail(value) {
   return normalized ? normalized.toLowerCase() : "";
 }
 
-function passwordResetGenericPayload() {
+function passwordResetGenericPayload(branch = false) {
   return {
     ok: true,
-    message: "Falls die E-Mail-Adresse einem aktiven persönlichen Zugang zugeordnet ist, wurde ein Link versendet.",
+    message: branch
+      ? "Falls für das Filialkonto eine Rücksetz-E-Mail-Adresse hinterlegt ist, wird der Link dorthin gesendet."
+      : "Falls die E-Mail-Adresse einem aktiven persönlichen Zugang zugeordnet ist, wurde ein Link versendet.",
   };
 }
 
@@ -47017,6 +47078,31 @@ async function requestPersonalPasswordReset(input = {}) {
   }
 }
 
+const branchPasswordResetService = branchPasswordReset.createBranchAccountPasswordReset({
+  repositories: {
+    organizationPersonnel: organizationPersonnelRepository,
+    planningSettings: planningSettingsRepository,
+  },
+  transaction: work => runLoginTransaction(persistenceProvider, createApplicationRepositories, work),
+  sendPasswordReset: input => externalNotificationAdapter.sendPasswordReset(input),
+  resetUrl: rawToken => normalizedPublicOrigin + "/portal.html#password-reset=" + rawToken,
+  hashPassword: hashPortalPassword,
+  passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
+  invalidToken: invalidPasswordResetTokenError,
+  requestWindowMs: PASSWORD_RESET_RATE_WINDOW_MS,
+  maxRequests: PASSWORD_RESET_RATE_MAX_PER_TARGET,
+  tokenTtlMs: PASSWORD_RESET_TOKEN_TTL_MS,
+});
+
+async function requestBranchPasswordReset(input) {
+  const loginName = input.branchLoginName.toLowerCase();
+  if (!passwordResetRequestRateAllowed(input.ipKey, "branch:" + loginName)) return;
+  if (!/^[a-z][a-z0-9._-]{2,39}$/.test(loginName)
+    || !normalizedPublicOrigin?.startsWith("https://")
+    || !externalNotificationEventAvailable("email", "password_reset")) return;
+  await branchPasswordResetService.issue(loginName);
+}
+
 function invalidPasswordResetTokenError() {
   return httpError(
     410,
@@ -47025,7 +47111,7 @@ function invalidPasswordResetTokenError() {
   );
 }
 
-async function completePersonalPasswordReset(request) {
+async function completePortalPasswordReset(request) {
   assertPasswordResetConfirmRateLimit(request);
   const browserSession = portalSessionFromRequest(request);
   const rawToken = String(request.body?.token || "").trim();
@@ -47038,7 +47124,11 @@ async function completePersonalPasswordReset(request) {
   const tokenHash = sha256(rawToken);
   const now = new Date().toISOString();
   const available = await portalAccessRepository.getPasswordResetTokenByHash({ tokenHash, now });
-  if (!available) throw invalidPasswordResetTokenError();
+  if (!available) {
+    await branchPasswordResetService.complete({ tokenHash, newPassword, browserSession });
+    request.portalSession = null;
+    return;
+  }
   const passwordHash = await hashPortalPassword(newPassword, { employeeNumber: available.employee_number,
     loginName: available.employee_number, displayName: available.full_name });
   const completed = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
@@ -62187,6 +62277,10 @@ function assertRequestPermission(request, permission) {
 }
 
 app.put("/api/settings", async (request, response) => {
+  if (Object.keys(request.body || {}).some(branchPasswordReset.isBranchAccountPasswordResetSettingKey)) {
+    throw httpError(400, "Die Rücksetz-E-Mail wird beim jeweiligen Filialkonto verwaltet.",
+      "PORTAL_ORGANIZATION_RECOVERY_PROTECTED_SETTING");
+  }
   if (Object.hasOwn(request.body || {}, deployBackupScope.KEY)) {
     throw httpError(400, "Der Sicherungsumfang wird unter System & Backups gespeichert.", "DEPLOY_BACKUP_SCOPE_DEDICATED_API_REQUIRED");
   }

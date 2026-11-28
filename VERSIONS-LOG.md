@@ -1,6 +1,12 @@
 # Versionsstatus
 
-## v0.92.106 Beta · Quellstand
+## v0.92.107 Beta · Quellstand
+
+Im grafischen Dienstplan lassen sich Dienste an den Kanten verlängern und kürzen sowie in der Mitte verschieben. Das Verschieben in eine andere Tages­spalte behält die Person und die Dauer bei.
+
+Filialkonten zeigen die Dauer einer Sperre nach fünf falschen Passworteingaben an. Nach 30 Minuten ist die Anmeldung wieder möglich. Ein Rücksetzlink kann an die hinterlegte Adresse gesendet werden.
+
+Die Recovery-Statusanzeige übernimmt den ursprünglichen Nachttermin beim Deploy. Enthält den bisherigen Quellstand v0.92.106 Beta.
 
 Dienstplan, Urlaubsplanung, Filialbestellungen und Standortpflege können je Filiale freigegeben werden. Branding und mobile Standortübersicht nutzen die verfügbare Breite.
 

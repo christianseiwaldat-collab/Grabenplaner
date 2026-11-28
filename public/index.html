@@ -73,9 +73,10 @@
         <p>Filialleitung und Administration verwenden hier ihre Personalnummer.</p>
         <label class="field"><span>Personalnummer</span><input id="adminLoginPersonnelNumber" name="username" autocomplete="username" required disabled /></label>
         <label class="field"><span>Passwort</span><span class="password-field"><input id="adminLoginPassword" name="password" type="password" autocomplete="current-password" required disabled /><button class="password-toggle" type="button" data-password-toggle="adminLoginPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-        <p class="login-error hidden" id="adminLoginError"></p>
+        <p class="login-error hidden" id="adminLoginError" role="alert"></p>
         <button class="primary-button" type="submit">Anmelden</button>
         <button class="secondary-button" id="adminPasskeyLogin" data-gp-passkey-login type="button" hidden>Mit Passkey anmelden</button>
+        <a href="/portal.html#passwort-zuruecksetzen">Passwort zurücksetzen</a>
         <a href="/portal.html">Zum Mitarbeiterportal</a>
       </form>
     </section>
@@ -87,7 +88,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" data-gp-print-fallback type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.106 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.107 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -2820,6 +2821,7 @@
                   <label class="field"><span>Kontotyp</span><select id="organizationAccountType"><option value="branch">Filialkonto</option><option value="terminal">Terminalkonto</option></select></label>
                   <label class="field"><span>Filiale</span><select id="organizationAccountLocation" required></select></label>
                   <label class="field"><span>Passwort neu vergeben</span><span class="password-field"><input data-gp-new-password id="organizationAccountPassword" type="password" autocomplete="new-password" placeholder="Beim Bearbeiten optional" /><button class="password-toggle" type="button" data-password-toggle="organizationAccountPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+                  <label class="field" id="organizationAccountRecoveryEmailRow"><span>Rücksetz-E-Mail</span><input id="organizationAccountRecoveryEmail" type="email" maxlength="320" autocomplete="off" /><small>An diese Adresse sendet der Grabenplaner den Rücksetzlink für das Filialkonto.</small></label>
                 </div>
                 <div class="organization-account-permissions" aria-label="Freigegebene Filialfunktionen">
                   <label class="switch-row"><span><strong>Offene Leihen ansehen</strong><small>Name der ausleihenden Person sowie die in der Leihverwaltung für das Filialkonto freigegebenen Gerätedaten.</small></span><input id="organizationAccountLoanOverview" type="checkbox" checked /></label>
@@ -3295,7 +3297,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.106 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.107 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

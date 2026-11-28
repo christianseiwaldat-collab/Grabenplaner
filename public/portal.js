@@ -223,6 +223,7 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
   "pendingCandidateEvaluationNotice", "pendingCandidateEvaluationSummary", "pendingCandidateEvaluationLink",
+  "passwordResetKind", "passwordResetPersonalFields", "passwordResetBranchFields", "passwordResetBranchLogin",
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "forgotPasswordButton", "passwordResetRequestDialog", "passwordResetRequestForm", "passwordResetEmail", "passwordResetRequestMessage", "passwordResetRequestSubmit", "passwordResetConfirmDialog", "passwordResetConfirmForm", "passwordResetToken", "passwordResetNewPassword", "passwordResetRepeatPassword", "passwordResetConfirmMessage", "passwordResetConfirmSubmit", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "personalActionsButton", "personalActionsDialog", "personalActionsTitle", "personalActionsMessage", "personalActionsList", "personalActionsLoadMore", "logoutButton", "portalLogoutStatus", "notificationsButton", "notificationBadge", "mobileHomeTab", "mobileHomeView", "mobileHomeTiles", "mobileSettingsHome", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
@@ -1925,7 +1926,7 @@ async function initialize() {
     const session = await api("/api/portal/v1/session");
     if (!session.authenticated) {
       showLogin();
-      openPasswordResetConfirm();
+      openPasswordResetFromLocation();
       return;
     }
     showPortal(session);
@@ -1937,7 +1938,7 @@ async function initialize() {
       await refreshBirthdayPresentationTheme();
       await claimBirthdayPresentation();
     }
-    openPasswordResetConfirm();
+    openPasswordResetFromLocation();
   } catch (error) {
     if (error.code === "PORTAL_SESSION_CHANGED") return;
     showLogin(error.message);
@@ -2759,16 +2760,36 @@ function passwordResetTokenFromHash() {
   return match?.[1] || "";
 }
 
+function openPasswordResetFromLocation() {
+  if (window.location.hash !== "#passwort-zuruecksetzen") return openPasswordResetConfirm();
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  openPasswordResetRequest();
+}
+
 function clearPasswordResetHash() {
   if (!String(window.location.hash || "").startsWith("#password-reset=")) return;
   window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
 }
 
+function syncPasswordResetRequestMode() {
+  const branch = el.passwordResetKind.value === "branch";
+  el.passwordResetPersonalFields.classList.toggle("hidden", branch);
+  el.passwordResetBranchFields.classList.toggle("hidden", !branch);
+  el.passwordResetEmail.disabled = branch;
+  el.passwordResetBranchLogin.disabled = !branch;
+  el.passwordResetBranchLogin.required = branch;
+  message(el.passwordResetRequestMessage, "");
+}
+
 function openPasswordResetRequest() {
+  const loginName = el.loginPersonnelNumber.value.trim();
+  el.passwordResetKind.value = /^fil(?:iale)?[._-]?\d+$/i.test(loginName) ? "branch" : "employee";
   message(el.passwordResetRequestMessage, "");
   el.passwordResetEmail.value = "";
+  el.passwordResetBranchLogin.value = loginName;
+  syncPasswordResetRequestMode();
   el.passwordResetRequestDialog.showModal();
-  el.passwordResetEmail.focus();
+  (el.passwordResetKind.value === "branch" ? el.passwordResetBranchLogin : el.passwordResetEmail).focus();
 }
 
 function openPasswordResetConfirm(token = passwordResetTokenFromHash()) {
@@ -2797,16 +2818,21 @@ async function requestPasswordReset(event) {
   event.preventDefault();
   if (el.passwordResetRequestSubmit.disabled) return;
   el.passwordResetRequestSubmit.disabled = true;
+  const branch = el.passwordResetKind.value === "branch";
   message(el.passwordResetRequestMessage, "Der Rücksetzlink wird angefordert.");
   try {
     const result = await api("/api/portal/v1/auth/password-reset/request", {
       method: "POST",
-      body: JSON.stringify({ email: el.passwordResetEmail.value.trim() }),
+      body: JSON.stringify(branch
+        ? { branchLoginName: el.passwordResetBranchLogin.value.trim() }
+        : { email: el.passwordResetEmail.value.trim() }),
     });
     el.passwordResetEmail.value = "";
     message(
       el.passwordResetRequestMessage,
-      result?.message || "Falls ein passender persönlicher Zugang vorhanden ist, wurde ein Rücksetzlink versendet.",
+      result?.message || (branch
+        ? "Falls für das Filialkonto eine Rücksetz-E-Mail-Adresse hinterlegt ist, wird der Link dorthin gesendet."
+        : "Falls ein passender persönlicher Zugang vorhanden ist, wurde ein Rücksetzlink versendet."),
     );
   } catch (error) {
     message(el.passwordResetRequestMessage, error.message, true);
@@ -7996,6 +8022,7 @@ el.portalLoginForm.addEventListener("submit", login);
 el.loginPersonnelNumber.addEventListener("input", scheduleLoginBrandingPreview);
 el.loginPersonnelNumber.addEventListener("blur", previewLoginBranding);
 el.forgotPasswordButton?.addEventListener("click", openPasswordResetRequest);
+el.passwordResetKind?.addEventListener("change", syncPasswordResetRequestMode);
 el.passwordResetRequestForm?.addEventListener("submit", requestPasswordReset);
 el.passwordResetConfirmForm?.addEventListener("submit", confirmPasswordReset);
 document.querySelectorAll("[data-close-password-reset-request]").forEach((button) => button.addEventListener("click", () => el.passwordResetRequestDialog.close()));
