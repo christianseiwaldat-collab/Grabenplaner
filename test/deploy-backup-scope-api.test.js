@@ -2,6 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),vm=require('node:vm');
 const express=require('express'),P=require('../lib/deploy-backup-scope');
 const {isLocalSystemSession}=require('../lib/personnel-lifecycle-access');
+const branchPasswordReset=require('../lib/branch-account-password-reset');
 const source=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
 function sourceFunction(name){const start=source.search(new RegExp('^(?:async )?function '+name+'\\(','m')),end=source.indexOf('\n}',start);assert.ok(start>=0&&end>start,name);return source.slice(start,end+2);}
 function route(method,url){const start=source.indexOf(`app.${method}("${url}",`),end=source.indexOf('\n});',start);assert.ok(start>=0&&end>start,url);return source.slice(start,end+4);}
@@ -22,7 +23,7 @@ async function fixture(t,{raw}={}){
  }};
  const list=raw=>raw===undefined?[]:[{key:P.KEY,value:raw}];
  const registered={get:(url,handler)=>app.get(url,async(request,response)=>handler(request,response)),put:(url,handler)=>app.put(url,async(request,response)=>handler(request,response))};
- const context=vm.createContext({app:registered,process:{platform:'linux'},serverModeActive:true,crypto,Buffer,deployBackupScope:P,BACKUP_ADMIN_ROLES:new Set(['developer','it_admin','admin']),isLocalSystemSession,
+ const context=vm.createContext({app:registered,process:{platform:'linux'},serverModeActive:true,crypto,Buffer,deployBackupScope:P,branchPasswordReset,BACKUP_ADMIN_ROLES:new Set(['developer','it_admin','admin']),isLocalSystemSession,
   PORTAL_CSRF_COOKIE:'grabenplaner_csrf',PORTAL_SESSION_COOKIE:'grabenplaner_session',getPortalStatus:()=>({portalEnabled:state.portalEnabled}),isLoopbackRequest:()=>true,
   planningSettingsRepository:{async listSettings(){calls.push('read');return list(state.raw);}},persistenceProvider,
   createApplicationRepositories:tx=>({portalAccess:tx.portalAccess,planningSettings:{async listSettings(){return list(tx.raw);},async upsertSetting(row){assert.equal(row.key,P.KEY);calls.push('upsert');tx.raw=row.value;}},
@@ -78,6 +79,7 @@ test('strict input is rejected before state or audit writes and the generic sett
   const result=await f.request('PUT',body);assert.equal(result.status,400);if(body!==null&&typeof body!=='string')assert.equal(result.body.code,'DEPLOY_BACKUP_SCOPE_INVALID');
  }
  const blocked=await f.request('PUT',{[P.KEY]:'deploy-owned'},{route:'/api/settings'});assert.equal(blocked.status,400);assert.equal(blocked.body.code,'DEPLOY_BACKUP_SCOPE_DEDICATED_API_REQUIRED');
+ const branchBlocked=await f.request('PUT',{[branchPasswordReset.SETTING_PREFIX+'synthetic-account']:'synthetic'}, {route:'/api/settings'});assert.equal(branchBlocked.status,400);assert.equal(branchBlocked.body.code,'PORTAL_ORGANIZATION_RECOVERY_PROTECTED_SETTING');
  assert.equal(f.transactions.length,0);assert.equal(f.state.raw,undefined);assert.equal(f.state.audits.length,0);
 });
 
