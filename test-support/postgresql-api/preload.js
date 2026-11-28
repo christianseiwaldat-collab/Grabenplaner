@@ -143,6 +143,18 @@ function install() {
     if (filename && path.resolve(filename) !== fixturePath) throw new Error("PG_API_FIXTURE_INDEPENDENT_DATABASE_REQUIRED");
     return database(false, options);
   };
+  function openApplicationForCurrentTest() {
+    open();
+    const application = require("../../lib/persistence/postgresql/application").openDeferredPostgresqlApplication({
+      coreUrl: process.env.GP_CORE_APP_URL,
+      salesUrl: process.env.GP_SALES_APP_URL,
+      readers: { coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL },
+      authorize: async () => true,
+    });
+    applicationHandles.add(application);
+    return { database: database(false), provider: application.provider, close: () => application.provider.close() };
+  }
+  module.exports.openApplicationForCurrentTest = openApplicationForCurrentTest;
   module.exports.closeCurrentTestFixture = () => {
     if (subject) throw new Error("PG_API_FIXTURE_CLOSE_CURRENT_APPLICATION_FIRST");
     return raw.close();
@@ -206,17 +218,9 @@ function install() {
       const originalCreate = exported.createSqlitePersistenceProvider;
       const matching = filename => filename && filename !== ":memory:" && process.env.DB_PATH
         && path.resolve(filename) === path.resolve(process.env.DB_PATH);
-      function application(options = {}) {
-        open();
-        const app = require("../../lib/persistence/postgresql/application").openDeferredPostgresqlApplication({
-          coreUrl: process.env.GP_CORE_APP_URL, salesUrl: process.env.GP_SALES_APP_URL,
-          readers: { coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL }, authorize: async () => true,
-        });
-        applicationHandles.add(app); return { database: database(false), provider: app.provider, close: () => app.provider.close() };
-      }
-      exported.openSqliteApplicationPersistence = options => matching(options?.databasePath) ? application(options) : originalOpen(options);
+      exported.openSqliteApplicationPersistence = options => matching(options?.databasePath) ? openApplicationForCurrentTest() : originalOpen(options);
       exported.openSqliteLegacyDatabase = (filename, ...args) => matching(filename) ? (open(), database(false)) : originalLegacy(filename, ...args);
-      exported.createSqlitePersistenceProvider = options => options?.database?.postgresqlTestFixture ? application(options).provider : originalCreate(options);
+      exported.createSqlitePersistenceProvider = options => options?.database?.postgresqlTestFixture ? openApplicationForCurrentTest().provider : originalCreate(options);
     }
     return exported;
   };
